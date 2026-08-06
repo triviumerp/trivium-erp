@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<!-- Cabeçalho do Perfil -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-arrow-left"></i> Voltar ao Dashboard</a>
+        <h2>{{ cliente.nome }}</h2>
+    </div>
+    <div>
+        <a href="{{ url_for('editar_cliente', id=cliente.id) }}" class="btn btn-outline-dark">
+            <i class="bi bi-pencil me-1"></i> Editar Dados Cadastrais
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Coluna Esquerda: Status do AVCB, Financeiro e Contato -->
+    <div class="col-md-5 mb-4">
+        
+        <!-- Cartão de Alerta AVCB -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header card-header-drd2">
+                <i class="bi bi-shield-check me-2"></i>Vigência do Licenciamento AVCB
+            </div>
+            <div class="card-body">
+                <p class="mb-1"><strong>Data de Emissão:</strong> {{ cliente.data_inicio_avcb.strftime('%d/%m/%Y') }}</p>
+                <p class="mb-3"><strong>Data de Vencimento:</strong> {{ cliente.data_vencimento_avcb.strftime('%d/%m/%Y') }}</p>
+                
+                {% if alerta_ativo %}
+                    <div class="alert alert-danger mb-0 text-center fw-bold badge-alerta-vencimento">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ mensagem_alerta }}
+                    </div>
+                {% else %}
+                    <div class="alert alert-success mb-0 text-center fw-bold">
+                        <i class="bi bi-check-circle-fill me-2"></i>{{ mensagem_alerta }}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Cartão de Gestão Financeira Rápida -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-dark text-white fw-bold">
+                <i class="bi bi-currency-dollar me-2"></i>Gestão Financeira do Contrato
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('atualizar_financeiro', id=cliente.id) }}" method="POST">
+                    <div class="mb-3">
+                        <label for="valor_proposta" class="form-label fw-bold">Valor da Proposta (R$):</label>
+                        <input type="number" step="0.01" class="form-control" name="valor_proposta" value="{{ cliente.valor_proposta }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="status_boleto" class="form-label fw-bold">Status do Pagamento:</label>
+                        <select class="form-select" name="status_boleto" required>
+                            <option value="Pendente" {% if cliente.status_boleto == 'Pendente' %}selected{% endif %}>Pendente</option>
+                            <option value="Pago" {% if cliente.status_boleto == 'Pago' %}selected{% endif %}>Pago</option>
+                            <option value="Atrasado" {% if cliente.status_boleto == 'Atrasado' %}selected{% endif %}>Atrasado</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-drd2-primary w-100">Atualizar Status Financeiro</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Cartão de Contato -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-light fw-bold">
+                <i class="bi bi-telephone me-2"></i>Canais de Contato
+            </div>
+            <div class="card-body">
+                <p class="mb-1"><strong>Telefone / WhatsApp:</strong> {{ cliente.telefone }}</p>
+                <p class="mb-0"><strong>E-mail:</strong> {{ cliente.email }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Coluna Direita: Anexo de Documentos e Arquivo Digital -->
+    <div class="col-md-7">
+        
+        <!-- Formulário de Upload de Arquivos -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header card-header-drd2">
+                <i class="bi bi-cloud-upload me-2"></i>Anexar Documento Técnico
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('upload_documento', id=cliente.id) }}" method="POST" enctype="multipart/form-data">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="tipo_documento" class="form-label fw-bold">Tipo do Documento:</label>
+                            <select class="form-select" name="tipo_documento" required>
+                                <option value="AVCB">AVCB</option>
+                                <option value="Projeto">Projeto Técnico</option>
+                                <option value="ART">ART / RRT</option>
+                                <option value="Outros">Outros Documentos</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="arquivo" class="form-label fw-bold">Arquivo (PDF / Imagem):</label>
+                            <input class="form-control" type="file" name="arquivo" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-drd2-alert mt-3 w-100">
+                        <i class="bi bi-file-earmark-arrow-up me-1"></i> Upload do Arquivo
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Lista de Documentos Anexados do Cliente -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+                <span>Documentos Arquivados</span>
+                <span class="badge bg-secondary">{{ documentos|length }} arquivo(s)</span>
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for doc in documentos %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center p-3">
+                        <div>
+                            <span class="badge bg-primary mb-1">{{ doc.tipo_documento }}</span>
+                            <span class="d-block fw-bold text-truncate" style="max-width: 300px;">
+                                {{ doc.nome_arquivo.split('_')[-1] }}
+                            </span>
+                            <small class="text-muted">Enviado em: {{ doc.data_upload.strftime('%d/%m/%Y às %H:%M') }}</small>
+                        </div>
+                        <div class="btn-group btn-group-sm">
+                            <!-- Link para Visualizar/Baixar o Arquivo da pasta static/uploads -->
+                            <a href="{{ url_for('download_file', filename=doc.nome_arquivo) }}" target="_blank" class="btn btn-outline-primary" title="Abrir / Baixar Documento">
+                                <i class="bi bi-download"></i>
+                            </a>
+                            <!-- Link para Deletar Documento -->
+                            <a href="{{ url_for('deletar_documento', doc_id=doc.id) }}" class="btn btn-outline-danger" onclick="return confirm('Tem certeza que deseja remover este documento?');" title="Excluir Documento">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </div>
+                    </li>
+                    {% else %}
+                    <li class="list-group-item text-center py-4 text-muted">
+                        <i class="bi bi-folder2-open fs-2 d-block mb-2"></i>
+                        Nenhum documento anexado para este cliente ainda.
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header card-header-drd2">
+                <h4 class="mb-0">
+                    {% if cliente %}
+                        <i class="bi bi-pencil-square me-2"></i>Editar Cliente #{{ cliente.id }}
+                    {% else %}
+                        <i class="bi bi-person-plus me-2"></i>Cadastrar Novo Cliente
+                    {% endif %}
+                </h4>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST" action="{% if cliente %}{{ url_for('editar_cliente', id=cliente.id) }}{% else %}{{ url_for('novo_cliente') }}{% endif %}">
+                    
+                    <!-- 1. Informações de Identificação -->
+                    <h5 class="text-muted mb-3 border-bottom pb-2">Informações Gerais</h5>
+                    <div class="mb-3">
+                        <label for="nome" class="form-label fw-bold">Nome da Empresa / Cliente:</label>
+                        <input type="text" class="form-control" id="nome" name="nome" value="{{ cliente.nome if cliente else '' }}" required placeholder="Ex: Condomínio Edifício Central">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="telefone" class="form-label fw-bold">Telefone / WhatsApp:</label>
+                            <input type="text" class="form-control" id="telefone" name="telefone" value="{{ cliente.telefone if cliente else '' }}" required placeholder="(11) 99999-9999">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="email" class="form-label fw-bold">E-mail de Contato:</label>
+                            <input type="email" class="form-control" id="email" name="email" value="{{ cliente.email if cliente else '' }}" required placeholder="contato@empresa.com">
+                        </div>
+                    </div>
+
+                    <!-- 2. Vigência do Licenciamento AVCB -->
+                    <h5 class="text-muted mt-4 mb-3 border-bottom pb-2">Vigência da Licença AVCB</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="data_inicio_avcb" class="form-label fw-bold">Data de Início do AVCB:</label>
+                            <input type="date" class="form-control" id="data_inicio_avcb" name="data_inicio_avcb" value="{{ cliente.data_inicio_avcb.strftime('%Y-%m-%d') if cliente else '' }}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="data_vencimento_avcb" class="form-label fw-bold">Data de Vencimento do AVCB:</label>
+                            <input type="date" class="form-control" id="data_vencimento_avcb" name="data_vencimento_avcb" value="{{ cliente.data_vencimento_avcb.strftime('%Y-%m-%d') if cliente else '' }}" required>
+                        </div>
+                    </div>
+
+                    <!-- 3. Informações Financeiras da Proposta -->
+                    <h5 class="text-muted mt-4 mb-3 border-bottom pb-2">Proposta Comercial e Financeiro</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="valor_proposta" class="form-label fw-bold">Valor da Proposta (R$):</label>
+                            <input type="number" step="0.01" class="form-control" id="valor_proposta" name="valor_proposta" value="{{ cliente.valor_proposta if cliente else '0.00' }}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="status_boleto" class="form-label fw-bold">Status do Boleto:</label>
+                            <select class="form-select" id="status_boleto" name="status_boleto" required>
+                                <option value="Pendente" {% if cliente and cliente.status_boleto == 'Pendente' %}selected{% endif %}>Pendente</option>
+                                <option value="Pago" {% if cliente and cliente.status_boleto == 'Pago' %}selected{% endif %}>Pago</option>
+                                <option value="Atrasado" {% if cliente and cliente.status_boleto == 'Atrasado' %}selected{% endif %}>Atrasado</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Botões de Ação -->
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancelar</a>
+                        <button type="submit" class="btn btn-drd2-alert px-4">
+                            {% if cliente %}Salvar Alterações{% else %}Cadastrar Cliente{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
