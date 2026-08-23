@@ -834,10 +834,19 @@ def atualizar_cobranca_servico(id):
     return redirect(url_for('financeiro', status=request.form.get('filtro_retorno', 'todos')))
 
 # -----------------------------------------------------------------------------
-# 8. INICIALIZAÇÃO E CRIAÇÃO AUTOMÁTICA DAS TABELAS
+# 8. INICIALIZAÇÃO SEGURA
 # -----------------------------------------------------------------------------
-with app.app_context():
-    db.create_all()
+try:
+    with app.app_context():
+        db.create_all()
+except Exception as e:
+    print(f"[AVISO] Não foi possível conectar ao banco no startup: {e}")
+
+@app.route('/admin/init-db')
+def init_db_manual():
+    with app.app_context():
+        db.create_all()
+    return "<h1>Banco inicializado com sucesso!</h1><p><a href='/'>Ir para Home</a></p>"
 
 if __name__ == '__main__':
     app.run(debug=True)
