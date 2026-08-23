@@ -1,4 +1,16 @@
-.venv/
+# Banco de dados local (SQLite)
+*.db
+*.sqlite
+*.sqlite3
+instance/
+
+# Arquivos carregados de clientes (boletos, NFs, documentos)
+static/uploads/*
+!static/uploads/.gitkeep
+
+# Ambientes virtuais e cache do Python
 __pycache__/
 *.pyc
-database.db
+.env
+venv/
+env/
