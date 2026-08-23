@@ -18,14 +18,6 @@ from reportlab.lib.units import inch
 # 1. CONFIGURAÇÃO DA APLICAÇÃO
 # -----------------------------------------------------------------------------
 app = Flask(__name__)
-uri_banco = os.getenv('DATABASE_URL', 'sqlite:///database.db')
-if uri_banco.startswith("postgres://"):
-    uri_banco = uri_banco.replace("postgres://", "postgresql://", 1)
-
-app.config['SQLALCHEMY_DATABASE_URI'] = uri_banco
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-db = SQLAlchemy(app)
 
 UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -39,6 +31,7 @@ if uri_banco.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = uri_banco
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# APENAS UMA VEZ:
 db = SQLAlchemy(app)
 
 # -----------------------------------------------------------------------------
@@ -834,19 +827,15 @@ def atualizar_cobranca_servico(id):
     return redirect(url_for('financeiro', status=request.form.get('filtro_retorno', 'todos')))
 
 # -----------------------------------------------------------------------------
-# 8. INICIALIZAÇÃO SEGURA
+# 8. INICIALIZAÇÃO DO SISTEMA
 # -----------------------------------------------------------------------------
-try:
-    with app.app_context():
-        db.create_all()
-except Exception as e:
-    print(f"[AVISO] Não foi possível conectar ao banco no startup: {e}")
-
 @app.route('/admin/init-db')
 def init_db_manual():
     with app.app_context():
         db.create_all()
-    return "<h1>Banco inicializado com sucesso!</h1><p><a href='/'>Ir para Home</a></p>"
+    return "<h1>✅ Tabelas criadas com sucesso no PostgreSQL!</h1><p><a href='/'>Ir para o Dashboard</a></p>"
 
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
     app.run(debug=True)
