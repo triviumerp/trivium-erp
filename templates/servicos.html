@@ -1,0 +1,306 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold text-dark mb-0"><i class="bi bi-tools text-primary me-2"></i>Acompanhamento de Serviços & Obras</h2>
+        <p class="text-muted mb-0">Gestão operacional de atividades aprovadas em campo e catálogo técnico</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalCatalogo">
+            <i class="bi bi-journal-bookmark me-1"></i>Gerenciar Catálogo
+        </button>
+        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoServicoDireto">
+            <i class="bi bi-plus-circle me-1"></i>Nova Atividade Manual
+        </button>
+    </div>
+</div>
+
+<!-- CARDS DE METRICAS OPERACIONAIS -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm p-3 bg-primary text-white">
+            <div class="card-body p-0">
+                <span class="small text-white-50">Atividades em Andamento</span>
+                <h3 class="fw-bold my-1">{{ qtd_em_andamento }}</h3>
+                <small><i class="bi bi-play-circle me-1"></i>Em execução técnica</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm p-3 bg-warning text-dark">
+            <div class="card-body p-0">
+                <span class="small text-dark-50">Atividades Pendentes</span>
+                <h3 class="fw-bold my-1">{{ qtd_pendentes }}</h3>
+                <small><i class="bi bi-clock-history me-1"></i>Aguardando início</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm p-3 bg-success text-white">
+            <div class="card-body p-0">
+                <span class="small text-white-50">Concluídos (Liberados ao Financeiro)</span>
+                <h3 class="fw-bold my-1">{{ qtd_concluidos }}</h3>
+                <small><i class="bi bi-check2-all me-1"></i>Prontos para cobrança</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- FILTROS DE STATUS OPERACIONAIS -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body py-2 d-flex justify-content-between align-items-center">
+        <div class="btn-group">
+            <a href="{{ url_for('consultar_servicos', status='Em Andamento') }}" class="btn btn-sm {% if filtro_atual == 'Em Andamento' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}">
+                Em Andamento
+            </a>
+            <a href="{{ url_for('consultar_servicos', status='Pendente') }}" class="btn btn-sm {% if filtro_atual == 'Pendente' %}btn-warning fw-bold text-dark{% else %}btn-outline-secondary{% endif %}">
+                Pendentes
+            </a>
+            <a href="{{ url_for('consultar_servicos', status='Concluido') }}" class="btn btn-sm {% if filtro_atual == 'Concluido' %}btn-success fw-bold{% else %}btn-outline-secondary{% endif %}">
+                Concluídos (Faturáveis)
+            </a>
+            <a href="{{ url_for('consultar_servicos', status='Todos') }}" class="btn btn-sm {% if filtro_atual == 'Todos' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
+                Todos
+            </a>
+        </div>
+        <small class="text-muted">Total: <b>{{ servicos_operacionais|length }}</b> registros</small>
+    </div>
+</div>
+
+<!-- LISTAGEM DE ACOMPANHAMENTO OPERACIONAL -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Cliente / Razão Social</th>
+                        <th>Serviço / Escopo Técnico</th>
+                        <th>Previsão de Entrega</th>
+                        <th>Valor (R$)</th>
+                        <th>Status Operacional</th>
+                        <th class="text-center">Acompanhamento & Conclusão</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in servicos_operacionais %}
+                    {% set atrasado = item.data_previsao and item.data_previsao < hoje and item.status != 'Concluido' %}
+                    <tr class="{% if atrasado %}table-danger{% endif %}">
+                        <td>
+                            <span class="fw-bold text-dark d-block">{{ item.cliente.nome }}</span>
+                            <small class="text-muted">{{ item.cliente.telefone }}</small>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary mb-1">{{ item.tipo_servico.nome }}</span>
+                            {% if item.observacoes %}
+                                <small class="d-block text-muted text-truncate" style="max-width: 280px;" title="{{ item.observacoes }}">{{ item.observacoes }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.data_previsao %}
+                                <span class="fw-bold {% if atrasado %}text-danger{% else %}text-dark{% endif %}">
+                                    {{ item.data_previsao.strftime('%d/%m/%Y') }}
+                                </span>
+                                {% if atrasado %}
+                                    <span class="badge bg-danger ms-1">Prazo Vencido</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted small">Sem data fixada</span>
+                            {% endif %}
+                        </td>
+                        <td class="fw-bold text-dark">R$ {{ "%.2f"|format(item.valor_cobrado) }}</td>
+                        <td>
+                            {% if item.status == 'Concluido' %}
+                                <span class="badge bg-success p-2"><i class="bi bi-check-circle me-1"></i>Concluído</span>
+                            {% elif item.status == 'Em Andamento' %}
+                                <span class="badge bg-primary p-2"><i class="bi bi-play-circle me-1"></i>Em Andamento</span>
+                            {% elif item.status == 'Cancelado' %}
+                                <span class="badge bg-danger p-2">Cancelado</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark p-2"><i class="bi bi-hourglass-split me-1"></i>Pendente</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalAcompanhamento{{ item.id }}">
+                                <i class="bi bi-pencil-square me-1"></i>Atualizar / Concluir
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">
+                            <i class="bi bi-check2-circle fs-3 d-block mb-1 text-success"></i>
+                            Nenhuma atividade encontrada para o filtro selecionado.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ==================================================================== -->
+<!-- MODAIS DE ATUALIZAÇÃO / CONCLUSÃO OPERACIONAL (1 POR SERVIÇO) -->
+<!-- ==================================================================== -->
+{% for item in servicos_operacionais %}
+<div class="modal fade" id="modalAcompanhamento{{ item.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <form action="{{ url_for('atualizar_operacao_servico', id=item.id) }}" method="POST">
+                <input type="hidden" name="filtro_retorno" value="{{ filtro_atual }}">
+                <div class="modal-header bg-light">
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0">{{ item.tipo_servico.nome }}</h5>
+                        <small class="text-muted">{{ item.cliente.nome }} - Valor: R$ {{ "%.2f"|format(item.valor_cobrado) }}</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Status Operacional *</label>
+                        <select name="status" class="form-select border-primary">
+                            <option value="Em Andamento" {% if item.status == 'Em Andamento' %}selected{% endif %}>Em Andamento (Em execução)</option>
+                            <option value="Pendente" {% if item.status == 'Pendente' %}selected{% endif %}>Pendente (Aguardando)</option>
+                            <option value="Concluido" {% if item.status == 'Concluido' %}selected{% endif %} class="fw-bold text-success">✔ Concluído (Liberar p/ Faturamento)</option>
+                            <option value="Cancelado" {% if item.status == 'Cancelado' %}selected{% endif %} class="text-danger">✖ Cancelado</option>
+                        </select>
+                        <small class="text-muted">Ao marcar como <b>Concluído</b>, o item aparecerá imediatamente na aba Financeiro para cobrança.</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Previsão / Prazo de Entrega</label>
+                        <input type="date" name="data_previsao" class="form-control" value="{{ item.data_previsao.strftime('%Y-%m-%d') if item.data_previsao else '' }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Observações Técnicas / Andamento da Obra</label>
+                        <textarea name="observacoes" class="form-control" rows="3" placeholder="Ex: Vistoria realizada, aguardando aprovação do relatório de SPDA...">{{ item.observacoes or '' }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="submit" class="btn btn-primary fw-bold">Salvar Andamento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- ==================================================================== -->
+<!-- MODAL: GERENCIAR CATÁLOGO DE SERVIÇOS -->
+<!-- ==================================================================== -->
+<div class="modal fade" id="modalCatalogo" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold text-dark"><i class="bi bi-journal-bookmark me-2"></i>Catálogo Geral de Serviços</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <!-- Cadastro de Novo Serviço no Catálogo -->
+                <form action="{{ url_for('novo_tipo_servico') }}" method="POST" class="p-3 bg-light rounded border mb-4">
+                    <h6 class="fw-bold text-primary mb-3">Cadastrar Novo Tipo de Serviço</h6>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Nome do Serviço *</label>
+                            <input type="text" name="nome" class="form-control form-control-sm" required placeholder="Ex: Laudo Termográfico">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Valor Base (R$)</label>
+                            <input type="number" step="0.01" name="valor_sugerido" class="form-control form-control-sm" placeholder="0.00">
+                        </div>
+                        <div class="col-md-12 mt-2">
+                            <label class="form-label small fw-bold">Descrição Padrão Técnica</label>
+                            <input type="text" name="descricao" class="form-control form-control-sm" placeholder="Escopo padrão para uso nas cartas proposta...">
+                        </div>
+                        <div class="col-12 text-end mt-2">
+                            <button type="submit" class="btn btn-sm btn-success fw-bold">Salvar no Catálogo</button>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Tabela de Itens do Catálogo -->
+                <h6 class="fw-bold text-dark mb-2">Serviços Cadastrados</h6>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Nome</th>
+                                <th>Valor Base Sugerido</th>
+                                <th>Descrição Padrão</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in catalogo %}
+                            <tr>
+                                <td class="fw-bold">{{ c.nome }}</td>
+                                <td class="text-success fw-bold">R$ {{ "%.2f"|format(c.valor_sugerido) }}</td>
+                                <td><small class="text-muted">{{ c.descricao_padrao or '-' }}</small></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================================================================== -->
+<!-- MODAL: NOVA ATIVIDADE MANUAL (CASO NÃO VENHA DE PROPOSTA) -->
+<!-- ==================================================================== -->
+<div class="modal fade" id="modalNovoServicoDireto" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ url_for('vincular_servico_cliente') }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark">Adicionar Atividade Manual</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Cliente *</label>
+                        <select name="cliente_id" class="form-select form-select-sm" required>
+                            <option value="">Selecione o Cliente...</option>
+                            {% for cli in clientes %}
+                                <option value="{{ cli.id }}">{{ cli.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Serviço *</label>
+                        <select name="tipo_servico_id" class="form-select form-select-sm" required>
+                            <option value="">Selecione o Serviço...</option>
+                            {% for s in catalogo %}
+                                <option value="{{ s.id }}">{{ s.nome }} (R$ {{ "%.2f"|format(s.valor_sugerido) }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Valor (R$)</label>
+                            <input type="number" step="0.01" name="valor_cobrado" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Previsão de Entrega</label>
+                            <input type="date" name="data_previsao" class="form-control form-control-sm">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Observações</label>
+                        <textarea name="observacoes" class="form-control form-control-sm" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold">Criar Atividade</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

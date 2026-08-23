@@ -1,0 +1,369 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold text-dark mb-0"><i class="bi bi-file-earmark-text text-primary me-2"></i>Propostas Comerciais (Orçamentos)</h2>
+        <p class="text-muted mb-0">Emissão de cartas proposta em PDF, negociação de valores e controle de aprovação</p>
+    </div>
+    <div>
+        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovaProposta">
+            <i class="bi bi-plus-circle me-1"></i>Gerar Nova Proposta
+        </button>
+    </div>
+</div>
+
+<!-- CARDS DE MÉTRICAS COMERCIAIS -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm p-3 bg-warning text-dark">
+            <div class="card-body p-0">
+                <span class="small text-dark-50">Aguardando Aprovação</span>
+                <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_aguardando) }}</h3>
+                <small><i class="bi bi-hourglass-split me-1"></i>{{ qtd_aguardando }} proposta(s) em negociação</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm p-3 bg-success text-white">
+            <div class="card-body p-0">
+                <span class="small text-white-50">Propostas Aprovadas (Fechadas)</span>
+                <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_aprovadas) }}</h3>
+                <small><i class="bi bi-check2-circle me-1"></i>Prontas para execução / faturamento</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm p-3 bg-dark text-white">
+            <div class="card-body p-0">
+                <span class="small text-white-50">Padrão de Emissão</span>
+                <h4 class="fw-bold my-1">Carta Proposta PDF</h4>
+                <small><i class="bi bi-file-earmark-pdf me-1"></i>Com ART e escopo técnico</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- FILTROS DE STATUS -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body py-2 d-flex justify-content-between align-items-center">
+        <div class="btn-group">
+            <a href="{{ url_for('listar_propostas', filtro='ativas') }}" class="btn btn-sm {% if filtro_atual == 'ativas' %}btn-warning fw-bold{% else %}btn-outline-secondary{% endif %}">
+                Aguardando Aprovação
+            </a>
+            <a href="{{ url_for('listar_propostas', filtro='aprovadas') }}" class="btn btn-sm {% if filtro_atual == 'aprovadas' %}btn-success fw-bold{% else %}btn-outline-secondary{% endif %}">
+                Aprovadas
+            </a>
+            <a href="{{ url_for('listar_propostas', filtro='canceladas') }}" class="btn btn-sm {% if filtro_atual == 'canceladas' %}btn-danger fw-bold{% else %}btn-outline-secondary{% endif %}">
+                Canceladas (Histórico)
+            </a>
+            <a href="{{ url_for('listar_propostas', filtro='todas') }}" class="btn btn-sm {% if filtro_atual == 'todas' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
+                Todas
+            </a>
+        </div>
+        <small class="text-muted">Mostrando <b>{{ propostas|length }}</b> registros</small>
+    </div>
+</div>
+
+<!-- LISTAGEM DAS PROPOSTAS -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nº Proposta</th>
+                        <th>Cliente / Razão Social</th>
+                        <th>Emissão</th>
+                        <th>Serviços Inclusos</th>
+                        <th>Valor Total</th>
+                        <th>Status</th>
+                        <th class="text-center">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for prop in propostas %}
+                    <tr>
+                        <td class="fw-bold text-primary">{{ prop.numero_proposta }}</td>
+                        <td>
+                            <span class="fw-bold text-dark d-block">{{ prop.cliente.nome }}</span>
+                            <small class="text-muted">{{ prop.cliente.telefone }}</small>
+                        </td>
+                        <td>{{ prop.data_criacao.strftime('%d/%m/%Y') }}</td>
+                        <td>
+                            <span class="badge bg-secondary">{{ prop.itens|length }} item(ns)</span>
+                            <small class="text-muted d-block text-truncate" style="max-width: 220px;">
+                                {% for it in prop.itens %}{{ it.tipo_servico.nome }}{% if not loop.last %}, {% endif %}{% endfor %}
+                            </small>
+                        </td>
+                        <td class="fw-bold text-success fs-6">
+                            R$ {{ "%.2f"|format(prop.valor_total) }}
+                        </td>
+                        <td>
+                            {% if prop.status == 'Aprovado' %}
+                                <span class="badge bg-success p-2"><i class="bi bi-check-circle me-1"></i>Aprovado</span>
+                            {% elif prop.status == 'Cancelado' %}
+                                <span class="badge bg-danger p-2"><i class="bi bi-x-circle me-1"></i>Cancelado</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark p-2"><i class="bi bi-hourglass-split me-1"></i>Aguardando</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <!-- EDITAR PROPOSTA -->
+                            <button class="btn btn-sm btn-outline-primary me-1" data-bs-toggle="modal" data-bs-target="#modalEditarProposta{{ prop.id }}" title="Editar Proposta">
+                                <i class="bi bi-pencil-square"></i>
+                            </button>
+
+                            <!-- GERAR PDF DA CARTA PROPOSTA -->
+                            <a href="{{ url_for('gerar_pdf_proposta', id=prop.id) }}" class="btn btn-sm btn-danger fw-bold me-1" title="Baixar Carta Proposta em PDF">
+                                <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+                            </a>
+
+                            <!-- ALTERAR STATUS RÁPIDO -->
+                            <div class="dropdown d-inline">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                    Status
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li>
+                                        <form action="{{ url_for('atualizar_status_proposta', id=prop.id) }}" method="POST">
+                                            <input type="hidden" name="novo_status" value="Aguardando Aprovação">
+                                            <button type="submit" class="dropdown-item text-warning"><i class="bi bi-hourglass me-2"></i>Aguardando Aprovação</button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form action="{{ url_for('atualizar_status_proposta', id=prop.id) }}" method="POST">
+                                            <input type="hidden" name="novo_status" value="Aprovado">
+                                            <button type="submit" class="dropdown-item text-success fw-bold"><i class="bi bi-check-circle me-2"></i>Aprovar Proposta</button>
+                                        </form>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <form action="{{ url_for('atualizar_status_proposta', id=prop.id) }}" method="POST">
+                                            <input type="hidden" name="novo_status" value="Cancelado">
+                                            <button type="submit" class="dropdown-item text-danger" onclick="return confirm('Deseja arquivar/cancelar esta proposta?')"><i class="bi bi-x-circle me-2"></i>Cancelar Proposta</button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-3 d-block mb-1"></i>
+                            Nenhuma proposta encontrada para este status.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ==================================================================== -->
+<!-- MODAL: GERAR NOVA PROPOSTA -->
+<!-- ==================================================================== -->
+<div class="modal fade" id="modalNovaProposta" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow">
+            <form action="{{ url_for('criar_proposta') }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-file-earmark-plus text-primary me-2"></i>Gerar Nova Proposta Comercial</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Cliente / Razão Social *</label>
+                        <select name="cliente_id" class="form-select" required>
+                            <option value="">Selecione o Cliente...</option>
+                            {% for cli in clientes %}
+                                <option value="{{ cli.id }}">{{ cli.nome }} ({{ cli.cnpj_cpf or 'Sem CNPJ' }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Validade da Proposta (Dias)</label>
+                            <input type="number" name="validade_dias" class="form-control form-control-sm" value="15" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Condição de Pagamento</label>
+                            <input type="text" name="condicoes_pagamento" class="form-control form-control-sm" value="Boleto Bancário / Transferência em 30 dias">
+                        </div>
+                    </div>
+
+                    <h6 class="fw-bold text-secondary mb-2 mt-4"><i class="bi bi-list-check me-1"></i>Serviços Inclusos:</h6>
+                    
+                    <div id="container-servicos-nova">
+                        <div class="row g-2 mb-2 p-2 bg-light rounded border item-servico">
+                            <div class="col-md-5">
+                                <label class="form-label small fw-bold">Serviço</label>
+                                <select name="tipo_servico_id[]" class="form-select form-select-sm select-servico" required>
+                                    <option value="">Selecione...</option>
+                                    {% for s in tipos_servico %}
+                                        <option value="{{ s.id }}" data-preco="{{ s.valor_sugerido }}" data-desc="{{ s.descricao_padrao }}">{{ s.nome }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Valor (R$)</label>
+                                <input type="number" step="0.01" name="valor_unitario[]" class="form-control form-control-sm input-valor" required placeholder="0.00">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Detalhamento Técnico</label>
+                                <input type="text" name="descricao[]" class="form-control form-control-sm input-desc" placeholder="Escopo para a carta...">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="adicionarLinha('container-servicos-nova')">
+                        <i class="bi bi-plus-lg me-1"></i>Adicionar Outro Serviço
+                    </button>
+
+                    <div class="mt-4">
+                        <label class="form-label small fw-bold">Observações Gerais</label>
+                        <textarea name="observacoes" class="form-control form-control-sm" rows="2" placeholder="Ex: Inclusas taxas do Corpo de Bombeiros e emissão de ART..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4">Gerar Proposta Comercial</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ==================================================================== -->
+<!-- MODAIS DE EDIÇÃO DE PROPOSTA (1 POR PROPOSTA) -->
+<!-- ==================================================================== -->
+{% for prop in propostas %}
+<div class="modal fade" id="modalEditarProposta{{ prop.id }}" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow">
+            <form action="{{ url_for('editar_proposta', id=prop.id) }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-pencil-square text-primary me-2"></i>Editar Proposta {{ prop.numero_proposta }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Cliente / Razão Social *</label>
+                        <select name="cliente_id" class="form-select" required>
+                            {% for cli in clientes %}
+                                <option value="{{ cli.id }}" {% if cli.id == prop.cliente_id %}selected{% endif %}>{{ cli.nome }} ({{ cli.cnpj_cpf or 'Sem CNPJ' }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Validade da Proposta (Dias)</label>
+                            <input type="number" name="validade_dias" class="form-control form-control-sm" value="{{ prop.validade_dias }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Condição de Pagamento</label>
+                            <input type="text" name="condicoes_pagamento" class="form-control form-control-sm" value="{{ prop.condicoes_pagamento }}">
+                        </div>
+                    </div>
+
+                    <h6 class="fw-bold text-secondary mb-2 mt-4"><i class="bi bi-list-check me-1"></i>Serviços Inclusos na Proposta:</h6>
+                    
+                    <div id="container-servicos-edit-{{ prop.id }}">
+                        {% for item in prop.itens %}
+                        <div class="row g-2 mb-2 p-2 bg-light rounded border item-servico align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Serviço</label>
+                                <select name="tipo_servico_id[]" class="form-select form-select-sm select-servico" required>
+                                    {% for s in tipos_servico %}
+                                        <option value="{{ s.id }}" data-preco="{{ s.valor_sugerido }}" data-desc="{{ s.descricao_padrao }}" {% if s.id == item.tipo_servico_id %}selected{% endif %}>{{ s.nome }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Valor (R$)</label>
+                                <input type="number" step="0.01" name="valor_unitario[]" class="form-control form-control-sm input-valor" value="{{ item.valor_unitario }}" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Detalhamento Técnico</label>
+                                <input type="text" name="descricao[]" class="form-control form-control-sm input-desc" value="{{ item.descricao_personalizada or '' }}" placeholder="Escopo...">
+                            </div>
+                            <div class="col-md-1 text-end">
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removerLinha(this)" title="Remover item"><i class="bi bi-trash"></i></button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="adicionarLinha('container-servicos-edit-{{ prop.id }}')">
+                        <i class="bi bi-plus-lg me-1"></i>Adicionar Outro Serviço
+                    </button>
+
+                    <div class="mt-4">
+                        <label class="form-label small fw-bold">Observações Gerais</label>
+                        <textarea name="observacoes" class="form-control form-control-sm" rows="2">{{ prop.observacoes or '' }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<script>
+function adicionarLinha(containerId) {
+    const container = document.getElementById(containerId);
+    const primeiraLinha = container.querySelector('.item-servico');
+    const novaLinha = primeiraLinha.cloneNode(true);
+    
+    novaLinha.querySelector('.input-valor').value = '';
+    novaLinha.querySelector('.input-desc').value = '';
+    novaLinha.querySelector('.select-servico').selectedIndex = 0;
+    
+    // Garante botão de exclusão se clonado da nova proposta
+    if (!novaLinha.querySelector('.btn-outline-danger')) {
+        const divBtn = document.createElement('div');
+        divBtn.className = 'col-md-1 text-end';
+        divBtn.innerHTML = '<button type="button" class="btn btn-sm btn-outline-danger" onclick="removerLinha(this)"><i class="bi bi-trash"></i></button>';
+        novaLinha.querySelector('.col-md-4').className = 'col-md-4';
+        novaLinha.appendChild(divBtn);
+    }
+    
+    container.appendChild(novaLinha);
+    configurarEventosSelect();
+}
+
+function removerLinha(btn) {
+    const container = btn.closest('#container-servicos-nova, [id^="container-servicos-edit-"]');
+    if (container.querySelectorAll('.item-servico').length > 1) {
+        btn.closest('.item-servico').remove();
+    } else {
+        alert('A proposta deve conter pelo menos um serviço.');
+    }
+}
+
+function configurarEventosSelect() {
+    document.querySelectorAll('.select-servico').forEach(select => {
+        select.onchange = function() {
+            const opt = this.options[this.selectedIndex];
+            const preco = opt.getAttribute('data-preco');
+            const desc = opt.getAttribute('data-desc');
+            const linha = this.closest('.item-servico');
+            
+            if (preco) linha.querySelector('.input-valor').value = parseFloat(preco).toFixed(2);
+            if (desc && !linha.querySelector('.input-desc').value) {
+                linha.querySelector('.input-desc').value = desc;
+            }
+        };
+    });
+}
+document.addEventListener('DOMContentLoaded', configurarEventosSelect);
+</script>
+{% endblock %}

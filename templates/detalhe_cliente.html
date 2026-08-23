@@ -1,150 +1,260 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<!-- Cabeçalho do Perfil -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-arrow-left"></i> Voltar ao Dashboard</a>
-        <h2>{{ cliente.nome }}</h2>
+        <h2 class="fw-bold text-dark mb-0"><i class="bi bi-building text-primary me-2"></i>{{ cliente.nome }}</h2>
+        <p class="text-muted mb-0">
+            {% if cliente.nome_fantasia %}<b>{{ cliente.nome_fantasia }}</b> | {% endif %}
+            CNPJ/CPF: <b>{{ cliente.cnpj_cpf or 'Não informado' }}</b>
+        </p>
     </div>
-    <div>
-        <a href="{{ url_for('editar_cliente', id=cliente.id) }}" class="btn btn-outline-dark">
-            <i class="bi bi-pencil me-1"></i> Editar Dados Cadastrais
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('editar_cliente', id=cliente.id) }}" class="btn btn-primary fw-bold shadow-sm">
+            <i class="bi bi-pencil-square me-1"></i>Editar Cadastro Completo
+        </a>
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Voltar
         </a>
     </div>
 </div>
 
-<div class="row">
-    <!-- Coluna Esquerda: Status do AVCB, Financeiro e Contato -->
-    <div class="col-md-5 mb-4">
+<div class="row g-4">
+    <!-- COLUNA DA ESQUERDA: DADOS CADASTRAIS, ENDEREÇO & TÉCNICOS -->
+    <div class="col-lg-5">
         
-        <!-- Cartão de Alerta AVCB -->
+        <!-- CARD 1: LICENCIAMENTO AVCB -->
         <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header card-header-drd2">
-                <i class="bi bi-shield-check me-2"></i>Vigência do Licenciamento AVCB
+            <div class="card-header bg-white py-3">
+                <h5 class="fw-bold mb-0 text-danger"><i class="bi bi-shield-fire me-2"></i>Status do AVCB / Bombeiros</h5>
             </div>
             <div class="card-body">
-                <p class="mb-1"><strong>Data de Emissão:</strong> {{ cliente.data_inicio_avcb.strftime('%d/%m/%Y') }}</p>
-                <p class="mb-3"><strong>Data de Vencimento:</strong> {{ cliente.data_vencimento_avcb.strftime('%d/%m/%Y') }}</p>
-                
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted small">Início da Vigência:</span>
+                    <span class="fw-bold">{{ cliente.data_inicio_avcb.strftime('%d/%m/%Y') }}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted small">Vencimento do AVCB:</span>
+                    <span class="fw-bold">{{ cliente.data_vencimento_avcb.strftime('%d/%m/%Y') }}</span>
+                </div>
                 {% if alerta_ativo %}
-                    <div class="alert alert-danger mb-0 text-center fw-bold badge-alerta-vencimento">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ mensagem_alerta }}
+                    <div class="alert alert-danger mb-0 py-2 text-center fw-bold small">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ mensagem_alerta }}
                     </div>
                 {% else %}
-                    <div class="alert alert-success mb-0 text-center fw-bold">
-                        <i class="bi bi-check-circle-fill me-2"></i>{{ mensagem_alerta }}
+                    <div class="alert alert-success mb-0 py-2 text-center fw-bold small">
+                        <i class="bi bi-check-circle-fill me-1"></i>{{ mensagem_alerta }}
                     </div>
                 {% endif %}
             </div>
         </div>
 
-        <!-- Cartão de Gestão Financeira Rápida -->
+        <!-- CARD 2: PARÂMETROS TÉCNICOS DA EDIFICAÇÃO -->
         <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-dark text-white fw-bold">
-                <i class="bi bi-currency-dollar me-2"></i>Gestão Financeira do Contrato
+            <div class="card-header bg-white py-3">
+                <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-rulers me-2 text-primary"></i>Dados Técnicos da Edificação</h5>
             </div>
-            <div class="card-body">
-                <form action="{{ url_for('atualizar_financeiro', id=cliente.id) }}" method="POST">
-                    <div class="mb-3">
-                        <label for="valor_proposta" class="form-label fw-bold">Valor da Proposta (R$):</label>
-                        <input type="number" step="0.01" class="form-control" name="valor_proposta" value="{{ cliente.valor_proposta }}" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="status_boleto" class="form-label fw-bold">Status do Pagamento:</label>
-                        <select class="form-select" name="status_boleto" required>
-                            <option value="Pendente" {% if cliente.status_boleto == 'Pendente' %}selected{% endif %}>Pendente</option>
-                            <option value="Pago" {% if cliente.status_boleto == 'Pago' %}selected{% endif %}>Pago</option>
-                            <option value="Atrasado" {% if cliente.status_boleto == 'Atrasado' %}selected{% endif %}>Atrasado</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="btn btn-drd2-primary w-100">Atualizar Status Financeiro</button>
-                </form>
+            <div class="card-body small">
+                <p class="mb-2"><strong>Área Construída:</strong> {{ "%.2f"|format(cliente.area_construida) if cliente.area_construida else '-' }} m²</p>
+                <p class="mb-2"><strong>Ocupação:</strong> {{ cliente.tipo_ocupacao or '-' }}</p>
+                <p class="mb-2"><strong>Pavimentos:</strong> {{ cliente.numero_pavimentos or '-' }}</p>
+                <p class="mb-0"><strong>Nº Projeto Bombeiros:</strong> {{ cliente.numero_projeto_cb or '-' }}</p>
             </div>
         </div>
 
-        <!-- Cartão de Contato -->
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-light fw-bold">
-                <i class="bi bi-telephone me-2"></i>Canais de Contato
+        <!-- CARD 3: CONTATOS & LOCALIZAÇÃO -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-geo-alt me-2 text-primary"></i>Endereço & Contatos</h5>
+            </div>
+            <div class="card-body small">
+                <p class="mb-2"><strong>Responsável / Síndico:</strong> {{ cliente.responsavel or '-' }}</p>
+                <p class="mb-2"><strong>Telefone WhatsApp:</strong> {{ cliente.telefone }}</p>
+                {% if cliente.telefone_secundario %}<p class="mb-2"><strong>Telefone Fixo:</strong> {{ cliente.telefone_secundario }}</p>{% endif %}
+                <p class="mb-2"><strong>E-mail Principal:</strong> {{ cliente.email }}</p>
+                {% if cliente.email_financeiro %}<p class="mb-2"><strong>E-mail Financeiro:</strong> {{ cliente.email_financeiro }}</p>{% endif %}
+                <hr>
+                <p class="mb-1"><strong>Endereço:</strong></p>
+                <p class="text-muted mb-0">
+                    {{ cliente.logradouro or '' }}, {{ cliente.numero or 'S/N' }} {{ cliente.complemento or '' }}<br>
+                    {{ cliente.bairro or '' }} - {{ cliente.cidade or '' }}/{{ cliente.estado or '' }} - CEP: {{ cliente.cep or '-' }}
+                </p>
+                {% if cliente.observacoes %}
+                    <hr>
+                    <p class="mb-1"><strong>Observações:</strong></p>
+                    <p class="text-muted mb-0 font-monospace">{{ cliente.observacoes }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- CARD 4: RESUMO FINANCEIRO -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-cash-coin me-2 text-success"></i>Resumo Financeiro</h5>
             </div>
             <div class="card-body">
-                <p class="mb-1"><strong>Telefone / WhatsApp:</strong> {{ cliente.telefone }}</p>
-                <p class="mb-0"><strong>E-mail:</strong> {{ cliente.email }}</p>
+                <div class="mb-3">
+                    <span class="text-muted small d-block">Serviços Faturados / Concluídos:</span>
+                    <h3 class="fw-bold text-success mb-0">R$ {{ "%.2f"|format(cliente.total_concluido) }}</h3>
+                </div>
+                <div>
+                    <span class="text-muted small d-block">Em Aberto / Execução:</span>
+                    <h4 class="fw-bold text-dark mb-0">R$ {{ "%.2f"|format(cliente.total_em_aberto) }}</h4>
+                </div>
+                <hr>
+                <a href="{{ url_for('financeiro') }}" class="btn btn-sm btn-outline-success w-100 fw-bold">
+                    <i class="bi bi-receipt me-1"></i>Acessar Painel Financeiro
+                </a>
             </div>
         </div>
     </div>
 
-    <!-- Coluna Direita: Anexo de Documentos e Arquivo Digital -->
-    <div class="col-md-7">
+    <!-- COLUNA DA DIREITA: ATIVIDADES OPERACIONAIS E DOCUMENTOS -->
+    <div class="col-lg-7">
         
-        <!-- Formulário de Upload de Arquivos -->
+        <!-- HISTÓRICO DE SERVIÇOS -->
         <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header card-header-drd2">
-                <i class="bi bi-cloud-upload me-2"></i>Anexar Documento Técnico
-            </div>
-            <div class="card-body">
-                <form action="{{ url_for('upload_documento', id=cliente.id) }}" method="POST" enctype="multipart/form-data">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label for="tipo_documento" class="form-label fw-bold">Tipo do Documento:</label>
-                            <select class="form-select" name="tipo_documento" required>
-                                <option value="AVCB">AVCB</option>
-                                <option value="Projeto">Projeto Técnico</option>
-                                <option value="ART">ART / RRT</option>
-                                <option value="Outros">Outros Documentos</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="arquivo" class="form-label fw-bold">Arquivo (PDF / Imagem):</label>
-                            <input class="form-control" type="file" name="arquivo" required>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-drd2-alert mt-3 w-100">
-                        <i class="bi bi-file-earmark-arrow-up me-1"></i> Upload do Arquivo
-                    </button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Lista de Documentos Anexados do Cliente -->
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-                <span>Documentos Arquivados</span>
-                <span class="badge bg-secondary">{{ documentos|length }} arquivo(s)</span>
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-tools me-2 text-primary"></i>Atividades Operacionais</h5>
+                <a href="{{ url_for('consultar_servicos') }}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-lg me-1"></i>Acessar Serviços
+                </a>
             </div>
             <div class="card-body p-0">
-                <ul class="list-group list-group-flush">
-                    {% for doc in documentos %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center p-3">
-                        <div>
-                            <span class="badge bg-primary mb-1">{{ doc.tipo_documento }}</span>
-                            <span class="d-block fw-bold text-truncate" style="max-width: 300px;">
-                                {{ doc.nome_arquivo.split('_')[-1] }}
-                            </span>
-                            <small class="text-muted">Enviado em: {{ doc.data_upload.strftime('%d/%m/%Y às %H:%M') }}</small>
-                        </div>
-                        <div class="btn-group btn-group-sm">
-                            <!-- Link para Visualizar/Baixar o Arquivo da pasta static/uploads -->
-                            <a href="{{ url_for('download_file', filename=doc.nome_arquivo) }}" target="_blank" class="btn btn-outline-primary" title="Abrir / Baixar Documento">
-                                <i class="bi bi-download"></i>
-                            </a>
-                            <!-- Link para Deletar Documento -->
-                            <a href="{{ url_for('deletar_documento', doc_id=doc.id) }}" class="btn btn-outline-danger" onclick="return confirm('Tem certeza que deseja remover este documento?');" title="Excluir Documento">
-                                <i class="bi bi-trash"></i>
-                            </a>
-                        </div>
-                    </li>
-                    {% else %}
-                    <li class="list-group-item text-center py-4 text-muted">
-                        <i class="bi bi-folder2-open fs-2 d-block mb-2"></i>
-                        Nenhum documento anexado para este cliente ainda.
-                    </li>
-                    {% endfor %}
-                </ul>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Serviço</th>
+                                <th>Valor (R$)</th>
+                                <th>Previsão</th>
+                                <th>Status</th>
+                                <th>Cobrança</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in cliente.servicos %}
+                            <tr>
+                                <td>
+                                    <span class="fw-bold text-dark">{{ s.tipo_servico.nome }}</span>
+                                    {% if s.observacoes %}
+                                        <small class="d-block text-muted text-truncate" style="max-width: 220px;">{{ s.observacoes }}</small>
+                                    {% endif %}
+                                </td>
+                                <td class="fw-bold text-dark">R$ {{ "%.2f"|format(s.valor_cobrado) }}</td>
+                                <td>{{ s.data_previsao.strftime('%d/%m/%Y') if s.data_previsao else '-' }}</td>
+                                <td>
+                                    {% if s.status == 'Concluido' %}
+                                        <span class="badge bg-success">Concluído</span>
+                                    {% elif s.status == 'Em Andamento' %}
+                                        <span class="badge bg-primary">Em Andamento</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">{{ s.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if s.status_pagamento == 'Pago' %}
+                                        <span class="badge bg-success">Pago</span>
+                                    {% elif s.status_pagamento == 'Boleto Emitido' %}
+                                        <span class="badge bg-warning text-dark">Boleto Emitido</span>
+                                    {% elif s.status_pagamento == 'Em Atraso' %}
+                                        <span class="badge bg-danger">Em Atraso</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">A Faturar</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">Nenhum serviço registrado para este cliente.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
+        <!-- DOCUMENTOS TÉCNICOS ANEXADOS -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-file-earmark-arrow-up me-2 text-primary"></i>Documentos Técnicos (Plantas, ART, Laudos)</h5>
+                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalUpload">
+                    <i class="bi bi-cloud-upload me-1"></i>Anexar Documento
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Tipo</th>
+                                <th>Arquivo</th>
+                                <th>Data</th>
+                                <th class="text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for doc in documentos %}
+                            <tr>
+                                <td><span class="badge bg-secondary">{{ doc.tipo_documento }}</span></td>
+                                <td><span class="fw-bold text-dark text-truncate d-block" style="max-width: 250px;">{{ doc.nome_arquivo }}</span></td>
+                                <td>{{ doc.data_upload.strftime('%d/%m/%Y') }}</td>
+                                <td class="text-center">
+                                    <a href="{{ url_for('download_file', filename=doc.nome_arquivo) }}" target="_blank" class="btn btn-sm btn-outline-primary me-1" title="Baixar Arquivo">
+                                        <i class="bi bi-download"></i>
+                                    </a>
+                                    <a href="{{ url_for('deletar_documento', doc_id=doc.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remover permanentemente este documento?')" title="Excluir">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">Nenhum documento anexado até o momento.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- MODAL DE UPLOAD DE DOCUMENTOS -->
+<div class="modal fade" id="modalUpload" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <form action="{{ url_for('upload_documento', id=cliente.id) }}" method="POST" enctype="multipart/form-data">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold">Anexar Documento Técnico</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Tipo de Documento *</label>
+                        <select name="tipo_documento" class="form-select" required>
+                            <option value="AVCB / CLCB">AVCB / CLCB</option>
+                            <option value="ART / RRT">ART / RRT</option>
+                            <option value="Projeto Técnico">Projeto Técnico (Plantas/Memoriais)</option>
+                            <option value="Laudo Técnico">Laudo Técnico (SPDA / Gás / Elétrica)</option>
+                            <option value="Certificado de Brigada">Certificado de Brigada</option>
+                            <option value="Outros">Outros</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Selecione o Arquivo *</label>
+                        <input type="file" name="arquivo" class="form-control" required>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold">Fazer Upload</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 {% endblock %}

@@ -1,119 +1,144 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<!-- Cabeçalho do Dashboard -->
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-    <h2><i class="bi bi-building me-2"></i>Painel de Clientes e Licenças AVCB</h2>
-    <a href="{{ url_for('novo_cliente') }}" class="btn btn-drd2-alert shadow-sm">
-        <i class="bi bi-person-plus-fill me-1"></i> Cadastrar Cliente
-    </a>
+<!-- Título do Dashboard -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold text-dark mb-0"><i class="bi bi-speedometer2 me-2"></i>Painel Principal</h2>
+        <p class="text-muted mb-0">Gestão integrada de licenças, finanças, serviços e equipe DRD2</p>
+    </div>
 </div>
 
-<!-- Cartão de Busca e Filtros Rápidos -->
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-body bg-white rounded">
-        <form method="GET" action="{{ url_for('index') }}" class="row g-3">
-            <!-- Campo de Pesquisa por Nome -->
-            <div class="col-md-7">
-                <div class="input-group">
-                    <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
-                    <input type="text" name="busca" class="form-control" placeholder="Buscar por nome do cliente..." value="{{ busca }}">
+<!-- 1. CARTÕES DE NAVEGAÇÃO RÁPIDA (MENU PRINCIPAL) -->
+<div class="row g-4 mb-5">
+    
+    <!-- Botão 1: Cadastrar Cliente -->
+    <div class="col-md-3">
+        <a href="{{ url_for('novo_cliente') }}" class="text-decoration-none">
+            <div class="card border-0 shadow-sm h-100 card-menu-hover text-center p-3">
+                <div class="card-body">
+                    <div class="icon-shape bg-primary text-white rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                        <i class="bi bi-person-plus-fill fs-3"></i>
+                    </div>
+                    <h5 class="fw-bold text-dark">Cadastrar Cliente</h5>
+                    <p class="text-muted small mb-0">Novo registro empresarial e vigência do AVCB</p>
                 </div>
             </div>
+        </a>
+    </div>
 
-            <!-- Botões de Ação da Busca e Filtro de Alerta -->
-            <div class="col-md-5 d-flex gap-2">
-                <button type="submit" class="btn btn-drd2-primary flex-grow-1">Pesquisar</button>
-                
-                {% if filtro_alerta == 'sim' %}
-                    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Limpar Filtros</a>
-                {% else %}
-                    <a href="{{ url_for('index', alerta='sim', busca=busca) }}" class="btn btn-outline-danger">
-                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Apenas Vencimentos Próximos
-                    </a>
-                {% endif %}
+    <!-- Botão 2: Financeiro -->
+    <div class="col-md-3">
+        <a href="{{ url_for('financeiro') }}" class="text-decoration-none">
+            <div class="card border-0 shadow-sm h-100 card-menu-hover text-center p-3">
+                <div class="card-body">
+                    <div class="icon-shape bg-success text-white rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                        <i class="bi bi-cash-stack fs-3"></i>
+                    </div>
+                    <h5 class="fw-bold text-dark">Financeiro</h5>
+                    <p class="text-muted small mb-0">Status de cobranças e faturamento de propostas</p>
+                </div>
             </div>
-        </form>
+        </a>
+    </div>
+
+    <!-- Botão 3: Consultar Serviços -->
+    <div class="col-md-3">
+        <a href="{{ url_for('consultar_servicos') }}" class="text-decoration-none">
+            <div class="card border-0 shadow-sm h-100 card-menu-hover text-center p-3">
+                <div class="card-body">
+                    <div class="icon-shape bg-warning text-dark rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                        <i class="bi bi-tools fs-3"></i>
+                    </div>
+                    <h5 class="fw-bold text-dark">Consultar Serviços</h5>
+                    <p class="text-muted small mb-0">Projetos técnicos, vistorias e laudos</p>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Botão 4: Gerenciar Usuários -->
+    <div class="col-md-3">
+        <a href="#secao-usuarios" class="text-decoration-none">
+            <div class="card border-0 shadow-sm h-100 card-menu-hover text-center p-3">
+                <div class="card-body">
+                    <div class="icon-shape bg-dark text-white rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                        <i class="bi bi-people-fill fs-3"></i>
+                    </div>
+                    <h5 class="fw-bold text-dark">Gerenciar Usuários</h5>
+                    <p class="text-muted small mb-0">Controle de acessos e membros da equipe</p>
+                </div>
+            </div>
+        </a>
     </div>
 </div>
 
-<!-- Tabela de Clientes -->
-<div class="card border-0 shadow-sm">
-    <div class="card-header card-header-drd2 d-flex justify-content-between align-items-center">
-        <span>Relatório Geral de Contratos AVCB</span>
-        <span class="badge bg-light text-dark">{{ clientes|length }} Cliente(s)</span>
+<!-- 2. RESUMO DE ALERTAS E CLIENTES -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-shield-exclamation text-warning me-2"></i>Status do Licenciamento AVCB</h5>
+        
+        <!-- Formulário de Busca e Filtro -->
+        <form method="GET" action="{{ url_for('index') }}" class="d-flex gap-2">
+            <input type="text" name="busca" class="form-control form-control-sm" placeholder="Buscar cliente..." value="{{ busca or '' }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-search"></i></button>
+            {% if filtro_alerta == 'sim' %}
+                <a href="{{ url_for('index') }}" class="btn btn-sm btn-secondary">Limpar Filtros</a>
+            {% else %}
+                <a href="{{ url_for('index', alerta='sim') }}" class="btn btn-sm btn-outline-danger"><i class="bi bi-funnel-fill me-1"></i>Apenas Alertas/Vencidos</a>
+            {% endif %}
+        </form>
     </div>
+
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th>ID</th>
-                        <th>Cliente</th>
+                        <th>Empresa / Cliente</th>
                         <th>Contato</th>
                         <th>Vencimento AVCB</th>
                         <th>Status da Licença</th>
-                        <th>Financeiro</th>
+                        <th>Status Financeiro</th>
                         <th class="text-center">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for cliente in clientes %}
-                    <!-- Chama a função Python que calcula se falta <= 5 meses para vencer -->
                     {% set alerta_ativo, msg_alerta = calcular_alerta_avcb(cliente.data_vencimento_avcb) %}
                     <tr>
-                        <td><strong>#{{ cliente.id }}</strong></td>
+                        <td class="fw-bold">{{ cliente.nome }}</td>
                         <td>
-                            <a href="{{ url_for('detalhe_cliente', id=cliente.id) }}" class="text-decoration-none fw-bold text-dark">
-                                {{ cliente.nome }}
-                            </a>
-                        </td>
-                        <td>
-                            <small class="d-block text-muted"><i class="bi bi-telephone"></i> {{ cliente.telefone }}</small>
-                            <small class="d-block text-muted"><i class="bi bi-envelope"></i> {{ cliente.email }}</small>
+                            <small class="d-block text-muted">{{ cliente.telefone }}</small>
+                            <small class="text-muted">{{ cliente.email }}</small>
                         </td>
                         <td>{{ cliente.data_vencimento_avcb.strftime('%d/%m/%Y') }}</td>
                         <td>
                             {% if alerta_ativo %}
-                                <!-- Tag Vermelha Pulsante de Alerta -->
-                                <span class="badge badge-alerta-vencimento">
-                                    <i class="bi bi-exclamation-octagon-fill me-1"></i>{{ msg_alerta }}
-                                </span>
+                                <span class="badge bg-danger p-2"><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ msg_alerta }}</span>
                             {% else %}
-                                <!-- Tag Verde de Vencimento Normal -->
-                                <span class="badge bg-success">
-                                    <i class="bi bi-check-circle me-1"></i>{{ msg_alerta }}
-                                </span>
+                                <span class="badge bg-success p-2"><i class="bi bi-check-circle-fill me-1"></i>{{ msg_alerta }}</span>
                             {% endif %}
                         </td>
                         <td>
-                            <span class="d-block fw-bold text-dark">R$ {{ "%.2f"|format(cliente.valor_proposta) }}</span>
                             {% if cliente.status_boleto == 'Pago' %}
                                 <span class="badge bg-success">Pago</span>
-                            {% elif cliente.status_boleto == 'Pendente' %}
-                                <span class="badge bg-warning text-dark">Pendente</span>
-                            {% else %}
+                            {% elif cliente.status_boleto == 'Atrasado' %}
                                 <span class="badge bg-danger">Atrasado</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">Pendente</span>
                             {% endif %}
                         </td>
                         <td class="text-center">
-                            <div class="btn-group btn-group-sm">
-                                <a href="{{ url_for('detalhe_cliente', id=cliente.id) }}" class="btn btn-outline-primary" title="Perfil / Anexar Documentos">
-                                    <i class="bi bi-eye"></i>
-                                </a>
-                                <a href="{{ url_for('editar_cliente', id=cliente.id) }}" class="btn btn-outline-secondary" title="Editar">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
-                                <a href="{{ url_for('deletar_cliente', id=cliente.id) }}" class="btn btn-outline-danger" onclick="return confirm('Tem certeza que deseja excluir este cliente?');" title="Excluir">
-                                    <i class="bi bi-trash"></i>
-                                </a>
-                            </div>
+                            <a href="{{ url_for('detalhe_cliente', id=cliente.id) }}" class="btn btn-sm btn-outline-primary" title="Ver Detalhes e Documentos">
+                                <i class="bi bi-eye"></i> Gerenciar
+                            </a>
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="7" class="text-center py-4 text-muted">
-                            <i class="bi bi-folder-x fs-2 d-block mb-2"></i>
+                        <td colspan="6" class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox fs-2 d-block mb-2"></i>
                             Nenhum cliente cadastrado ou encontrado na busca.
                         </td>
                     </tr>
