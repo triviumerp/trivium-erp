@@ -57,6 +57,9 @@ login_manager.login_message_category = 'warning'
 
 app.register_blueprint(auth_bp)
 
+# Cria automaticamente todas as tabelas no PostgreSQL na inicialização (mesmo rodando via Gunicorn)
+with app.app_context():
+    db.create_all()
 
 def _limpar_texto(texto):
     """Garante que caracteres especiais como & e tags não quebrem o parser XML do ReportLab."""
