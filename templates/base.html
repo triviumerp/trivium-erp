@@ -119,11 +119,25 @@
         }
 
         /* --- CONTEÚDO PRINCIPAL --- */
-        .main-wrapper {
+        main-wrapper {
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             width: 100%;
+        }
+
+        @media (min-width: 768px) {
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 250px;
+                z-index: 100;
+            }
+            .main-wrapper {
+                margin-left: 250px;
+                width: calc(100% - 250px); /* Garante que caiba perfeitamente no monitor */
+            }
         }
 
         .top-navbar {
