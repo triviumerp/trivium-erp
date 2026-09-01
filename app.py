@@ -41,6 +41,7 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'trivium_erp_chave_secreta_pr
 
 # Conexão com o PostgreSQL Local
 URL_LOCAL_POSTGRES = "postgresql://postgres:admin@127.0.0.1:5432/trivium_db?client_encoding=utf8"
+# Ajuste obrigatório da URL do PostgreSQL no Render
 uri_banco = os.getenv('DATABASE_URL', '')
 if uri_banco.startswith("postgres://"):
     uri_banco = uri_banco.replace("postgres://", "postgresql://", 1)
@@ -48,12 +49,10 @@ if uri_banco.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = uri_banco
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# CORREÇÃO PARA SSL ERROR NO RENDER / GUNICORN
+# CORREÇÃO DO POOL DE CONEXÃO SSL
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    "pool_pre_ping": True,        # Testa a conexão antes de executar a query (evita conexão quebrada)
-    "pool_recycle": 300,          # Recicla conexões a cada 5 minutos
-    "pool_size": 10,
-    "max_overflow": 20
+    "pool_pre_ping": True,
+    "pool_recycle": 300
 
 # Inicialização
 db.init_app(app)
