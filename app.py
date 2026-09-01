@@ -37,11 +37,11 @@ app = Flask(__name__)
 UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'trivium_erp_chave_secreta_local_2026')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'trivium_erp_chave_secreta_producao_2026')
 
 # Conexão com o PostgreSQL Local
 URL_LOCAL_POSTGRES = "postgresql://postgres:admin@127.0.0.1:5432/trivium_db?client_encoding=utf8"
-uri_banco = os.getenv('DATABASE_URL', URL_LOCAL_POSTGRES)
+uri_banco = os.getenv('DATABASE_URL','')
 if uri_banco.startswith("postgres://"):
     uri_banco = uri_banco.replace("postgres://", "postgresql://", 1)
 
@@ -59,7 +59,10 @@ app.register_blueprint(auth_bp)
 
 # Cria automaticamente todas as tabelas no PostgreSQL na inicialização (mesmo rodando via Gunicorn)
 with app.app_context():
-    db.create_all()
+    try:
+        db.create_all()
+    except Exception as e:
+        print(f"[ERRO AO CRIAR TABELAS]: {e}")
 
 def _limpar_texto(texto):
     """Garante que caracteres especiais como & e tags não quebrem o parser XML do ReportLab."""
