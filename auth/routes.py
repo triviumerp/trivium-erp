@@ -42,14 +42,11 @@ def login():
 
         usuario = Usuario.query.filter_by(email=email).first()
         if usuario and usuario.check_senha(senha):
-            # TRAVA: Impede login se a conta não estiver ativada por e-mail
+            # Ativa automaticamente contas antigas que ficaram pendentes nos testes
             if not usuario.ativo:
-                token = gerar_token_ativacao(usuario.email)
-                link = url_for('auth.ativar_conta', token=token, _external=True)
-                enviar_email_ativacao(usuario.email, usuario.nome, link)
-                flash('Cadastro realizado com sucesso! Enviamos um link de confirmação para o seu e-mail. Se não encontrar na Caixa de Entrada, verifique o Spam ou Lixo Eletrônico.', 'success')
-                return redirect(url_for('auth.login'))
-            
+                usuario.ativo = True
+                db.session.commit()
+
             login_user(usuario, remember=True)
             flash(f'Bem-vindo de volta, {usuario.nome}!', 'success')
             next_page = request.args.get('next')
@@ -106,7 +103,7 @@ def registro():
             email=email,
             cargo="Administrador",
             nivel_acesso="admin",
-            ativo=False
+            ativo=True
         )
         novo_usuario.set_senha(senha)
         db.session.add(novo_usuario)
@@ -114,14 +111,14 @@ def registro():
 
         # 5. Geração do Token e Envio do E-mail
         
-        try: 
-            token = gerar_token_ativacao(email)
-            link = url_for('auth.ativar_conta', token=token, _external=True)
-            enviar_email_ativacao(email, nome_usuario, link)
-        except Exception as e:
-            print(f"[ERRO DISPARO EMAIL]: {e}")
+        #try: 
+            #token = gerar_token_ativacao(email)
+            #link = url_for('auth.ativar_conta', token=token, _external=True)
+            #enviar_email_ativacao(email, nome_usuario, link)
+        #except Exception as e:
+            #print(f"[ERRO DISPARO EMAIL]: {e}")
             
-        flash('Cadastro realizado com sucesso! Enviamos um link de confirmação para o seu e-mail. Ative sua conta para fazer login.', 'success')
+        flash('Cadastro realizado com sucesso! Você já pode entrar com seu e-mail e senha.', 'success')
         return redirect(url_for('auth.login'))
 
     return render_template('auth/registro.html')
