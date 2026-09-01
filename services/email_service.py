@@ -1,18 +1,40 @@
-import os
 import smtplib
+import os
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
-SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
-SMTP_USER = os.getenv('SMTP_USER', 'suporte.triviumerp@gmail.com')
-SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', 'oqowvladpuxqpeex')
+SMTP_PORT = int(os.getenv('SMTP_PORT', 465))
+SMTP_USER = os.getenv('SMTP_USER', '')
+SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', '')
 
-def enviar_email_ativacao(destinatario, nome, link_ativacao):
+def _enviar_email(destinatario, assunto, html_conteudo):
+    """Envia e-mail utilizando SSL direto na porta 465 com timeout de segurança."""
+    if not SMTP_USER or not SMTP_PASSWORD:
+        print("[EMAIL IGNORADO] Credenciais de SMTP não configuradas.")
+        return False
+
     msg = MIMEMultipart('alternative')
-    msg['Subject'] = 'Ativação da sua conta - Trivium ERP'
+    msg['Subject'] = assunto
     msg['From'] = f"Trivium ERP <{SMTP_USER}>"
     msg['To'] = destinatario
+    msg.attach(MIMEText(html_conteudo, 'html'))
+
+    try:
+        # Timeout de 8 segundos para evitar travamento do worker Gunicorn
+        if SMTP_PORT == 465:
+            with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=8) as server:
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_USER, destinatario, msg.as_string())
+        else:
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=8) as server:
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_USER, destinatario, msg.as_string())
+        return True
+    except Exception as e:
+        print(f"[ERRO SMTP]: Falha ao enviar e-mail para {destinatario}: {e}")
+        return False
 
     html_content = f"""
     <!DOCTYPE html>
