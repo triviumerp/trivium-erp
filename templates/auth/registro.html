@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro - Trivium ERP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem 0; }
+        .reg-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 580px; padding: 2.5rem; }
+        .btn-brand { background-color: #059669; color: #fff; font-weight: 700; border-radius: 10px; padding: 12px; border: none; }
+        .btn-brand:hover { background-color: #047857; color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="reg-card">
+        <div class="text-center mb-4">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Trivium ERP" style="height: 48px; width: auto; object-fit: contain;" class="mb-2" onerror="this.style.display='none'">
+            <h3 class="fw-bold text-primary mb-1">Trivium <span class="text-dark">ERP</span></h3>
+            <p class="text-muted small">Crie sua conta e comece a gerenciar suas propostas</p>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} small py-2">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" id="formRegistro">
+            <!-- SELETOR PJ / PF -->
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-muted d-block">Tipo de Perfil</label>
+                <div class="btn-group w-100" role="group">
+                    <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pj" value="PJ" autocomplete="off" checked onchange="alternarTipoCadastro()">
+                    <label class="btn btn-outline-primary fw-bold py-2" for="tipo_pj"><i class="bi bi-building me-1"></i> Empresa (CNPJ)</label>
+
+                    <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pf" value="PF" autocomplete="off" onchange="alternarTipoCadastro()">
+                    <label class="btn btn-outline-primary fw-bold py-2" for="tipo_pf"><i class="bi bi-person me-1"></i> Autônomo (CPF)</label>
+                </div>
+            </div>
+
+            <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-briefcase me-1"></i> Dados Cadastrais</h6>
+            <div class="row g-2 mb-3">
+                <div class="col-md-7">
+                    <label class="form-label small fw-bold" id="label-razao">Razão Social / Nome da Empresa *</label>
+                    <input type="text" name="razao_social" id="campo_razao" class="form-control" required>
+                </div>
+                
+                <!-- Campo CNPJ (PJ) -->
+                <div class="col-md-5 campo-pj">
+                    <label class="form-label small fw-bold">CNPJ</label>
+                    <input type="text" name="cnpj" class="form-control" placeholder="00.000.000/0000-00">
+                </div>
+
+                <!-- Campo CPF com Validação (PF) -->
+                <div class="col-md-5 campo-pf d-none">
+                    <label class="form-label small fw-bold">CPF *</label>
+                    <input type="text" name="cpf" id="campo_cpf" class="form-control" placeholder="000.000.000-00" maxlength="14" oninput="mascaraCPF(this)" onblur="validarCampoCPF(this)">
+                    <small id="cpf-status" class="d-block mt-1" style="font-size: 0.75rem;"></small>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small fw-bold">Telefone / WhatsApp Comercial *</label>
+                    <input type="text" name="telefone" class="form-control" placeholder="(00) 00000-0000" required>
+                </div>
+            </div>
+
+            <h6 class="fw-bold text-secondary mb-3 mt-4"><i class="bi bi-person-badge me-1"></i> Usuário Administrador</h6>
+            <div class="row g-2 mb-4">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Seu Nome Completo *</label>
+                    <input type="text" name="nome_usuario" id="campo_nome_usuario" class="form-control" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">E-mail de Acesso *</label>
+                    <input type="email" name="email" class="form-control" placeholder="seu@email.com" required>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-bold">Senha de Acesso *</label>
+                    <input type="password" name="senha" class="form-control" minlength="4" placeholder="••••••••" required>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-brand w-100 mb-3">Concluir Cadastro e Ativar</button>
+        </form>
+
+        <div class="text-center">
+            <small class="text-muted">Já possui cadastro? <a href="{{ url_for('auth.login') }}" class="fw-bold text-decoration-none">Fazer Login</a></small>
+        </div>
+    </div>
+
+    <script>
+    function alternarTipoCadastro() {
+        const isPj = document.getElementById('tipo_pj').checked;
+        const camposPJ = document.querySelectorAll('.campo-pj');
+        const camposPF = document.querySelectorAll('.campo-pf');
+        const labelRazao = document.getElementById('label-razao');
+        const inputRazao = document.getElementById('campo_razao');
+
+        if (isPj) {
+            camposPJ.forEach(el => el.classList.remove('d-none'));
+            camposPF.forEach(el => el.classList.add('d-none'));
+            labelRazao.innerText = 'Razão Social / Nome da Empresa *';
+            document.getElementById('campo_cpf').required = false;
+        } else {
+            camposPJ.forEach(el => el.classList.add('d-none'));
+            camposPF.forEach(el => el.classList.remove('d-none'));
+            labelRazao.innerText = 'Nome Comercial / Fantasia *';
+            document.getElementById('campo_cpf').required = true;
+        }
+    }
+
+    function mascaraCPF(input) {
+        let v = input.value.replace(/\D/g, '');
+        v = v.replace(/(\d{3})(\d)/, '$1.$2');
+        v = v.replace(/(\d{3})(\d)/, '$1.$2');
+        v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+        input.value = v;
+    }
+
+    function validarCPF(cpfLimpo) {
+        cpfLimpo = cpfLimpo.replace(/\D/g, '');
+        if (cpfLimpo.length !== 11 || /^(\d)\1{10}$/.test(cpfLimpo)) return false;
+
+        let soma = 0;
+        for (let i = 0; i < 9; i++) soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
+        let resto = 11 - (soma % 11);
+        let digito1 = (resto === 10 || resto === 11) ? 0 : resto;
+        if (digito1 !== parseInt(cpfLimpo.charAt(9))) return false;
+
+        soma = 0;
+        for (let i = 0; i < 10; i++) soma += parseInt(cpfLimpo.charAt(i)) * (11 - i);
+        resto = 11 - (soma % 11);
+        let digito2 = (resto === 10 || resto === 11) ? 0 : resto;
+        return digito2 === parseInt(cpfLimpo.charAt(10));
+    }
+
+    function validarCampoCPF(input) {
+        const statusText = document.getElementById('cpf-status');
+        const valor = input.value.trim();
+
+        if (!valor) {
+            statusText.innerText = '';
+            input.classList.remove('is-invalid', 'is-valid');
+            return false;
+        }
+
+        if (validarCPF(valor)) {
+            input.classList.remove('is-invalid');
+            input.classList.add('is-valid');
+            statusText.innerText = 'CPF válido';
+            statusText.className = 'text-success d-block mt-1';
+            return true;
+        } else {
+            input.classList.remove('is-valid');
+            input.classList.add('is-invalid');
+            statusText.innerText = 'CPF inválido. Verifique os dígitos.';
+            statusText.className = 'text-danger d-block mt-1';
+            return false;
+        }
+    }
+
+    document.getElementById('formRegistro').addEventListener('submit', function(e) {
+        const isPf = document.getElementById('tipo_pf').checked;
+        if (isPf) {
+            const cpfInput = document.getElementById('campo_cpf');
+            if (!validarCampoCPF(cpfInput)) {
+                e.preventDefault();
+                cpfInput.focus();
+            }
+        }
+    });
+    </script>
+</body>
+</html>

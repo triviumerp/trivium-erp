@@ -1,201 +1,311 @@
 {% extends 'base.html' %}
 
+{% block title %}{% if cliente %}Editar Cliente{% else %}Novo Cliente{% endif %} - Trivium ERP{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h2 class="fw-bold text-dark mb-0">
-            <i class="bi {% if cliente %}bi-pencil-square text-primary{% else %}bi-building-add text-danger{% endif %} me-2"></i>
-            {% if cliente %}Editar Cadastro: {{ cliente.nome }}{% else %}Novo Cadastro de Cliente & Imóvel{% endif %}
-        </h2>
-        <p class="text-muted mb-0">Preencha os dados jurídicos, fiscais, endereço do imóvel e parâmetros técnicos de AVCB/Bombeiros</p>
+        <a href="{{ url_for('index') }}" class="text-decoration-none small text-muted mb-1 d-inline-block">
+            <i class="bi bi-arrow-left"></i> Voltar à Lista
+        </a>
+        <h3 class="fw-bold mb-0 text-dark">{% if cliente %}Editar Cadastro{% else %}Novo Cliente{% endif %}</h3>
+        <p class="text-muted mb-0 small">Cadastre empresas (PJ) ou pessoas físicas (PF) na sua base de clientes</p>
     </div>
-    <a href="{% if cliente %}{{ url_for('detalhe_cliente', id=cliente.id) }}{% else %}{{ url_for('index') }}{% endif %}" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left me-1"></i>Voltar
-    </a>
 </div>
 
-<form action="{% if cliente %}{{ url_for('editar_cliente', id=cliente.id) }}{% else %}{{ url_for('novo_cliente') }}{% endif %}" method="POST">
-    
-    <!-- BLOCO 1: IDENTIFICAÇÃO JURÍDICA E FISCAL -->
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-white py-3">
-            <h5 class="fw-bold text-primary mb-0"><i class="bi bi-card-heading me-2"></i>1. Identificação Jurídica & Fiscal</h5>
-        </div>
-        <div class="card-body p-4">
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">Razão Social / Nome do Condomínio ou Empresa *</label>
-                    <input type="text" name="nome" class="form-control" value="{{ cliente.nome if cliente else '' }}" required placeholder="Ex: Condomínio Residencial Jardins">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">Nome Fantasia</label>
-                    <input type="text" name="nome_fantasia" class="form-control" value="{{ cliente.nome_fantasia if cliente and cliente.nome_fantasia else '' }}" placeholder="Ex: Edifício Jardins">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">CNPJ / CPF *</label>
-                    <input type="text" name="cnpj_cpf" class="form-control" value="{{ cliente.cnpj_cpf if cliente and cliente.cnpj_cpf else '' }}" placeholder="00.000.000/0001-00" required>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">Inscrição Estadual / Municipal</label>
-                    <input type="text" name="inscricao_estadual" class="form-control" value="{{ cliente.inscricao_estadual if cliente and cliente.inscricao_estadual else '' }}" placeholder="Isento ou Nº da Inscrição">
-                </div>
+<div class="card-custom p-4">
+    <form method="POST">
+        <!-- Alternador Tipo de Cliente -->
+        <div class="mb-4">
+            <label class="form-label small fw-bold text-muted d-block">Tipo de Cliente</label>
+            <div class="btn-group" role="group">
+                <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pj" value="PJ" autocomplete="off" {% if not cliente or (cliente and cliente.cnpj_cpf and cliente.cnpj_cpf|length > 14) %}checked{% endif %} onchange="alternarTipoCliente()">
+                <label class="btn btn-outline-primary fw-bold px-4" for="tipo_pj"><i class="bi bi-building me-1"></i> Pessoa Jurídica (CNPJ)</label>
+
+                <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pf" value="PF" autocomplete="off" {% if cliente and cliente.cnpj_cpf and cliente.cnpj_cpf|length <= 14 %}checked{% endif %} onchange="alternarTipoCliente()">
+                <label class="btn btn-outline-primary fw-bold px-4" for="tipo_pf"><i class="bi bi-person me-1"></i> Pessoa Física (CPF)</label>
             </div>
         </div>
-    </div>
 
-    <!-- BLOCO 2: CONTATOS E RESPONSÁVEL -->
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-white py-3">
-            <h5 class="fw-bold text-primary mb-0"><i class="bi bi-people me-2"></i>2. Contatos & Responsável Legal</h5>
-        </div>
-        <div class="card-body p-4">
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label class="form-label small fw-bold">Nome do Síndico / Gestor / Administrador</label>
-                    <input type="text" name="responsavel" class="form-control" value="{{ cliente.responsavel if cliente and cliente.responsavel else '' }}" placeholder="Ex: Carlos Alberto da Silva">
+        <!-- 1. IDENTIFICAÇÃO -->
+        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-card-text me-2"></i>1. Identificação Principal</h6>
+        <div class="row g-3 mb-4">
+            <!-- Campos PJ -->
+            <div class="col-md-6 campo-pj">
+                <label class="form-label small fw-bold" id="label-razao">Razão Social / Nome da Empresa *</label>
+                <input type="text" name="nome" id="campo_nome" class="form-control" value="{{ cliente.nome if cliente else '' }}" required>
+            </div>
+            <div class="col-md-6 campo-pj">
+                <label class="form-label small fw-bold">Nome Fantasia</label>
+                <input type="text" name="nome_fantasia" id="campo_fantasia" class="form-control" value="{{ cliente.nome_fantasia if cliente else '' }}">
+            </div>
+            <div class="col-md-6 campo-pj">
+                <label class="form-label small fw-bold">CNPJ</label>
+                <input type="text" name="cnpj" id="campo_cnpj" class="form-control" placeholder="00.000.000/0000-00" value="{{ cliente.cnpj_cpf if (cliente and cliente.cnpj_cpf and cliente.cnpj_cpf|length > 14) else '' }}">
+            </div>
+            <div class="col-md-6 campo-pj">
+                <label class="form-label small fw-bold">Inscrição Estadual</label>
+                <input type="text" name="inscricao_estadual" class="form-control" value="{{ cliente.inscricao_estadual if cliente else '' }}">
+            </div>
+
+            <!-- Campos PF -->
+            <div class="col-md-6 campo-pf d-none">
+                <label class="form-label small fw-bold">CPF *</label>
+                <input type="text" name="cpf" id="campo_cpf" class="form-control" placeholder="000.000.000-00" maxlength="14" value="{{ cliente.cnpj_cpf if (cliente and cliente.cnpj_cpf and cliente.cnpj_cpf|length <= 14) else '' }}" oninput="mascaraCPF(this)" onblur="validarCampoCPF(this)">
+                    <small id="cpf-status" class="d-block mt-1" style="font-size: 0.75rem;"></small>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label small fw-bold">Telefone Principal (WhatsApp) *</label>
-                    <input type="text" name="telefone" class="form-control" value="{{ cliente.telefone if cliente else '' }}" placeholder="(11) 99999-9999" required>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small fw-bold">Telefone Secundário / Fixo</label>
-                    <input type="text" name="telefone_secundario" class="form-control" value="{{ cliente.telefone_secundario if cliente and cliente.telefone_secundario else '' }}" placeholder="(11) 3333-3333">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">E-mail Principal (Propostas & Relatórios) *</label>
-                    <input type="email" name="email" class="form-control" value="{{ cliente.email if cliente else '' }}" placeholder="contato@empresa.com.br" required>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">E-mail Financeiro (Contas a Pagar / Boletos / NFs)</label>
-                    <input type="email" name="email_financeiro" class="form-control" value="{{ cliente.email_financeiro if cliente and cliente.email_financeiro else '' }}" placeholder="financeiro@empresa.com.br">
-                </div>
+             </div>
+
+        <hr class="my-4 text-muted">
+
+        <!-- 2. CONTATO E RESPONSÁVEL -->
+        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-telephone me-2"></i>2. Informações de Contato</h6>
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <label class="form-label small fw-bold" id="label-responsavel">Pessoa de Contato / Responsável</label>
+                <input type="text" name="responsavel" class="form-control" placeholder="Ex: Diretor, Gestor ou o próprio" value="{{ cliente.responsavel if cliente else '' }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-bold">Telefone / WhatsApp Principal *</label>
+                <input type="text" name="telefone" class="form-control" placeholder="(00) 00000-0000" value="{{ cliente.telefone if cliente else '' }}" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-bold">Telefone Secundário</label>
+                <input type="text" name="telefone_secundario" class="form-control" placeholder="(00) 00000-0000" value="{{ cliente.telefone_secundario if cliente else '' }}">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">E-mail Comercial *</label>
+                <input type="email" name="email" class="form-control" placeholder="cliente@email.com" value="{{ cliente.email if cliente else '' }}" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">E-mail Financeiro (Opcional)</label>
+                <input type="email" name="email_financeiro" class="form-control" placeholder="financeiro@email.com" value="{{ cliente.email_financeiro if cliente else '' }}">
             </div>
         </div>
-    </div>
 
-    <!-- BLOCO 3: LOCALIZAÇÃO DO IMÓVEL / EDIFICAÇÃO -->
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-white py-3">
-            <h5 class="fw-bold text-primary mb-0"><i class="bi bi-geo-alt me-2"></i>3. Endereço da Edificação / Imóvel</h5>
-        </div>
-        <div class="card-body p-4">
-            <div class="row g-3">
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">CEP</label>
-                    <div class="input-group">
-                        <input type="text" id="cep" name="cep" class="form-control" value="{{ cliente.cep if cliente and cliente.cep else '' }}" placeholder="00000-000">
-                        <button class="btn btn-outline-secondary" type="button" onclick="buscarCEP()"><i class="bi bi-search"></i></button>
-                    </div>
+        <hr class="my-4 text-muted">
+
+        <!-- 3. ENDEREÇO COM BUSCA DE CEP -->
+        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-geo-alt me-2"></i>3. Endereço</h6>
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <label class="form-label small fw-bold">CEP</label>
+                <div class="input-group">
+                    <input type="text" name="cep" id="cep" class="form-control" placeholder="00000-000" maxlength="9" value="{{ cliente.cep if cliente else '' }}">
+                    <button class="btn btn-outline-secondary" type="button" id="btn-busca-cep" onclick="buscarCEP()" title="Buscar endereço pelo CEP">
+                        <i class="bi bi-search" id="icone-busca-cep"></i>
+                    </button>
                 </div>
-                <div class="col-md-7">
-                    <label class="form-label small fw-bold">Logradouro (Rua / Av.)</label>
-                    <input type="text" id="logradouro" name="logradouro" class="form-control" value="{{ cliente.logradouro if cliente and cliente.logradouro else '' }}" placeholder="Ex: Av. Paulista">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small fw-bold">Número</label>
-                    <input type="text" id="numero" name="numero" class="form-control" value="{{ cliente.numero if cliente and cliente.numero else '' }}" placeholder="1000">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small fw-bold">Complemento (Torre / Bloco / Galpão)</label>
-                    <input type="text" name="complemento" class="form-control" value="{{ cliente.complemento if cliente and cliente.complemento else '' }}" placeholder="Ex: Bloco B - Torre 1">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small fw-bold">Bairro</label>
-                    <input type="text" id="bairro" name="bairro" class="form-control" value="{{ cliente.bairro if cliente and cliente.bairro else '' }}" placeholder="Bairro">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">Cidade</label>
-                    <input type="text" id="cidade" name="cidade" class="form-control" value="{{ cliente.cidade if cliente and cliente.cidade else '' }}" placeholder="Cidade">
-                </div>
-                <div class="col-md-1">
-                    <label class="form-label small fw-bold">UF</label>
-                    <input type="text" id="estado" name="estado" class="form-control" value="{{ cliente.estado if cliente and cliente.estado else '' }}" placeholder="SP" maxlength="2">
-                </div>
+                <small id="cep-status" class="text-muted d-block mt-1" style="font-size: 0.75rem;"></small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">Logradouro (Rua, Av, etc)</label>
+                <input type="text" name="logradouro" id="logradouro" class="form-control" value="{{ cliente.logradouro if cliente else '' }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Número</label>
+                <input type="text" name="numero" id="numero" class="form-control" value="{{ cliente.numero if cliente else '' }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-bold">Complemento</label>
+                <input type="text" name="complemento" id="complemento" class="form-control" placeholder="Sala, Bloco, Galpão..." value="{{ cliente.complemento if cliente else '' }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-bold">Bairro</label>
+                <input type="text" name="bairro" id="bairro" class="form-control" value="{{ cliente.bairro if cliente else '' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Cidade</label>
+                <input type="text" name="cidade" id="cidade" class="form-control" value="{{ cliente.cidade if cliente else '' }}">
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small fw-bold">UF</label>
+                <input type="text" name="estado" id="estado" class="form-control text-uppercase" maxlength="2" placeholder="SP" value="{{ cliente.estado if cliente else '' }}">
             </div>
         </div>
-    </div>
 
-    <!-- BLOCO 4: PARÂMETROS TÉCNICOS DE ENGENHARIA & BOMBEIROS -->
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-white py-3">
-            <h5 class="fw-bold text-danger mb-0"><i class="bi bi-shield-fire me-2"></i>4. Parâmetros Técnicos & Licenciamento AVCB / CLCB</h5>
-        </div>
-        <div class="card-body p-4">
-            <div class="row g-3">
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">Área Construída ($m^2$)</label>
-                    <input type="number" step="0.01" name="area_construida" class="form-control" value="{{ cliente.area_construida if cliente and cliente.area_construida else '' }}" placeholder="Ex: 2500.50">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">Tipo de Ocupação</label>
-                    <select name="tipo_ocupacao" class="form-select">
-                        <option value="">Selecione...</option>
-                        <option value="A-2 Residencial Multifamiliar" {% if cliente and cliente.tipo_ocupacao == 'A-2 Residencial Multifamiliar' %}selected{% endif %}>A-2 Residencial Multifamiliar</option>
-                        <option value="C-2 Comercial Geral" {% if cliente and cliente.tipo_ocupacao == 'C-2 Comercial Geral' %}selected{% endif %}>C-2 Comercial Geral</option>
-                        <option value="D-1 Serviços Profissionais / Escritórios" {% if cliente and cliente.tipo_ocupacao == 'D-1 Serviços Profissionais / Escritórios' %}selected{% endif %}>D-1 Escritórios / Consultórios</option>
-                        <option value="F-6 Casas de Shows / Eventos" {% if cliente and cliente.tipo_ocupacao == 'F-6 Casas de Shows / Eventos' %}selected{% endif %}>F-6 Eventos / Casas Noturnas</option>
-                        <option value="I-1 / I-2 Industrial" {% if cliente and cliente.tipo_ocupacao == 'I-1 / I-2 Industrial' %}selected{% endif %}>I Industrial / Galpão</option>
-                        <option value="H-3 Hospital / Saúde" {% if cliente and cliente.tipo_ocupacao == 'H-3 Hospital / Saúde' %}selected{% endif %}>H Saúde / Clínicas</option>
-                        <option value="Outros" {% if cliente and cliente.tipo_ocupacao == 'Outros' %}selected{% endif %}>Outros</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small fw-bold">Nº Pavimentos</label>
-                    <input type="number" name="numero_pavimentos" class="form-control" value="{{ cliente.numero_pavimentos if cliente and cliente.numero_pavimentos else '' }}" placeholder="Ex: 8">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small fw-bold">Nº Projeto Aprovado no CB / Via Fácil</label>
-                    <input type="text" name="numero_projeto_cb" class="form-control" value="{{ cliente.numero_projeto_cb if cliente and cliente.numero_projeto_cb else '' }}" placeholder="Ex: 123456/2024">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">Data de Emissão / Início do AVCB *</label>
-                    <input type="date" name="data_inicio_avcb" class="form-control" value="{{ cliente.data_inicio_avcb.strftime('%Y-%m-%d') if cliente else '' }}" required>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">Data de Vencimento do AVCB *</label>
-                    <input type="date" name="data_vencimento_avcb" class="form-control" value="{{ cliente.data_vencimento_avcb.strftime('%Y-%m-%d') if cliente else '' }}" required>
-                </div>
+        <hr class="my-4 text-muted">
+
+        <!-- 4. OBSERVAÇÕES -->
+        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-chat-left-text me-2"></i>4. Observações Internas</h6>
+        <div class="row g-3 mb-4">
+            <div class="col-12">
+                <textarea name="observacoes" class="form-control" rows="3" placeholder="Informações de atendimento, particularidades do cliente, etc.">{{ cliente.observacoes if cliente else '' }}</textarea>
             </div>
         </div>
-    </div>
 
-    <!-- BLOCO 5: OBSERVAÇÕES E REGRAS DE ACESSO -->
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-white py-3">
-            <h5 class="fw-bold text-secondary mb-0"><i class="bi bi-card-text me-2"></i>5. Observações Gerais & Regras de Acesso</h5>
+        <!-- Botões de Ação -->
+        <div class="d-flex justify-content-end gap-2">
+            <a href="{{ url_for('index') }}" class="btn btn-light px-4">Cancelar</a>
+            <button type="submit" class="btn btn-primary fw-bold px-4">
+                <i class="bi bi-check-lg me-1"></i> {% if cliente %}Salvar Alterações{% else %}Cadastrar Cliente{% endif %}
+            </button>
         </div>
-        <div class="card-body p-4">
-            <textarea name="observacoes" class="form-control" rows="3" placeholder="Ex: Vistorias técnicas somente em horário comercial com agendamento prévio na portaria...">{{ cliente.observacoes if cliente and cliente.observacoes else '' }}</textarea>
-        </div>
-    </div>
-
-    <div class="text-end mb-5">
-        <button type="submit" class="btn btn-primary btn-lg fw-bold px-5 shadow">
-            <i class="bi bi-check2-circle me-2"></i>{% if cliente %}Salvar Alterações{% else %}Cadastrar Cliente & Imóvel{% endif %}
-        </button>
-    </div>
-</form>
+    </form>
+</div>
 
 <script>
-function buscarCEP() {
-    const cep = document.getElementById('cep').value.replace(/\D/g, '');
-    if (cep.length === 8) {
-        fetch(`https://viacep.com.br/ws/${cep}/json/`)
-            .then(res => res.json())
-            .then(data => {
-                if (!data.erro) {
-                    document.getElementById('logradouro').value = data.logradouro;
-                    document.getElementById('bairro').value = data.bairro;
-                    document.getElementById('cidade').value = data.localidade;
-                    document.getElementById('estado').value = data.uf;
-                    document.getElementById('numero').focus();
-                } else {
-                    alert('CEP não encontrado.');
-                }
-            })
-            .catch(() => alert('Erro ao consultar CEP.'));
+function alternarTipoCliente() {
+    const isPj = document.getElementById('tipo_pj').checked;
+    const camposPJ = document.querySelectorAll('.campo-pj');
+    const camposPF = document.querySelectorAll('.campo-pf');
+    const labelRazao = document.getElementById('label-razao');
+    const labelResponsavel = document.getElementById('label-responsavel');
+
+    if (isPj) {
+        camposPJ.forEach(el => el.classList.remove('d-none'));
+        camposPF.forEach(el => el.classList.add('d-none'));
+        labelRazao.innerText = 'Razão Social / Nome da Empresa *';
+        labelResponsavel.innerText = 'Pessoa de Contato / Responsável';
+    } else {
+        document.getElementById('campo_fantasia').closest('.campo-pj').classList.add('d-none');
+        document.getElementById('campo_cnpj').closest('.campo-pj').classList.add('d-none');
+        document.querySelector('input[name="inscricao_estadual"]').closest('.campo-pj').classList.add('d-none');
+        camposPF.forEach(el => el.classList.remove('d-none'));
+        labelRazao.innerText = 'Nome Completo da Pessoa *';
+        labelResponsavel.innerText = 'Apelido / Como prefere ser chamado';
     }
 }
+
+// BUSCA AUTOMÁTICA DE CEP VIA API
+function buscarCEP() {
+    const cepInput = document.getElementById('cep');
+    const statusText = document.getElementById('cep-status');
+    const iconeBusca = document.getElementById('icone-busca-cep');
+    
+    // Limpa caracteres especiais
+    const cep = cepInput.value.replace(/\D/g, '');
+
+    if (cep.length !== 8) {
+        statusText.innerText = 'Digite um CEP válido com 8 dígitos.';
+        statusText.className = 'text-danger d-block mt-1';
+        return;
+    }
+
+    // Feedback visual de carregamento
+    iconeBusca.className = 'spinner-border spinner-border-sm text-primary';
+    statusText.innerText = 'Consultando endereço...';
+    statusText.className = 'text-muted d-block mt-1';
+
+    fetch(`https://viacep.com.br/ws/${cep}/json/`)
+        .then(response => response.json())
+        .then(dados => {
+            iconeBusca.className = 'bi bi-search';
+
+            if (dados.erro) {
+                statusText.innerText = 'CEP não encontrado.';
+                statusText.className = 'text-danger d-block mt-1';
+            } else {
+                document.getElementById('logradouro').value = dados.logradouro || '';
+                document.getElementById('bairro').value = dados.bairro || '';
+                document.getElementById('cidade').value = dados.localidade || '';
+                document.getElementById('estado').value = dados.uf || '';
+                
+                statusText.innerText = 'Endereço localizado com sucesso!';
+                statusText.className = 'text-success d-block mt-1';
+
+                // Coloca o foco no número para agilizar a digitação
+                document.getElementById('numero').focus();
+            }
+        })
+        .catch(() => {
+            iconeBusca.className = 'bi bi-search';
+            statusText.innerText = 'Erro ao consultar o serviço de CEP.';
+            statusText.className = 'text-danger d-block mt-1';
+        });
+}
+
+// Dispara busca ao pressionar Enter no campo do CEP ou ao sair dele (blur)
+document.getElementById('cep').addEventListener('blur', function() {
+    if (this.value.replace(/\D/g, '').length === 8) {
+        buscarCEP();
+    }
+});
+
+document.getElementById('cep').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        buscarCEP();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', alternarTipoCliente);
+
+// Máscara dinâmica do CPF: 000.000.000-00
+function mascaraCPF(input) {
+    let v = input.value.replace(/\D/g, '');
+    v = v.replace(/(\d{3})(\d)/, '$1.$2');
+    v = v.replace(/(\d{3})(\d)/, '$1.$2');
+    v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    input.value = v;
+}
+
+// Algoritmo Oficial de Validação dos Dígitos Verificadores do CPF
+function validarCPF(cpfLimpo) {
+    cpfLimpo = cpfLimpo.replace(/\D/g, '');
+    
+    // Rejeita se não tiver 11 dígitos ou se forem todos iguais (ex: 111.111.111-11)
+    if (cpfLimpo.length !== 11 || /^(\d)\1{10}$/.test(cpfLimpo)) {
+        return false;
+    }
+
+    // Validação do 1º Dígito Verificador
+    let soma = 0;
+    for (let i = 0; i < 9; i++) {
+        soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
+    }
+    let resto = 11 - (soma % 11);
+    let digito1 = (resto === 10 || resto === 11) ? 0 : resto;
+    if (digito1 !== parseInt(cpfLimpo.charAt(9))) return false;
+
+    // Validação do 2º Dígito Verificador
+    soma = 0;
+    for (let i = 0; i < 10; i++) {
+        soma += parseInt(cpfLimpo.charAt(i)) * (11 - i);
+    }
+    resto = 11 - (soma % 11);
+    let digito2 = (resto === 10 || resto === 11) ? 0 : resto;
+    if (digito2 !== parseInt(cpfLimpo.charAt(10))) return false;
+
+    return true;
+}
+
+// Feedback visual na tela ao sair do campo
+function validarCampoCPF(input) {
+    const statusText = document.getElementById('cpf-status');
+    const valor = input.value.trim();
+
+    if (!valor) {
+        statusText.innerText = '';
+        input.classList.remove('is-invalid', 'is-valid');
+        return true;
+    }
+
+    if (validarCPF(valor)) {
+        input.classList.remove('is-invalid');
+        input.classList.add('is-valid');
+        statusText.innerText = 'CPF válido';
+        statusText.className = 'text-success d-block mt-1';
+        return true;
+    } else {
+        input.classList.remove('is-valid');
+        input.classList.add('is-invalid');
+        statusText.innerText = 'CPF inválido. Verifique os números digitados.';
+        statusText.className = 'text-danger d-block mt-1';
+        return false;
+    }
+}
+
+// Trava o submit do formulário se o CPF estiver incorreto
+document.querySelector('form').addEventListener('submit', function(e) {
+    const isPf = document.getElementById('tipo_pf').checked;
+    if (isPf) {
+        const cpfInput = document.getElementById('campo_cpf');
+        if (cpfInput.value && !validarCampoCPF(cpfInput)) {
+            e.preventDefault();
+            cpfInput.focus();
+        }
+    }
+});
 </script>
 {% endblock %}

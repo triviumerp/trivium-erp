@@ -1,0 +1,255 @@
+{% extends 'base.html' %}
+
+{% block title %}Configurações & Perfil - Trivium ERP{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-1 text-dark">Configurações & Perfil</h3>
+        <p class="text-muted mb-0 small">Gerencie os dados cadastrais da sua conta, identidade visual e faturamento</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Coluna da Esquerda: Navegação por Abas -->
+    <div class="col-lg-3">
+        <div class="card-custom p-3">
+            <div class="nav flex-column nav-pills gap-1" id="config-tabs" role="tablist">
+                <button class="nav-link active text-start fw-semibold py-2 px-3 rounded-3" id="tab-empresa-btn" data-bs-toggle="pill" data-bs-target="#tab-empresa" type="button" role="tab">
+                    <i class="bi bi-building me-2"></i> Dados Cadastrais
+                </button>
+                <button class="nav-link text-start fw-semibold py-2 px-3 rounded-3" id="tab-usuario-btn" data-bs-toggle="pill" data-bs-target="#tab-usuario" type="button" role="tab">
+                    <i class="bi bi-person-badge me-2"></i> Minha Conta & Senha
+                </button>
+                <button class="nav-link text-start fw-semibold py-2 px-3 rounded-3" id="tab-pagamento-btn" data-bs-toggle="pill" data-bs-target="#tab-pagamento" type="button" role="tab">
+                    <i class="bi bi-credit-card-2-front me-2"></i> Assinatura & Cartão
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Coluna da Direita: Conteúdo das Abas -->
+    <div class="col-lg-9">
+        <div class="tab-content" id="config-tabContent">
+            
+            <!-- ABA 1: DADOS CADASTRAIS (EMPRESA / PROFISSIONAL + WHITE-LABEL) -->
+            <div class="tab-pane fade show active" id="tab-empresa" role="tabpanel">
+                <div class="card-custom p-4">
+                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-building-gear text-primary me-2"></i>Identidade & Dados Cadastrais</h5>
+                    
+                    <form method="POST" action="{{ url_for('perfil_empresa') }}" enctype="multipart/form-data">
+                        <input type="hidden" name="form_type" value="dados_empresa">
+
+                        <!-- Alternador PJ / PF -->
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-muted d-block">Tipo de Cadastro</label>
+                            <div class="btn-group" role="group">
+                                <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pj" value="PJ" autocomplete="off" checked onchange="alternarTipoPessoa()">
+                                <label class="btn btn-outline-primary fw-bold px-4" for="tipo_pj"><i class="bi bi-briefcase me-1"></i> Pessoa Jurídica (PJ)</label>
+
+                                <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pf" value="PF" autocomplete="off" onchange="alternarTipoPessoa()">
+                                <label class="btn btn-outline-primary fw-bold px-4" for="tipo_pf"><i class="bi bi-person me-1"></i> Pessoa Física (PF / Autônomo)</label>
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <!-- Campos PJ -->
+                            <div class="col-md-6 campo-pj">
+                                <label class="form-label small fw-bold">Razão Social *</label>
+                                <input type="text" name="razao_social" class="form-control" value="{{ perfil.razao_social or '' }}" required>
+                            </div>
+                            <div class="col-md-6 campo-pj">
+                                <label class="form-label small fw-bold">Nome Fantasia</label>
+                                <input type="text" name="nome_fantasia" class="form-control" value="{{ perfil.nome_fantasia or '' }}">
+                            </div>
+                            <div class="col-md-6 campo-pj">
+                                <label class="form-label small fw-bold">CNPJ</label>
+                                <input type="text" name="cnpj" class="form-control" placeholder="00.000.000/0000-00" value="{{ perfil.cnpj or '' }}">
+                            </div>
+
+                            <!-- Campos PF -->
+                            <div class="col-md-6 campo-pf d-none">
+                                <label class="form-label small fw-bold">Nome Completo do Profissional *</label>
+                                <input type="text" name="nome_profissional" id="nome_profissional" class="form-control" value="{{ perfil.razao_social or '' }}">
+                            </div>
+                            <div class="col-md-6 campo-pf d-none">
+                                <label class="form-label small fw-bold">CPF</label>
+                                <input type="text" name="cpf" id="cpf" class="form-control" placeholder="000.000.000-00" value="{{ perfil.cnpj or '' }}">
+                            </div>
+
+                            <!-- Contatos Comuns -->
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Telefone / WhatsApp Comercial *</label>
+                                <input type="text" name="telefone" class="form-control" value="{{ perfil.telefone or '' }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">E-mail Comercial (Propostas / Notificações) *</label>
+                                <input type="email" name="email" class="form-control" value="{{ perfil.email or '' }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Site / Rede Social</label>
+                                <input type="text" name="site" class="form-control" placeholder="https://seusite.com.br" value="{{ perfil.site or '' }}">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold">Endereço Comercial Completo (Exibido nas Propostas PDF)</label>
+                                <input type="text" name="endereco_completo" class="form-control" placeholder="Rua, Número, Bairro, Cidade - UF, CEP" value="{{ perfil.endereco_completo or '' }}">
+                            </div>
+                        </div>
+
+                        <hr class="my-4 text-muted">
+
+                        <!-- Personalização Visual & White-Label -->
+                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-palette text-primary me-2"></i>Personalização Visual & Logotipo</h6>
+                        <div class="row g-3 align-items-center mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Logotipo Oficial (PNG, JPG, WEBP)</label>
+                                <input type="file" name="logo" class="form-control" accept="image/*">
+                                <small class="text-muted d-block mt-1">Recomendado formato horizontal com fundo transparente.</small>
+                            </div>
+                            <div class="col-md-6 text-center">
+                                {% if perfil.logo_filename %}
+                                    <div class="p-2 border rounded-3 bg-light d-inline-block">
+                                        <img src="{{ url_for('download_file', filename=perfil.logo_filename) }}" alt="Logo Empresa" style="max-height: 50px; max-width: 180px; object-fit: contain;">
+                                    </div>
+                                {% else %}
+                                    <div class="p-3 border rounded-3 bg-light text-muted small">
+                                        <i class="bi bi-image fs-4 d-block mb-1 text-secondary"></i> Nenhum logo personalizado anexado
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Cor Primária do Sistema & Propostas</label>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="color" name="cor_primaria" class="form-control form-control-color" value="{{ perfil.cor_primaria or '#1e3a8a' }}">
+                                    <span class="small text-muted">Aplica-se ao cabeçalho dos relatórios e PDFs.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-primary fw-bold px-4">Salvar Alterações Cadastrais</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ABA 2: MINHA CONTA & SENHA (USUÁRIO) -->
+            <div class="tab-pane fade" id="tab-usuario" role="tabpanel">
+                <div class="card-custom p-4">
+                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-shield-lock text-primary me-2"></i>Credenciais de Acesso</h5>
+
+                    <form method="POST" action="{{ url_for('perfil_empresa') }}">
+                        <input type="hidden" name="form_type" value="dados_usuario">
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Nome do Usuário *</label>
+                                <input type="text" name="nome_usuario" class="form-control" value="{{ current_user.nome }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">E-mail de Login *</label>
+                                <input type="email" name="email_login" class="form-control" value="{{ current_user.email }}" required>
+                            </div>
+                        </div>
+
+                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-key text-secondary me-2"></i>Alterar Senha de Acesso</h6>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Senha Atual</label>
+                                <input type="password" name="senha_atual" class="form-control" placeholder="••••••••">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Nova Senha</label>
+                                <input type="password" name="nova_senha" class="form-control" minlength="4" placeholder="Nova senha">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Confirmar Nova Senha</label>
+                                <input type="password" name="confirma_senha" class="form-control" minlength="4" placeholder="Repita a senha">
+                            </div>
+                        </div>
+
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-primary fw-bold px-4">Atualizar Credenciais</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ABA 3: ASSINATURA & CARTÃO DE CRÉDITO (FUTURO GATEWAY) -->
+            <div class="tab-pane fade" id="tab-pagamento" role="tabpanel">
+                <div class="card-custom p-4 mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-star-fill text-warning me-2"></i>Plano Atual</h5>
+                        <span class="badge bg-success px-3 py-2 fs-6">Plano {{ perfil.plano or 'Founder' }} (Ativo)</span>
+                    </div>
+                    <p class="text-muted small mb-0">Sua assinatura inclui emissão ilimitada de propostas, gestão multi-tenant e controle financeiro completo.</p>
+                </div>
+
+                <div class="card-custom p-4">
+                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-credit-card text-primary me-2"></i>Cadastrar Cartão de Crédito</h5>
+                    <p class="text-muted small mb-4">Mantenha sua forma de pagamento cadastrada para renovações automáticas do plano.</p>
+
+                    <form method="POST" action="{{ url_for('perfil_empresa') }}">
+                        <input type="hidden" name="form_type" value="dados_cartao">
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-12">
+                                <label class="form-label small fw-bold">Número do Cartão de Crédito</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-credit-card-2-back"></i></span>
+                                    <input type="text" name="numero_cartao" class="form-control" placeholder="0000 0000 0000 0000" maxlength="19">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Nome Impresso no Cartão</label>
+                                <input type="text" name="nome_cartao" class="form-control" placeholder="Ex: CARLOS E SILVA">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Validade</label>
+                                <input type="text" name="validade_cartao" class="form-control" placeholder="MM/AA" maxlength="5">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">CVV</label>
+                                <input type="password" name="cvv_cartao" class="form-control" placeholder="123" maxlength="4">
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info small d-flex align-items-center gap-2 mb-4" role="alert">
+                            <i class="bi bi-shield-lock-fill fs-5"></i>
+                            <div>Os dados de cartão são criptografados com certificado SSL de 256 bits conforme normas PCI-DSS.</div>
+                        </div>
+
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-outline-primary fw-bold px-4">Salvar Forma de Pagamento</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+function alternarTipoPessoa() {
+    const isPj = document.getElementById('tipo_pj').checked;
+    const camposPJ = document.querySelectorAll('.campo-pj');
+    const camposPF = document.querySelectorAll('.campo-pf');
+
+    if (isPj) {
+        camposPJ.forEach(el => el.classList.remove('d-none'));
+        camposPF.forEach(el => el.classList.add('d-none'));
+    } else {
+        camposPJ.forEach(el => el.classList.add('d-none'));
+        camposPF.forEach(el => el.classList.remove('d-none'));
+        
+        // Copia o valor do campo Razão Social para Nome Profissional se estiver preenchido
+        const inputRazao = document.querySelector('input[name="razao_social"]');
+        const inputProf = document.getElementById('nome_profissional');
+        if (inputRazao && !inputProf.value) {
+            inputProf.value = inputRazao.value;
+        }
+    }
+}
+</script>
+{% endblock %}

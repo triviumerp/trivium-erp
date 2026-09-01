@@ -1,136 +1,201 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
     <div>
-        <h2 class="fw-bold text-dark mb-0"><i class="bi bi-tools text-primary me-2"></i>Acompanhamento de Serviços & Obras</h2>
-        <p class="text-muted mb-0">Gestão operacional de atividades aprovadas em campo e catálogo técnico</p>
+        <h2 class="fw-bold text-dark mb-0"><i class="bi bi-calendar-check text-primary me-2"></i>Agenda Operacional & Serviços</h2>
+        <p class="text-muted mb-0">Cronograma de visitas, execução técnica de obras e vistorias de contratos mensalistas</p>
     </div>
     <div class="d-flex gap-2">
         <button class="btn btn-outline-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalCatalogo">
             <i class="bi bi-journal-bookmark me-1"></i>Gerenciar Catálogo
         </button>
         <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoServicoDireto">
-            <i class="bi bi-plus-circle me-1"></i>Nova Atividade Manual
+            <i class="bi bi-plus-circle me-1"></i>Agendar Nova Atividade
         </button>
     </div>
 </div>
 
-<!-- CARDS DE METRICAS OPERACIONAIS -->
+<!-- CARDS SUPERIORES DE RESUMO OPERACIONAL -->
 <div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-3 bg-primary text-white">
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3 bg-primary text-white rounded-3">
             <div class="card-body p-0">
-                <span class="small text-white-50">Atividades em Andamento</span>
+                <span class="small text-white-50">Atividades em Execução</span>
                 <h3 class="fw-bold my-1">{{ qtd_em_andamento }}</h3>
-                <small><i class="bi bi-play-circle me-1"></i>Em execução técnica</small>
+                <small><i class="bi bi-play-circle me-1"></i>Em andamento técnico</small>
             </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-3 bg-warning text-dark">
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3 bg-warning text-dark rounded-3">
             <div class="card-body p-0">
-                <span class="small text-dark-50">Atividades Pendentes</span>
+                <span class="small text-dark-50">Agendamentos Pendentes</span>
                 <h3 class="fw-bold my-1">{{ qtd_pendentes }}</h3>
-                <small><i class="bi bi-clock-history me-1"></i>Aguardando início</small>
+                <small><i class="bi bi-clock-history me-1"></i>Aguardando data / início</small>
             </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-3 bg-success text-white">
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3 bg-success text-white rounded-3">
             <div class="card-body p-0">
-                <span class="small text-white-50">Concluídos (Liberados ao Financeiro)</span>
+                <span class="small text-white-50">Concluídos no Mês</span>
                 <h3 class="fw-bold my-1">{{ qtd_concluidos }}</h3>
-                <small><i class="bi bi-check2-all me-1"></i>Prontos para cobrança</small>
+                <small><i class="bi bi-check2-all me-1"></i>Finalizados e faturáveis</small>
             </div>
         </div>
     </div>
 </div>
 
-<!-- FILTROS DE STATUS OPERACIONAIS -->
+<!-- SELETOR DE VISUALIZAÇÃO E FILTRO TEMPORAL INTEGRADO -->
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-body py-2 d-flex justify-content-between align-items-center">
+    <div class="card-body py-2 d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+        <!-- Filtro por Categoria de Serviço -->
         <div class="btn-group">
-            <a href="{{ url_for('consultar_servicos', status='Em Andamento') }}" class="btn btn-sm {% if filtro_atual == 'Em Andamento' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}">
-                Em Andamento
+            <a href="{{ url_for('consultar_servicos', status='agenda', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'agenda' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}">
+                <i class="bi bi-calendar-event me-1"></i>Agenda / Cronograma
             </a>
-            <a href="{{ url_for('consultar_servicos', status='Pendente') }}" class="btn btn-sm {% if filtro_atual == 'Pendente' %}btn-warning fw-bold text-dark{% else %}btn-outline-secondary{% endif %}">
-                Pendentes
+            <a href="{{ url_for('consultar_servicos', status='recorrentes', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'recorrentes' %}btn-info text-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
+                <i class="bi bi-arrow-repeat me-1"></i>Contratos Mensalistas
             </a>
-            <a href="{{ url_for('consultar_servicos', status='Concluido') }}" class="btn btn-sm {% if filtro_atual == 'Concluido' %}btn-success fw-bold{% else %}btn-outline-secondary{% endif %}">
-                Concluídos (Faturáveis)
+            <a href="{{ url_for('consultar_servicos', status='avulsos', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'avulsos' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
+                <i class="bi bi-briefcase me-1"></i>Projetos & Obras Avulsas
             </a>
-            <a href="{{ url_for('consultar_servicos', status='Todos') }}" class="btn btn-sm {% if filtro_atual == 'Todos' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
+            <a href="{{ url_for('consultar_servicos', status='concluidos', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'concluidos' %}btn-success fw-bold{% else %}btn-outline-secondary{% endif %}">
+                <i class="bi bi-check2-circle me-1"></i>Concluídos
+            </a>
+            <a href="{{ url_for('consultar_servicos', status='todos', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'todos' %}btn-secondary fw-bold{% else %}btn-outline-secondary{% endif %}">
                 Todos
             </a>
         </div>
-        <small class="text-muted">Total: <b>{{ servicos_operacionais|length }}</b> registros</small>
+
+        <!-- Filtro por Período Temporal (Próximos 7 dias / 30 dias / Ano) -->
+        <div class="d-flex align-items-center gap-2">
+            <small class="text-muted fw-bold"><i class="bi bi-funnel me-1"></i>Horizonte:</small>
+            <div class="btn-group">
+                <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='semana') }}" class="btn btn-sm {% if periodo_atual == 'semana' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}" title="Vencendo nos próximos 7 dias + pendências">
+                    Próximos 7 Dias
+                </a>
+                <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='mes') }}" class="btn btn-sm {% if periodo_atual == 'mes' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}" title="Vencendo nos próximos 30 dias">
+                    Próximos 30 Dias
+                </a>
+                <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='ano') }}" class="btn btn-sm {% if periodo_atual == 'ano' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}" title="Vencendo no próximo ano">
+                    Próximos 12 Meses
+                </a>
+                <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='todos') }}" class="btn btn-sm {% if periodo_atual == 'todos' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
+                    Tudo
+                </a>
+            </div>
+            <span class="badge bg-light text-dark border ms-2">{{ servicos_operacionais|length }} item(ns)</span>
+        </div>
     </div>
 </div>
 
-<!-- LISTAGEM DE ACOMPANHAMENTO OPERACIONAL -->
+<!-- TABELA / CRONOGRAMA OPERACIONAL -->
 <div class="card border-0 shadow-sm">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
-                    <tr>
-                        <th>Cliente / Razão Social</th>
-                        <th>Serviço / Escopo Técnico</th>
-                        <th>Previsão de Entrega</th>
-                        <th>Valor (R$)</th>
-                        <th>Status Operacional</th>
-                        <th class="text-center">Acompanhamento & Conclusão</th>
+                    <tr class="small text-muted">
+                        <th style="width: 150px;">DATA PREVISTA</th>
+                        <th>CLIENTE / LOCAL</th>
+                        <th>SERVIÇO & TIPO</th>
+                        <th>VALOR</th>
+                        <th>STATUS</th>
+                        <th class="text-end pe-3">AÇÕES</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in servicos_operacionais %}
-                    {% set atrasado = item.data_previsao and item.data_previsao < hoje and item.status != 'Concluido' %}
-                    <tr class="{% if atrasado %}table-danger{% endif %}">
-                        <td>
-                            <span class="fw-bold text-dark d-block">{{ item.cliente.nome }}</span>
-                            <small class="text-muted">{{ item.cliente.telefone }}</small>
-                        </td>
-                        <td>
-                            <span class="badge bg-secondary mb-1">{{ item.tipo_servico.nome }}</span>
-                            {% if item.observacoes %}
-                                <small class="d-block text-muted text-truncate" style="max-width: 280px;" title="{{ item.observacoes }}">{{ item.observacoes }}</small>
-                            {% endif %}
-                        </td>
+                    {% set atrasado = item.data_previsao and item.data_previsao < hoje and item.status not in ['Concluido', 'Cancelado', 'Bloqueado'] %}
+                    <tr class="{% if atrasado %}table-danger{% elif item.status == 'Bloqueado' %}table-warning bg-opacity-25{% endif %}">
+                        <!-- DATA PREVISTA COM BADGE DINÂMICO -->
                         <td>
                             {% if item.data_previsao %}
-                                <span class="fw-bold {% if atrasado %}text-danger{% else %}text-dark{% endif %}">
-                                    {{ item.data_previsao.strftime('%d/%m/%Y') }}
-                                </span>
-                                {% if atrasado %}
-                                    <span class="badge bg-danger ms-1">Prazo Vencido</span>
-                                {% endif %}
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="border text-center p-1 rounded {% if atrasado %}border-danger bg-danger text-white{% elif item.status == 'Bloqueado' %}border-warning bg-warning text-dark{% else %}bg-light text-dark{% endif %}" style="min-width: 48px;">
+                                        <div class="fw-bold fs-6 lh-1">{{ item.data_previsao.strftime('%d') }}</div>
+                                        <small class="text-uppercase fw-bold" style="font-size: 0.65rem;">{{ item.data_previsao.strftime('%b') }}</small>
+                                    </div>
+                                    <div>
+                                        <span class="small fw-semibold text-dark d-block">{{ item.data_previsao.strftime('%Y') }}</span>
+                                        {% if atrasado %}
+                                            <span class="badge bg-danger text-white" style="font-size: 0.68rem;"><i class="bi bi-clock-history me-1"></i>Vencido</span>
+                                        {% elif item.status == 'Bloqueado' %}
+                                            <span class="badge bg-warning text-dark" style="font-size: 0.68rem;"><i class="bi bi-lock-fill me-1"></i>Aguardando Entrada</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
                             {% else %}
-                                <span class="text-muted small">Sem data fixada</span>
+                                <span class="badge bg-light text-muted border">Sem Data</span>
                             {% endif %}
                         </td>
-                        <td class="fw-bold text-dark">R$ {{ "%.2f"|format(item.valor_cobrado) }}</td>
+
+                        <!-- CLIENTE -->
                         <td>
-                            {% if item.status == 'Concluido' %}
+                            <a href="{{ url_for('detalhe_cliente', id=item.cliente_id) }}" class="fw-bold text-dark text-decoration-none d-block">
+                                {{ item.cliente.nome }}
+                            </a>
+                            <small class="text-muted"><i class="bi bi-telephone me-1"></i>{{ item.cliente.telefone }}</small>
+                        </td>
+
+                        <!-- SERVIÇO, ESCOPO E IDENTIFICAÇÃO -->
+                        <td>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="badge bg-secondary">{{ item.tipo_servico.nome }}</span>
+                                {% if item.contrato_id %}
+                                    <span class="badge bg-info text-dark"><i class="bi bi-arrow-repeat me-1"></i>Mensalista</span>
+                                {% else %}
+                                    <span class="badge bg-dark"><i class="bi bi-tag me-1"></i>Avulso</span>
+                                {% endif %}
+                            </div>
+                            {% if item.observacoes %}
+                                <small class="text-muted text-truncate d-block" style="max-width: 320px;" title="{{ item.observacoes }}">
+                                    {{ item.observacoes }}
+                                </small>
+                            {% endif %}
+                        </td>
+
+                        <!-- VALOR -->
+                        <td class="fw-bold text-dark">R$ {{ "%.2f"|format(item.valor_cobrado) }}</td>
+
+                        <!-- STATUS COM TRAVA DE BLOQUEIO / ENTRADA PENDENTE -->
+                        <td>
+                            {% if item.status == 'Bloqueado' %}
+                                <span class="badge bg-danger p-2 shadow-sm" title="Aguardando confirmação do sinal no Financeiro">
+                                    <i class="bi bi-lock-fill me-1"></i>Aguardando Sinal
+                                </span>
+                            {% elif item.status == 'Concluido' %}
                                 <span class="badge bg-success p-2"><i class="bi bi-check-circle me-1"></i>Concluído</span>
+                            {% elif atrasado %}
+                                <span class="badge bg-danger p-2"><i class="bi bi-exclamation-triangle-fill me-1"></i>Em Atraso</span>
                             {% elif item.status == 'Em Andamento' %}
                                 <span class="badge bg-primary p-2"><i class="bi bi-play-circle me-1"></i>Em Andamento</span>
                             {% elif item.status == 'Cancelado' %}
-                                <span class="badge bg-danger p-2">Cancelado</span>
+                                <span class="badge bg-secondary p-2">Cancelado</span>
                             {% else %}
                                 <span class="badge bg-warning text-dark p-2"><i class="bi bi-hourglass-split me-1"></i>Pendente</span>
                             {% endif %}
                         </td>
-                        <td class="text-center">
-                            <button class="btn btn-sm btn-outline-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalAcompanhamento{{ item.id }}">
-                                <i class="bi bi-pencil-square me-1"></i>Atualizar / Concluir
-                            </button>
+
+                        <!-- AÇÕES (COM TRAVA QUANDO BLOQUEADO) -->
+                        <td class="text-end pe-3">
+                            {% if item.status == 'Bloqueado' %}
+                                <a href="{{ url_for('financeiro') }}" class="btn btn-sm btn-outline-danger fw-bold" title="Acesse o Financeiro para dar baixa na entrada e destravar este serviço">
+                                    <i class="bi bi-lock-fill me-1"></i>Liberar no Financeiro
+                                </a>
+                            {% else %}
+                                <button class="btn btn-sm {% if atrasado %}btn-danger fw-bold{% else %}btn-outline-primary fw-bold{% endif %}" data-bs-toggle="modal" data-bs-target="#modalAcompanhamento{{ item.id }}">
+                                    <i class="bi bi-pencil-square me-1"></i>Atualizar / Concluir
+                                </button>
+                            {% endif %}
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="text-center py-4 text-muted">
-                            <i class="bi bi-check2-circle fs-3 d-block mb-1 text-success"></i>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <i class="bi bi-calendar-x fs-2 d-block mb-2 text-secondary"></i>
                             Nenhuma atividade encontrada para o filtro selecionado.
                         </td>
                     </tr>
@@ -159,29 +224,39 @@
                 </div>
                 <div class="modal-body p-4">
                     <div class="mb-3">
-                        <label class="form-label small fw-bold">Status Operacional *</label>
-                        <select name="status" class="form-select border-primary">
-                            <option value="Em Andamento" {% if item.status == 'Em Andamento' %}selected{% endif %}>Em Andamento (Em execução)</option>
-                            <option value="Pendente" {% if item.status == 'Pendente' %}selected{% endif %}>Pendente (Aguardando)</option>
-                            <option value="Concluido" {% if item.status == 'Concluido' %}selected{% endif %} class="fw-bold text-success">✔ Concluído (Liberar p/ Faturamento)</option>
-                            <option value="Cancelado" {% if item.status == 'Cancelado' %}selected{% endif %} class="text-danger">✖ Cancelado</option>
-                        </select>
-                        <small class="text-muted">Ao marcar como <b>Concluído</b>, o item aparecerá imediatamente na aba Financeiro para cobrança.</small>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Previsão / Prazo de Entrega</label>
+                        <label class="form-label small fw-bold">Data Agendada / Prazo de Execução</label>
                         <input type="date" name="data_previsao" class="form-control" value="{{ item.data_previsao.strftime('%Y-%m-%d') if item.data_previsao else '' }}">
+                        <small class="text-muted">Reagende a atividade ajustando a data acima.</small>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label small fw-bold">Observações Técnicas / Andamento da Obra</label>
-                        <textarea name="observacoes" class="form-control" rows="3" placeholder="Ex: Vistoria realizada, aguardando aprovação do relatório de SPDA...">{{ item.observacoes or '' }}</textarea>
+                        <label class="form-label small fw-bold">Status Operacional *</label>
+                        {% if item.status == 'Bloqueado' %}
+                            <div class="alert alert-danger py-2 small mb-0">
+                                <i class="bi bi-shield-lock-fill me-1"></i>
+                                <strong>Atividade Bloqueada:</strong> O status não pode ser alterado manualmente. Confirme o recebimento do sinal no módulo Financeiro para liberar a execução.
+                            </div>
+                            <input type="hidden" name="status" value="Bloqueado">
+                        {% else %}
+                            <select name="status" class="form-select border-primary fw-bold">
+                                <option value="Em Andamento" {% if item.status == 'Em Andamento' %}selected{% endif %}>Em Andamento (Em execução)</option>
+                                <option value="Pendente" {% if item.status == 'Pendente' %}selected{% endif %}>Pendente (Agendado)</option>
+                                <option value="Concluido" {% if item.status == 'Concluido' %}selected{% endif %} class="text-success">✔ Concluído (Liberar p/ Cobrança)</option>
+                                <option value="Cancelado" {% if item.status == 'Cancelado' %}selected{% endif %} class="text-muted">✖ Cancelado</option>
+                            </select>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Relato de Campo / Observações Técnicas</label>
+                        <textarea name="observacoes" class="form-control" rows="3" placeholder="Ex: Vistoria concluída sem apontamentos, relatório fotográfico em anexo...">{{ item.observacoes or '' }}</textarea>
                     </div>
                 </div>
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                    <button type="submit" class="btn btn-primary fw-bold">Salvar Andamento</button>
+                    {% if item.status != 'Bloqueado' %}
+                        <button type="submit" class="btn btn-primary fw-bold px-4">Salvar Alterações</button>
+                    {% endif %}
                 </div>
             </form>
         </div>
@@ -194,51 +269,59 @@
 <!-- ==================================================================== -->
 <div class="modal fade" id="modalCatalogo" tabindex="-1">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content">
+        <div class="modal-content border-0 shadow">
             <div class="modal-header bg-light">
-                <h5 class="modal-title fw-bold text-dark"><i class="bi bi-journal-bookmark me-2"></i>Catálogo Geral de Serviços</h5>
+                <h5 class="modal-title fw-bold text-dark"><i class="bi bi-journal-bookmark me-2 text-primary"></i>Catálogo Geral de Serviços</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
-                <!-- Cadastro de Novo Serviço no Catálogo -->
                 <form action="{{ url_for('novo_tipo_servico') }}" method="POST" class="p-3 bg-light rounded border mb-4">
-                    <h6 class="fw-bold text-primary mb-3">Cadastrar Novo Tipo de Serviço</h6>
+                    <h6 class="fw-bold text-primary mb-3">Cadastrar Novo Serviço</h6>
                     <div class="row g-2">
-                        <div class="col-md-6">
+                        <div class="col-md-5">
                             <label class="form-label small fw-bold">Nome do Serviço *</label>
-                            <input type="text" name="nome" class="form-control form-control-sm" required placeholder="Ex: Laudo Termográfico">
+                            <input type="text" name="nome" class="form-control form-control-sm" required placeholder="Ex: Manutenção Elétrica Preventiva">
                         </div>
                         <div class="col-md-3">
+                            <label class="form-label small fw-bold">Modelo de Cobrança</label>
+                            <select name="modelo_cobranca" class="form-select form-select-sm">
+                                <option value="pontual">Pontual / Avulso</option>
+                                <option value="mensal">Recorrente Mensal</option>
+                                <option value="anual">Recorrente Anual</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label small fw-bold">Valor Base (R$)</label>
                             <input type="number" step="0.01" name="valor_sugerido" class="form-control form-control-sm" placeholder="0.00">
                         </div>
-                        <div class="col-md-12 mt-2">
+                        <div class="col-12 mt-2">
                             <label class="form-label small fw-bold">Descrição Padrão Técnica</label>
-                            <input type="text" name="descricao" class="form-control form-control-sm" placeholder="Escopo padrão para uso nas cartas proposta...">
+                            <input type="text" name="descricao" class="form-control form-control-sm" placeholder="Escopo para cartas proposta...">
                         </div>
-                        <div class="col-12 text-end mt-2">
-                            <button type="submit" class="btn btn-sm btn-success fw-bold">Salvar no Catálogo</button>
+                        <div class="col-12 text-end mt-3">
+                            <button type="submit" class="btn btn-sm btn-success fw-bold px-3">Salvar no Catálogo</button>
                         </div>
                     </div>
                 </form>
 
-                <!-- Tabela de Itens do Catálogo -->
-                <h6 class="fw-bold text-dark mb-2">Serviços Cadastrados</h6>
+                <h6 class="fw-bold text-dark mb-2">Itens Ativos no Catálogo</h6>
                 <div class="table-responsive">
-                    <table class="table table-bordered table-sm align-middle mb-0">
+                    <table class="table table-bordered table-sm align-middle mb-0 small">
                         <thead class="table-light">
                             <tr>
                                 <th>Nome</th>
-                                <th>Valor Base Sugerido</th>
-                                <th>Descrição Padrão</th>
+                                <th>Modelo</th>
+                                <th>Valor Base</th>
+                                <th>Escopo Padrão</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for c in catalogo %}
                             <tr>
                                 <td class="fw-bold">{{ c.nome }}</td>
+                                <td><span class="badge bg-secondary">{{ c.modelo_cobranca|capitalize }}</span></td>
                                 <td class="text-success fw-bold">R$ {{ "%.2f"|format(c.valor_sugerido) }}</td>
-                                <td><small class="text-muted">{{ c.descricao_padrao or '-' }}</small></td>
+                                <td><span class="text-muted">{{ c.descricao_padrao or '-' }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -250,14 +333,14 @@
 </div>
 
 <!-- ==================================================================== -->
-<!-- MODAL: NOVA ATIVIDADE MANUAL (CASO NÃO VENHA DE PROPOSTA) -->
+<!-- MODAL: AGENDAR NOVA ATIVIDADE MANUAL -->
 <!-- ==================================================================== -->
 <div class="modal fade" id="modalNovoServicoDireto" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content">
+        <div class="modal-content border-0 shadow">
             <form action="{{ url_for('vincular_servico_cliente') }}" method="POST">
                 <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark">Adicionar Atividade Manual</h5>
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-calendar-plus text-primary me-2"></i>Agendar Atividade Manual</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
@@ -285,22 +368,21 @@
                             <input type="number" step="0.01" name="valor_cobrado" class="form-control form-control-sm" required>
                         </div>
                         <div class="col-6">
-                            <label class="form-label small fw-bold">Previsão de Entrega</label>
-                            <input type="date" name="data_previsao" class="form-control form-control-sm">
+                            <label class="form-label small fw-bold">Data Agendada</label>
+                            <input type="date" name="data_previsao" class="form-control form-control-sm" required>
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-bold">Observações</label>
-                        <textarea name="observacoes" class="form-control form-control-sm" rows="2"></textarea>
+                        <label class="form-label small fw-bold">Observações / Detalhes de Campo</label>
+                        <textarea name="observacoes" class="form-control form-control-sm" rows="2" placeholder="Informações de acesso, equipe ou escopo..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary fw-bold">Criar Atividade</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4">Confirmar Agendamento</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-
 {% endblock %}

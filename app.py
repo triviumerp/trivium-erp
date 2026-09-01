@@ -1,18 +1,33 @@
+import html
 import io
 import os
-from datetime import datetime, date
+import re
+from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 
+# Carrega as variáveis do arquivo .env automaticamente
+from dotenv import load_dotenv
+load_dotenv()
+
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, send_file
-from flask_sqlalchemy import SQLAlchemy
+from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 
 # Relatórios PDF
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import inch
+
+# Extensões e Modelos Modulares
+from extensions import db, login_manager
+from models import (
+    Empresa, Usuario, Cliente, Documento, TipoServico, 
+    ServicoCliente, Proposta, ItemProposta, ContratoRecorrente, 
+    Fatura, ParcelaFatura
+)
+from auth.routes import auth_bp
 
 # -----------------------------------------------------------------------------
 # 1. CONFIGURAÇÃO DA APLICAÇÃO
@@ -22,175 +37,131 @@ app = Flask(__name__)
 UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['SECRET_KEY'] = 'drd2_engenharia_seguranca_chave_secreta_2026'
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'trivium_erp_chave_secreta_local_2026')
 
-uri_banco = os.getenv('DATABASE_URL', 'sqlite:///database.db')
+# Conexão com o PostgreSQL Local
+URL_LOCAL_POSTGRES = "postgresql://postgres:admin@127.0.0.1:5432/trivium_db?client_encoding=utf8"
+uri_banco = os.getenv('DATABASE_URL', URL_LOCAL_POSTGRES)
 if uri_banco.startswith("postgres://"):
     uri_banco = uri_banco.replace("postgres://", "postgresql://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = uri_banco
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# APENAS UMA VEZ:
-db = SQLAlchemy(app)
+# Inicialização
+db.init_app(app)
+login_manager.init_app(app)
+login_manager.login_view = 'auth.login'
+login_manager.login_message = 'Por favor, faça login para acessar o sistema.'
+login_manager.login_message_category = 'warning'
+
+app.register_blueprint(auth_bp)
+
+
+def _limpar_texto(texto):
+    """Garante que caracteres especiais como & e tags não quebrem o parser XML do ReportLab."""
+    if not texto:
+        return ""
+    return html.escape(str(texto))
+
+
+def is_cpf_valido(cpf):
+    if not cpf:
+        return True
+    
+    cpf_limpo = re.sub(r'\D', '', cpf)
+    if len(cpf_limpo) != 11 or cpf_limpo == cpf_limpo[0] * 11:
+        return False
+        
+    soma = sum(int(cpf_limpo[i]) * (10 - i) for i in range(9))
+    resto = 11 - (soma % 11)
+    digito1 = 0 if resto in [10, 11] else resto
+    if digito1 != int(cpf_limpo[9]):
+        return False
+
+    soma = sum(int(cpf_limpo[i]) * (11 - i) for i in range(10))
+    resto = 11 - (soma % 11)
+    digito2 = 0 if resto in [10, 11] else resto
+    return digito2 == int(cpf_limpo[10])
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return Usuario.query.get(int(user_id))
 
 # -----------------------------------------------------------------------------
-# 2. MODELOS DO BANCO DE DADOS (ORM)
+# 3. CONTEXT PROCESSOR (Injeção de Perfil)
 # -----------------------------------------------------------------------------
-
-class Cliente(db.Model):
-    __tablename__ = 'clientes'
-    id = db.Column(db.Integer, primary_key=True)
-
-    # 1. Identificação Jurídica e Fiscal
-    nome = db.Column(db.String(150), nullable=False) # Razão Social / Nome Completo
-    nome_fantasia = db.Column(db.String(150), nullable=True)
-    cnpj_cpf = db.Column(db.String(30), nullable=True)
-    inscricao_estadual = db.Column(db.String(30), nullable=True)
-
-    # 2. Dados de Contato e Responsável
-    responsavel = db.Column(db.String(100), nullable=True) # Síndico, Gestor, Administrador
-    telefone = db.Column(db.String(50), nullable=False)
-    telefone_secundario = db.Column(db.String(50), nullable=True)
-    email = db.Column(db.String(120), nullable=False)
-    email_financeiro = db.Column(db.String(120), nullable=True) # Para envio de NFs e boletos
-
-    # 3. Endereço Completo do Imóvel / Edificação
-    cep = db.Column(db.String(20), nullable=True)
-    logradouro = db.Column(db.String(200), nullable=True)
-    numero = db.Column(db.String(20), nullable=True)
-    complemento = db.Column(db.String(100), nullable=True) # Bloco, Torre, Galpão
-    bairro = db.Column(db.String(100), nullable=True)
-    cidade = db.Column(db.String(100), nullable=True)
-    estado = db.Column(db.String(10), nullable=True)
-
-    # 4. Dados Técnicos da Edificação (Engenharia & Bombeiros)
-    area_construida = db.Column(db.Float, nullable=True) # em m²
-    tipo_ocupacao = db.Column(db.String(100), nullable=True) # Residencial, Comercial, Industrial, etc.
-    numero_pavimentos = db.Column(db.Integer, nullable=True)
-    numero_projeto_cb = db.Column(db.String(50), nullable=True) # Nº Projeto no Via Fácil / Bombeiros
-    data_inicio_avcb = db.Column(db.Date, nullable=False)
-    data_vencimento_avcb = db.Column(db.Date, nullable=False)
-
-    # 5. Observações Gerais
-    observacoes = db.Column(db.Text, nullable=True)
-
-    # Relacionamentos
-    documentos = db.relationship('Documento', backref='cliente', lazy=True, cascade="all, delete-orphan")
-    servicos = db.relationship('ServicoCliente', backref='cliente', lazy=True, cascade="all, delete-orphan")
-    propostas = db.relationship('Proposta', backref='cliente', lazy=True, cascade="all, delete-orphan")
-
-    @property
-    def total_concluido(self):
-        return sum(s.valor_cobrado for s in self.servicos if s.status == 'Concluido')
-
-    @property
-    def total_em_aberto(self):
-        return sum(s.valor_cobrado for s in self.servicos if s.status in ['Pendente', 'Em Andamento'])
-
-
-class Documento(db.Model):
-    __tablename__ = 'documentos'
-    id = db.Column(db.Integer, primary_key=True)
-    tipo_documento = db.Column(db.String(50), nullable=False)
-    nome_arquivo = db.Column(db.String(255), nullable=False)
-    data_upload = db.Column(db.DateTime, default=datetime.utcnow)
-    cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
-
-
-class TipoServico(db.Model):
-    __tablename__ = 'tipos_servico'
-    id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(150), unique=True, nullable=False)
-    descricao_padrao = db.Column(db.Text, nullable=True)
-    valor_sugerido = db.Column(db.Float, default=0.0)
-
-    execucoes = db.relationship('ServicoCliente', backref='tipo_servico', lazy=True)
-
-
-class ServicoCliente(db.Model):
-    __tablename__ = 'servicos_cliente'
-    id = db.Column(db.Integer, primary_key=True)
-    cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
-    tipo_servico_id = db.Column(db.Integer, db.ForeignKey('tipos_servico.id'), nullable=False)
-    
-    # Execução Técnica
-    valor_cobrado = db.Column(db.Float, default=0.0)
-    status = db.Column(db.String(30), default='Em Andamento')  # Pendente, Em Andamento, Concluido, Cancelado
-    data_solicitacao = db.Column(db.Date, default=date.today)
-    data_previsao = db.Column(db.Date, nullable=True)
-    observacoes = db.Column(db.Text, nullable=True)
-
-    # Gestão Financeira & Cobrança
-    data_vencimento_boleto = db.Column(db.Date, nullable=True)
-    status_pagamento = db.Column(db.String(30), default='A Faturar')  # A Faturar, Boleto Emitido, Pago, Em Atraso
-    arquivo_boleto = db.Column(db.String(255), nullable=True)
-    arquivo_nf = db.Column(db.String(255), nullable=True)
-    historico_cobranca = db.Column(db.Text, nullable=True)
-
-
-class Proposta(db.Model):
-    __tablename__ = 'propostas'
-    id = db.Column(db.Integer, primary_key=True)
-    numero_proposta = db.Column(db.String(30), unique=True, nullable=False)
-    cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
-    data_criacao = db.Column(db.Date, default=date.today)
-    validade_dias = db.Column(db.Integer, default=15)
-    condicoes_pagamento = db.Column(db.String(255), default='Boleto Bancário / Transferência em 30 dias')
-    observacoes = db.Column(db.Text, nullable=True)
-    status = db.Column(db.String(30), default='Aguardando Aprovação')
-
-    itens = db.relationship('ItemProposta', backref='proposta', lazy=True, cascade="all, delete-orphan")
-
-    @property
-    def valor_total(self):
-        return sum(item.valor_unitario for item in self.itens)
-
-
-class ItemProposta(db.Model):
-    __tablename__ = 'itens_proposta'
-    id = db.Column(db.Integer, primary_key=True)
-    proposta_id = db.Column(db.Integer, db.ForeignKey('propostas.id'), nullable=False)
-    tipo_servico_id = db.Column(db.Integer, db.ForeignKey('tipos_servico.id'), nullable=False)
-    valor_unitario = db.Column(db.Float, nullable=False, default=0.0)
-    descricao_personalizada = db.Column(db.Text, nullable=True)
-
-    tipo_servico = db.relationship('TipoServico')
-
-# -----------------------------------------------------------------------------
-# 3. REGRAS AUXILIARES
-# -----------------------------------------------------------------------------
-
-def calcular_alerta_avcb(data_vencimento):
-    hoje = date.today()
-    if data_vencimento < hoje:
-        return True, "VENCIDO!"
-    
-    diferenca = relativedelta(data_vencimento, hoje)
-    meses_restantes = (diferenca.years * 12) + diferenca.months
-    
-    if meses_restantes <= 5:
-        if meses_restantes == 0:
-            dias_restantes = (data_vencimento - hoje).days
-            return True, f"Alerta: Vence em {dias_restantes} dias"
-        return True, f"Alerta: Vence em {meses_restantes} mês(es)"
-    
-    return False, f"Válido por {meses_restantes} meses"
 
 @app.context_processor
 def utility_processor():
-    return dict(calcular_alerta_avcb=calcular_alerta_avcb)
+    perfil = None
+    if current_user.is_authenticated:
+        perfil = current_user.empresa
+    return dict(perfil_empresa=perfil)
 
 # -----------------------------------------------------------------------------
-# 4. ROTAS DO PAINEL PRINCIPAL & CLIENTES
+# 4. ROTAS DO PAINEL DASHBOARD & CARTEIRA DE CLIENTES
 # -----------------------------------------------------------------------------
 
 @app.route('/')
+@login_required
 def index():
-    busca = request.args.get('busca', '')
-    filtro_alerta = request.args.get('alerta', '')
+    hoje = date.today()
+    proximos_7_dias = hoje + timedelta(days=7)
 
-    query = Cliente.query
+    # 1. Indicadores de Contagem e Valores
+    total_clientes = Cliente.query.filter_by(empresa_id=current_user.empresa_id).count()
+
+    propostas_abertas = Proposta.query.filter_by(empresa_id=current_user.empresa_id, status='Aguardando Aprovação').all()
+    qtd_propostas_negociacao = len(propostas_abertas)
+    valor_propostas_abertas = sum(p.valor_total for p in propostas_abertas)
+
+    qtd_servicos_execucao = ServicoCliente.query.filter_by(empresa_id=current_user.empresa_id).filter(
+        ServicoCliente.status.in_(['Em Andamento', 'Bloqueado'])
+    ).count()
+
+    # 2. Financeiro do Mês
+    todas_parcelas = ParcelaFatura.query.filter_by(empresa_id=current_user.empresa_id).all()
+    total_recebido_mes = sum(p.valor for p in todas_parcelas if p.status == 'Pago')
+
+    # 3. Títulos em Atraso
+    titulos_atrasados = [p for p in todas_parcelas if p.status != 'Pago' and p.data_vencimento and p.data_vencimento < hoje]
+    qtd_titulos_atrasados = len(titulos_atrasados)
+    valor_titulos_atrasados = sum(p.valor for p in titulos_atrasados)
+
+    # 4. Listagens Dinâmicas da Tela Inicial
+    proximos_servicos = ServicoCliente.query.filter_by(empresa_id=current_user.empresa_id).filter(
+        ServicoCliente.status.in_(['Em Andamento', 'Pendente', 'Bloqueado'])
+    ).order_by(ServicoCliente.data_previsao.asc().nullslast()).limit(6).all()
+
+    titulos_proximos = ParcelaFatura.query.filter_by(empresa_id=current_user.empresa_id).filter(
+        ParcelaFatura.status != 'Pago',
+        ParcelaFatura.data_vencimento >= hoje,
+        ParcelaFatura.data_vencimento <= proximos_7_dias
+    ).order_by(ParcelaFatura.data_vencimento.asc()).limit(5).all()
+
+    return render_template(
+        'index.html',
+        hoje=hoje,
+        total_clientes=total_clientes,
+        qtd_propostas_negociacao=qtd_propostas_negociacao,
+        valor_propostas_abertas=valor_propostas_abertas,
+        qtd_servicos_execucao=qtd_servicos_execucao,
+        total_recebido_mes=total_recebido_mes,
+        qtd_titulos_atrasados=qtd_titulos_atrasados,
+        valor_titulos_atrasados=valor_titulos_atrasados,
+        proximos_servicos=proximos_servicos,
+        titulos_proximos=titulos_proximos
+    )
+
+
+@app.route('/clientes')
+@login_required
+def listar_clientes():
+    busca = request.args.get('busca', '')
+    query = Cliente.query.filter_by(empresa_id=current_user.empresa_id)
+
     if busca:
         query = query.filter(
             (Cliente.nome.ilike(f'%{busca}%')) | 
@@ -198,37 +169,33 @@ def index():
             (Cliente.cidade.ilike(f'%{busca}%'))
         )
 
-    todos_clientes = query.order_by(Cliente.nome).all()
-
-    if filtro_alerta == 'sim':
-        clientes_filtrados = [c for c in todos_clientes if calcular_alerta_avcb(c.data_vencimento_avcb)[0]]
-    else:
-        clientes_filtrados = todos_clientes
-
-    return render_template('index.html', clientes=clientes_filtrados, busca=busca, filtro_alerta=filtro_alerta)
+    clientes = query.order_by(Cliente.nome).all()
+    return render_template('clientes.html', clientes=clientes, busca=busca)
 
 
 @app.route('/cliente/novo', methods=['GET', 'POST'])
+@login_required
 def novo_cliente():
     if request.method == 'POST':
-        area_str = request.form.get('area_construida')
-        pav_str = request.form.get('numero_pavimentos')
+        tipo_pessoa = request.form.get('tipo_pessoa')
+        doc_identificacao = request.form.get('cnpj') if tipo_pessoa == 'PJ' else request.form.get('cpf')
+
+        if tipo_pessoa == 'PF' and doc_identificacao:
+            if not is_cpf_valido(doc_identificacao):
+                flash('O CPF informado é inválido. Por favor, revise os dígitos.', 'danger')
+                return render_template('cadastro.html', cliente=None)
 
         cliente = Cliente(
-            # 1. Identificação
+            empresa_id=current_user.empresa_id,
             nome=request.form.get('nome'),
-            nome_fantasia=request.form.get('nome_fantasia'),
-            cnpj_cpf=request.form.get('cnpj_cpf'),
-            inscricao_estadual=request.form.get('inscricao_estadual'),
-
-            # 2. Contato
+            nome_fantasia=request.form.get('nome_fantasia') if tipo_pessoa == 'PJ' else None,
+            cnpj_cpf=doc_identificacao,
+            inscricao_estadual=request.form.get('inscricao_estadual') if tipo_pessoa == 'PJ' else None,
             responsavel=request.form.get('responsavel'),
             telefone=request.form.get('telefone'),
             telefone_secundario=request.form.get('telefone_secundario'),
             email=request.form.get('email'),
             email_financeiro=request.form.get('email_financeiro'),
-
-            # 3. Endereço
             cep=request.form.get('cep'),
             logradouro=request.form.get('logradouro'),
             numero=request.form.get('numero'),
@@ -236,48 +203,39 @@ def novo_cliente():
             bairro=request.form.get('bairro'),
             cidade=request.form.get('cidade'),
             estado=request.form.get('estado'),
-
-            # 4. Dados Técnicos
-            area_construida=float(area_str) if area_str else None,
-            tipo_ocupacao=request.form.get('tipo_ocupacao'),
-            numero_pavimentos=int(pav_str) if pav_str else None,
-            numero_projeto_cb=request.form.get('numero_projeto_cb'),
-            data_inicio_avcb=datetime.strptime(request.form.get('data_inicio_avcb'), '%Y-%m-%d').date(),
-            data_vencimento_avcb=datetime.strptime(request.form.get('data_vencimento_avcb'), '%Y-%m-%d').date(),
-
-            # 5. Observações
             observacoes=request.form.get('observacoes')
         )
         db.session.add(cliente)
         db.session.commit()
-        flash('Cliente e dados técnicos cadastrados com sucesso!', 'success')
+        flash(f'Cliente "{cliente.nome}" cadastrado com sucesso!', 'success')
         return redirect(url_for('detalhe_cliente', id=cliente.id))
 
     return render_template('cadastro.html', cliente=None)
 
 
 @app.route('/cliente/editar/<int:id>', methods=['GET', 'POST'])
+@login_required
 def editar_cliente(id):
-    cliente = Cliente.query.get_or_404(id)
+    cliente = Cliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
 
     if request.method == 'POST':
-        area_str = request.form.get('area_construida')
-        pav_str = request.form.get('numero_pavimentos')
+        tipo_pessoa = request.form.get('tipo_pessoa')
+        doc_identificacao = request.form.get('cnpj') if tipo_pessoa == 'PJ' else request.form.get('cpf')
 
-        # 1. Identificação
+        if tipo_pessoa == 'PF' and doc_identificacao:
+            if not is_cpf_valido(doc_identificacao):
+                flash('O CPF informado é inválido. Por favor, revise os dígitos.', 'danger')
+                return render_template('cadastro.html', cliente=cliente)
+
         cliente.nome = request.form.get('nome')
-        cliente.nome_fantasia = request.form.get('nome_fantasia')
-        cliente.cnpj_cpf = request.form.get('cnpj_cpf')
-        cliente.inscricao_estadual = request.form.get('inscricao_estadual')
-
-        # 2. Contato
+        cliente.nome_fantasia = request.form.get('nome_fantasia') if tipo_pessoa == 'PJ' else None
+        cliente.cnpj_cpf = doc_identificacao
+        cliente.inscricao_estadual = request.form.get('inscricao_estadual') if tipo_pessoa == 'PJ' else None
         cliente.responsavel = request.form.get('responsavel')
         cliente.telefone = request.form.get('telefone')
         cliente.telefone_secundario = request.form.get('telefone_secundario')
         cliente.email = request.form.get('email')
         cliente.email_financeiro = request.form.get('email_financeiro')
-
-        # 3. Endereço
         cliente.cep = request.form.get('cep')
         cliente.logradouro = request.form.get('logradouro')
         cliente.numero = request.form.get('numero')
@@ -285,28 +243,19 @@ def editar_cliente(id):
         cliente.bairro = request.form.get('bairro')
         cliente.cidade = request.form.get('cidade')
         cliente.estado = request.form.get('estado')
-
-        # 4. Dados Técnicos
-        cliente.area_construida = float(area_str) if area_str else None
-        cliente.tipo_ocupacao = request.form.get('tipo_ocupacao')
-        cliente.numero_pavimentos = int(pav_str) if pav_str else None
-        cliente.numero_projeto_cb = request.form.get('numero_projeto_cb')
-        cliente.data_inicio_avcb = datetime.strptime(request.form.get('data_inicio_avcb'), '%Y-%m-%d').date()
-        cliente.data_vencimento_avcb = datetime.strptime(request.form.get('data_vencimento_avcb'), '%Y-%m-%d').date()
-
-        # 5. Observações
         cliente.observacoes = request.form.get('observacoes')
 
         db.session.commit()
-        flash('Cadastro completo atualizado com sucesso!', 'success')
+        flash('Cadastro atualizado com sucesso!', 'success')
         return redirect(url_for('detalhe_cliente', id=cliente.id))
 
     return render_template('cadastro.html', cliente=cliente)
 
 
 @app.route('/cliente/deletar/<int:id>')
+@login_required
 def deletar_cliente(id):
-    cliente = Cliente.query.get_or_404(id)
+    cliente = Cliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     db.session.delete(cliente)
     db.session.commit()
     flash('Cliente e todo o histórico vinculado foram removidos.', 'warning')
@@ -314,23 +263,17 @@ def deletar_cliente(id):
 
 
 @app.route('/cliente/<int:id>')
+@login_required
 def detalhe_cliente(id):
-    cliente = Cliente.query.get_or_404(id)
+    cliente = Cliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     documentos = Documento.query.filter_by(cliente_id=id).order_by(Documento.data_upload.desc()).all()
-    alerta_ativo, mensagem_alerta = calcular_alerta_avcb(cliente.data_vencimento_avcb)
-    
-    return render_template(
-        'detalhe_cliente.html', 
-        cliente=cliente, 
-        documentos=documentos, 
-        alerta_ativo=alerta_ativo, 
-        mensagem_alerta=mensagem_alerta
-    )
+    return render_template('detalhe_cliente.html', cliente=cliente, documentos=documentos)
 
 
 @app.route('/cliente/<int:id>/upload', methods=['POST'])
+@login_required
 def upload_documento(id):
-    cliente = Cliente.query.get_or_404(id)
+    cliente = Cliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     
     if 'arquivo' not in request.files:
         flash('Nenhum arquivo enviado!', 'danger')
@@ -357,8 +300,9 @@ def upload_documento(id):
 
 
 @app.route('/documento/deletar/<int:doc_id>')
+@login_required
 def deletar_documento(doc_id):
-    doc = Documento.query.get_or_404(doc_id)
+    doc = Documento.query.join(Cliente).filter(Documento.id == doc_id, Cliente.empresa_id == current_user.empresa_id).first_or_404()
     cliente_id = doc.cliente_id
 
     caminho = os.path.join(app.config['UPLOAD_FOLDER'], doc.nome_arquivo)
@@ -372,6 +316,7 @@ def deletar_documento(doc_id):
 
 
 @app.route('/uploads/<path:filename>')
+@login_required
 def download_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
@@ -380,54 +325,80 @@ def download_file(filename):
 # -----------------------------------------------------------------------------
 
 @app.route('/propostas')
+@login_required
 def listar_propostas():
-    filtro = request.args.get('filtro', 'ativas')
-    
-    query = Proposta.query
-    if filtro == 'ativas':
-        query = query.filter_by(status='Aguardando Aprovação')
-    elif filtro == 'aprovadas':
-        query = query.filter_by(status='Aprovado')
-    elif filtro == 'canceladas':
-        query = query.filter_by(status='Cancelado')
+    filtro_atual = request.args.get('filtro', 'ativas')
+    query = Proposta.query.filter_by(empresa_id=current_user.empresa_id)
 
-    propostas = query.order_by(Proposta.id.desc()).all()
-    clientes = Cliente.query.order_by(Cliente.nome).all()
-    tipos_servico = TipoServico.query.order_by(TipoServico.nome).all()
+    if filtro_atual == 'ativas':
+        propostas = query.filter_by(status='Aguardando Aprovação').order_by(Proposta.data_criacao.desc()).all()
+    elif filtro_atual == 'aprovadas':
+        propostas = query.filter_by(status='Aprovado').order_by(Proposta.data_criacao.desc()).all()
+    elif filtro_atual == 'canceladas':
+        propostas = query.filter_by(status='Cancelado').order_by(Proposta.data_criacao.desc()).all()
+    else:
+        propostas = query.order_by(Proposta.data_criacao.desc()).all()
 
-    total_aguardando = sum(p.valor_total for p in Proposta.query.filter_by(status='Aguardando Aprovação').all())
-    total_aprovadas = sum(p.valor_total for p in Proposta.query.filter_by(status='Aprovado').all())
-    qtd_aguardando = Proposta.query.filter_by(status='Aguardando Aprovação').count()
+    todas = query.all()
+    total_aguardando = sum(p.valor_total for p in todas if p.status == 'Aguardando Aprovação')
+    total_aprovadas = sum(p.valor_total for p in todas if p.status == 'Aprovado')
+    qtd_aguardando = len([p for p in todas if p.status == 'Aguardando Aprovação'])
+
+    clientes = Cliente.query.filter_by(empresa_id=current_user.empresa_id).order_by(Cliente.nome).all()
+    tipos_servico = TipoServico.query.filter_by(empresa_id=current_user.empresa_id).all()
 
     return render_template(
         'propostas.html',
         propostas=propostas,
-        clientes=clientes,
-        tipos_servico=tipos_servico,
-        filtro_atual=filtro,
+        filtro_atual=filtro_atual,
         total_aguardando=total_aguardando,
         total_aprovadas=total_aprovadas,
-        qtd_aguardando=qtd_aguardando
+        qtd_aguardando=qtd_aguardando,
+        clientes=clientes,
+        tipos_servico=tipos_servico
     )
 
 
 @app.route('/propostas/nova', methods=['POST'])
+@login_required
 def criar_proposta():
     cliente_id = int(request.form.get('cliente_id'))
     validade_dias = int(request.form.get('validade_dias') or 15)
-    condicoes = request.form.get('condicoes_pagamento') or 'Boleto Bancário / Transferência'
+    condicoes = request.form.get('condicoes_pagamento') or 'Conforme alinhamento comercial'
     observacoes = request.form.get('observacoes')
     
-    total_existentes = Proposta.query.count() + 1
+    tipo_cobranca = request.form.get('tipo_cobranca', 'pontual')
+    periodicidade = request.form.get('periodicidade', 'mensal')
+    dia_vencimento = int(request.form.get('dia_vencimento') or 10)
+
+    # Dados de Entrada e Parcelamento
+    exige_entrada = request.form.get('exige_entrada') == 'on' or request.form.get('exige_entrada') == 'true'
+    valor_entrada = float(request.form.get('valor_entrada') or 0.0)
+    forma_pagamento_entrada = request.form.get('forma_pagamento_entrada', 'PIX')
+    qtd_parcelas = int(request.form.get('qtd_parcelas') or 1)
+    forma_pagamento_parcelas = request.form.get('forma_pagamento_parcelas', 'Boleto Bancário')
+    intervalo_dias = int(request.form.get('intervalo_dias') or 30)
+    
+    total_existentes = Proposta.query.filter_by(empresa_id=current_user.empresa_id).count() + 1
     numero_proposta = f"PROP-{date.today().year}-{total_existentes:03d}"
 
     nova_prop = Proposta(
+        empresa_id=current_user.empresa_id,
         numero_proposta=numero_proposta,
         cliente_id=cliente_id,
         validade_dias=validade_dias,
         condicoes_pagamento=condicoes,
         observacoes=observacoes,
-        status='Aguardando Aprovação'
+        status='Aguardando Aprovação',
+        tipo_cobranca=tipo_cobranca,
+        periodicidade=periodicidade,
+        dia_vencimento=dia_vencimento,
+        exige_entrada=exige_entrada,
+        valor_entrada=valor_entrada,
+        forma_pagamento_entrada=forma_pagamento_entrada,
+        qtd_parcelas=qtd_parcelas,
+        forma_pagamento_parcelas=forma_pagamento_parcelas,
+        intervalo_dias=intervalo_dias
     )
     db.session.add(nova_prop)
     db.session.flush()
@@ -447,13 +418,14 @@ def criar_proposta():
             db.session.add(item)
 
     db.session.commit()
-    flash(f'Proposta Comercial {nova_prop.numero_proposta} gerada com sucesso!', 'success')
+    flash(f'Proposta {nova_prop.numero_proposta} gerada com sucesso!', 'success')
     return redirect(url_for('listar_propostas'))
 
 
 @app.route('/propostas/<int:id>/status', methods=['POST'])
+@login_required
 def atualizar_status_proposta(id):
-    proposta = Proposta.query.get_or_404(id)
+    proposta = Proposta.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     novo_status = request.form.get('novo_status')
     
     if novo_status in ['Aguardando Aprovação', 'Aprovado', 'Cancelado']:
@@ -461,42 +433,126 @@ def atualizar_status_proposta(id):
         proposta.status = novo_status
 
         if novo_status == 'Aprovado' and status_anterior != 'Aprovado':
+            hoje = date.today()
+
+            # 1. CRIA A FATURA PAI
+            fatura = Fatura(
+                empresa_id=current_user.empresa_id,
+                cliente_id=proposta.cliente_id,
+                proposta_id=proposta.id,
+                descricao=f"Proposta {proposta.numero_proposta} ({len(proposta.itens)} itens)",
+                valor_total=proposta.valor_total,
+                data_emissao=hoje
+            )
+            db.session.add(fatura)
+            db.session.flush()
+
+            # 2. CONTRATO RECORRENTE (SE MENSALISTA)
+            if proposta.tipo_cobranca == 'recorrente':
+                contrato = ContratoRecorrente(
+                    empresa_id=current_user.empresa_id,
+                    cliente_id=proposta.cliente_id,
+                    tipo_servico_id=proposta.itens[0].tipo_servico_id if proposta.itens else None,
+                    proposta_origem_id=proposta.id,
+                    titulo=f"Contrato Mensal - {proposta.cliente.nome}",
+                    valor_periodo=proposta.valor_total,
+                    periodicidade=proposta.periodicidade,
+                    dia_vencimento=proposta.dia_vencimento,
+                    status='Ativo',
+                    data_inicio=hoje,
+                    observacoes=proposta.observacoes
+                )
+                db.session.add(contrato)
+                db.session.flush()
+                fatura.contrato_id = contrato.id
+
+            # 3. GERAÇÃO DINÂMICA DAS PARCELAS (ENTRADA + PARCELAS 1 A 12X)
+            exige_entrada = proposta.exige_entrada and (proposta.valor_entrada or 0) > 0
+            valor_entrada = float(proposta.valor_entrada or 0) if exige_entrada else 0.0
+            saldo_parcelar = max(0.0, proposta.valor_total - valor_entrada)
+            qtd_parc = max(1, min(12, proposta.qtd_parcelas or 1))
+            total_titulos = (1 if exige_entrada else 0) + (qtd_parc if saldo_parcelar > 0 else 0)
+
+            num_seq = 1
+
+            # A) Parcela de Entrada / Sinal
+            if exige_entrada:
+                p_entrada = ParcelaFatura(
+                    empresa_id=current_user.empresa_id,
+                    fatura_id=fatura.id,
+                    numero_parcela=num_seq,
+                    total_parcelas=total_titulos,
+                    descricao_parcela="Entrada / Sinal de Mobilização",
+                    is_entrada=True,
+                    forma_pagamento=proposta.forma_pagamento_entrada or "PIX",
+                    valor=valor_entrada,
+                    data_vencimento=hoje,
+                    status="A Faturar"
+                )
+                db.session.add(p_entrada)
+                num_seq += 1
+
+            # B) Parcelas Restantes
+            if saldo_parcelar > 0:
+                valor_cada_parcela = round(saldo_parcelar / qtd_parc, 2)
+                intervalo = proposta.intervalo_dias or 30
+
+                for i in range(1, qtd_parc + 1):
+                    dt_venc = hoje + relativedelta(days=i * intervalo)
+                    p_normal = ParcelaFatura(
+                        empresa_id=current_user.empresa_id,
+                        fatura_id=fatura.id,
+                        numero_parcela=num_seq,
+                        total_parcelas=total_titulos,
+                        descricao_parcela=f"Parcela {i}/{qtd_parc}",
+                        is_entrada=False,
+                        forma_pagamento=proposta.forma_pagamento_parcelas or "Boleto Bancário",
+                        valor=valor_cada_parcela,
+                        data_vencimento=dt_venc,
+                        status="A Faturar"
+                    )
+                    db.session.add(p_normal)
+                    num_seq += 1
+
+            # 4. CRIA AS ORDENS DE SERVIÇO NA AGENDA COM TRAVA DE SINAL
+            status_inicial_os = 'Bloqueado' if exige_entrada else ('Em Andamento' if proposta.tipo_cobranca != 'recorrente' else 'Pendente')
+
             for item in proposta.itens:
                 nova_ordem = ServicoCliente(
+                    empresa_id=current_user.empresa_id,
                     cliente_id=proposta.cliente_id,
                     tipo_servico_id=item.tipo_servico_id,
+                    fatura_id=fatura.id,
                     valor_cobrado=item.valor_unitario,
-                    status='Em Andamento',
-                    data_solicitacao=date.today(),
-                    data_previsao=date.today() + relativedelta(days=proposta.validade_dias or 30),
-                    observacoes=f"[Ref. {proposta.numero_proposta}] {item.descricao_personalizada or ''}".strip(),
-                    status_pagamento='A Faturar'
+                    status=status_inicial_os,
+                    data_solicitacao=hoje,
+                    data_previsao=hoje + relativedelta(days=proposta.validade_dias or 30),
+                    observacoes=f"[Ref. {proposta.numero_proposta}] {item.descricao_personalizada or ''}".strip()
                 )
                 db.session.add(nova_ordem)
             
             db.session.commit()
-            flash(f'Proposta {proposta.numero_proposta} aprovada! Atividades liberadas para acompanhamento em Serviços.', 'success')
+            flash(f'Proposta {proposta.numero_proposta} aprovada! Fatura gerada com {total_titulos} título(s).', 'success')
             return redirect(url_for('listar_propostas'))
 
         db.session.commit()
-        flash(f'Status da Proposta {proposta.numero_proposta} alterado para "{novo_status}"!', 'info')
+        flash(f'Status da Proposta alterado para "{novo_status}"!', 'info')
     
     return redirect(url_for('listar_propostas'))
 
+
 @app.route('/propostas/<int:id>/editar', methods=['POST'])
+@login_required
 def editar_proposta(id):
-    proposta = Proposta.query.get_or_404(id)
+    proposta = Proposta.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     
-    # 1. Atualiza dados principais
     proposta.cliente_id = int(request.form.get('cliente_id'))
     proposta.validade_dias = int(request.form.get('validade_dias') or 15)
-    proposta.condicoes_pagamento = request.form.get('condicoes_pagamento') or 'Boleto Bancário / Transferência'
+    proposta.condicoes_pagamento = request.form.get('condicoes_pagamento') or 'Conforme alinhamento comercial'
     proposta.observacoes = request.form.get('observacoes')
     
-    # 2. Remove os itens antigos da proposta para reinserir os atualizados
     ItemProposta.query.filter_by(proposta_id=proposta.id).delete()
     
-    # 3. Captura os novos itens enviados no formulário de edição
     servicos_ids = request.form.getlist('tipo_servico_id[]')
     valores = request.form.getlist('valor_unitario[]')
     descricoes = request.form.getlist('descricao[]')
@@ -515,119 +571,235 @@ def editar_proposta(id):
     flash(f'Proposta {proposta.numero_proposta} atualizada com sucesso!', 'success')
     return redirect(url_for('listar_propostas'))
 
+
 @app.route('/propostas/<int:id>/pdf')
+@login_required
 def gerar_pdf_proposta(id):
-    proposta = Proposta.query.get_or_404(id)
+    proposta = Proposta.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     cliente = proposta.cliente
+    empresa = current_user.empresa
     buffer = io.BytesIO()
 
+    # Margens de 36pt (0.5 pol) = 540pt de largura útil (7.5 polegadas exatas)
     doc = SimpleDocTemplate(
         buffer,
         pagesize=letter,
-        rightMargin=40,
-        leftMargin=40,
-        topMargin=40,
-        bottomMargin=40
+        rightMargin=36,
+        leftMargin=36,
+        topMargin=36,
+        bottomMargin=36
     )
 
     elementos = []
     styles = getSampleStyleSheet()
 
-    estilo_titulo = ParagraphStyle('TituloDoc', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=16, leading=20, textColor=colors.HexColor("#1e293b"))
-    estilo_sub = ParagraphStyle('SubTituloDoc', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=14, textColor=colors.HexColor("#0284c7"))
-    estilo_corpo = ParagraphStyle('CorpoDoc', parent=styles['Normal'], fontName='Helvetica', fontSize=9, leading=13, textColor=colors.HexColor("#334155"))
-    estilo_corpo_bold = ParagraphStyle('CorpoBold', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, leading=13, textColor=colors.HexColor("#1e293b"))
+    cor_primaria_hex = empresa.cor_primaria if empresa.cor_primaria and empresa.cor_primaria.startswith('#') else "#1e3a8a"
+    cor_marca = colors.HexColor(cor_primaria_hex)
 
-    elementos.append(Paragraph("DRD2 ENGENHARIA & PREVENÇÃO CONTRA INCÊNDIO", estilo_titulo))
-    elementos.append(Paragraph("Assessoria Técnica, Projetos, Laudos e Licenciamento AVCB / CLCB", estilo_sub))
-    elementos.append(Spacer(1, 10))
-    elementos.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0284c7"), spaceAfter=15))
+    # Estilos Tipográficos Seguros
+    estilo_empresa_nome = ParagraphStyle('PDF_EmpresaNome', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=13, leading=16, textColor=cor_marca)
+    estilo_empresa_sub = ParagraphStyle('PDF_EmpresaSub', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=11, textColor=colors.HexColor("#475569"))
+    estilo_secao = ParagraphStyle('PDF_SecaoTit', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=cor_marca)
+    estilo_corpo = ParagraphStyle('PDF_CorpoDoc', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=12, textColor=colors.HexColor("#334155"))
+    estilo_corpo_bold = ParagraphStyle('PDF_CorpoBold', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, leading=12, textColor=colors.HexColor("#0f172a"))
+    estilo_escopo = ParagraphStyle('PDF_Escopo', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=11, textColor=colors.HexColor("#64748b"))
+    estilo_total = ParagraphStyle('PDF_TotalNum', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=13, textColor=colors.HexColor("#16a34a"), alignment=2)
 
-    endereco_formatado = f"{cliente.logradouro or ''}, {cliente.numero or 'S/N'} {cliente.complemento or ''} - {cliente.bairro or ''}, {cliente.cidade or ''}/{cliente.estado or ''}"
+    # =========================================================================
+    # 1. CABEÇALHO COM LOGOTIPO OU RAZÃO SOCIAL
+    # =========================================================================
+    logo_elemento = None
+    if empresa.logo_filename:
+        caminho_logo = os.path.join(app.config['UPLOAD_FOLDER'], empresa.logo_filename)
+        if os.path.exists(caminho_logo):
+            try:
+                logo_elemento = RLImage(caminho_logo, width=1.5*inch, height=0.6*inch)
+                logo_elemento.hAlign = 'LEFT'
+            except Exception:
+                logo_elemento = None
 
-    dados_cabecalho = [
+    razao_empresa = _limpar_texto(empresa.razao_social or 'EMPRESA PRESTADORA')
+    fantasia_empresa = _limpar_texto(empresa.nome_fantasia or '')
+    cnpj_empresa = _limpar_texto(empresa.cnpj or 'Não informado')
+    tel_empresa = _limpar_texto(empresa.telefone or 'Não informado')
+    email_empresa = _limpar_texto(empresa.email or '')
+    site_empresa = _limpar_texto(empresa.site or '')
+    end_empresa = _limpar_texto(empresa.endereco_completo or '')
+
+    info_empresa_html = f"""
+    <b>{razao_empresa.upper()}</b><br/>
+    {f"Nome Fantasia: {fantasia_empresa}<br/>" if fantasia_empresa else ""}
+    CNPJ/CPF: {cnpj_empresa} | Tel: {tel_empresa}<br/>
+    {f"E-mail: {email_empresa} | " if email_empresa else ""}{site_empresa}<br/>
+    {end_empresa}
+    """.strip()
+
+    if logo_elemento:
+        tab_topo = Table([[logo_elemento, Paragraph(info_empresa_html, estilo_empresa_sub)]], colWidths=[1.8*inch, 5.7*inch])
+    else:
+        tab_topo = Table([[Paragraph(f"<b>{razao_empresa.upper()}</b>", estilo_empresa_nome), Paragraph(info_empresa_html, estilo_empresa_sub)]], colWidths=[2.8*inch, 4.7*inch])
+
+    tab_topo.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('ALIGN', (1,0), (1,0), 'RIGHT'),
+    ]))
+    elementos.append(tab_topo)
+    elementos.append(Spacer(1, 6))
+    elementos.append(HRFlowable(width="100%", thickness=1.5, color=cor_marca, spaceAfter=10))
+
+    # =========================================================================
+    # 2. DADOS DA PROPOSTA & CLIENTE
+    # =========================================================================
+    nome_cli = _limpar_texto(cliente.nome or 'Cliente')
+    doc_cli = _limpar_texto(cliente.cnpj_cpf or '--')
+    resp_cli = _limpar_texto(cliente.responsavel or cliente.nome or '--')
+    tel_cli = _limpar_texto(cliente.telefone or '--')
+    email_cli = _limpar_texto(cliente.email or '--')
+    num_prop = _limpar_texto(proposta.numero_proposta or f"PROP-{proposta.id}")
+    dt_emissao = proposta.data_criacao.strftime('%d/%m/%Y') if proposta.data_criacao else datetime.today().strftime('%d/%m/%Y')
+    
+    end_cli_fmt = _limpar_texto(
+        f"{cliente.logradouro or ''}, {cliente.numero or 'S/N'} {cliente.complemento or ''} - {cliente.bairro or ''}, {cliente.cidade or ''}/{cliente.estado or ''}".strip(" ,-/")
+    ) or "Endereço não informado"
+
+    dados_painel = [
         [
-            Paragraph(f"<b>PROPOSTA COMERCIAL:</b> {proposta.numero_proposta}", estilo_corpo),
-            Paragraph(f"<b>DATA DE EMISSÃO:</b> {proposta.data_criacao.strftime('%d/%m/%Y')}", estilo_corpo)
+            Paragraph(f"<b>PROPOSTA COMERCIAL:</b> {num_prop}", estilo_corpo_bold),
+            Paragraph(f"<b>DATA DE EMISSÃO:</b> {dt_emissao}", estilo_corpo)
         ],
         [
-            Paragraph(f"<b>CLIENTE:</b> {cliente.nome}", estilo_corpo),
-            Paragraph(f"<b>CNPJ / CPF:</b> {cliente.cnpj_cpf or '-'}", estilo_corpo)
+            Paragraph(f"<b>CLIENTE:</b> {nome_cli}", estilo_corpo_bold),
+            Paragraph(f"<b>VALIDADE:</b> {proposta.validade_dias or 15} dias", estilo_corpo)
         ],
         [
-            Paragraph(f"<b>LOCAL / ENDEREÇO:</b> {endereco_formatado}", estilo_corpo),
-            Paragraph(f"<b>VALIDADE:</b> {proposta.validade_dias} dias", estilo_corpo)
+            Paragraph(f"<b>CNPJ / CPF:</b> {doc_cli}", estilo_corpo),
+            Paragraph(f"<b>RESPONSÁVEL TÉCNICO:</b> {_limpar_texto(current_user.nome)}", estilo_corpo)
         ],
         [
-            Paragraph(f"<b>RESPONSÁVEL / TEL:</b> {cliente.responsavel or '-'} | {cliente.telefone}", estilo_corpo),
-            Paragraph(f"<b>E-MAIL:</b> {cliente.email}", estilo_corpo)
+            Paragraph(f"<b>LOCAL / ENDEREÇO:</b> {end_cli_fmt}", estilo_corpo),
+            Paragraph(f"<b>CONTATO / TEL:</b> {resp_cli} | {tel_cli}", estilo_corpo)
         ]
     ]
-    tabela_cab = Table(dados_cabecalho, colWidths=[3.5*inch, 3.5*inch])
-    tabela_cab.setStyle(TableStyle([
+    tab_painel = Table(dados_painel, colWidths=[4.2*inch, 3.3*inch])
+    tab_painel.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f8fafc")),
         ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
         ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor("#f1f5f9")),
-        ('PADDING', (0,0), (-1,-1), 5),
+        ('PADDING', (0,0), (-1,-1), 4.5),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
     ]))
-    elementos.append(tabela_cab)
-    elementos.append(Spacer(1, 15))
+    elementos.append(tab_painel)
+    elementos.append(Spacer(1, 10))
 
-    elementos.append(Paragraph("ESCOPO DOS SERVIÇOS TÉCNICOS PROPOSTOS", estilo_sub))
-    elementos.append(Spacer(1, 8))
+    # =========================================================================
+    # 3. ESCOPO DOS SERVIÇOS
+    # =========================================================================
+    elementos.append(Paragraph("1. ESCOPO TÉCNICO & INVESTIMENTO", estilo_secao))
+    elementos.append(Spacer(1, 4))
 
-    dados_itens = [
+    dados_servicos = [
         [
             Paragraph("<b>Item / Serviço</b>", estilo_corpo_bold),
-            Paragraph("<b>Detalhamento Técnico / Escopo</b>", estilo_corpo_bold),
+            Paragraph("<b>Detalhamento Técnico / Metodologia</b>", estilo_corpo_bold),
             Paragraph("<b>Valor (R$)</b>", estilo_corpo_bold)
         ]
     ]
 
     for idx, item in enumerate(proposta.itens, 1):
-        descricao = item.descricao_personalizada or item.tipo_servico.descricao_padrao or "Conforme normas técnicas vigentes e ITs do Corpo de Bombeiros."
-        dados_itens.append([
-            Paragraph(f"<b>{idx}. {item.tipo_servico.nome}</b>", estilo_corpo),
-            Paragraph(descricao, estilo_corpo),
+        nome_serv = _limpar_texto(item.tipo_servico.nome if item.tipo_servico else 'Serviço Técnico')
+        escopo_raw = item.descricao_personalizada or (item.tipo_servico.descricao_padrao if item.tipo_servico else '') or "Conforme alinhamento técnico e comercial."
+        escopo_fmt = _limpar_texto(escopo_raw)
+
+        dados_servicos.append([
+            Paragraph(f"<b>{idx:02d}. {nome_serv}</b>", estilo_corpo),
+            Paragraph(escopo_fmt, estilo_escopo),
             Paragraph(f"R$ {item.valor_unitario:,.2f}", estilo_corpo_bold)
         ])
 
-    dados_itens.append([
-        Paragraph("<b>TOTAL GLOBAL DO INVESTIMENTO</b>", estilo_corpo_bold),
-        Paragraph("", estilo_corpo),
-        Paragraph(f"<b>R$ {proposta.valor_total:,.2f}</b>", ParagraphStyle('TotalText', parent=estilo_corpo_bold, fontSize=11, textColor=colors.HexColor("#16a34a")))
+    label_total = "VALOR DA MENSALIDADE" if proposta.tipo_cobranca == 'recorrente' else "TOTAL GLOBAL DO INVESTIMENTO"
+    sufixo_mes = "/mês" if proposta.tipo_cobranca == 'recorrente' else ""
+
+    dados_servicos.append([
+        Paragraph(f"<b>{label_total}</b>", estilo_corpo_bold),
+        Paragraph(f"<font color='#64748b'>Ref. {len(proposta.itens)} serviço(s) listado(s)</font>", estilo_escopo),
+        Paragraph(f"R$ {proposta.valor_total:,.2f} {sufixo_mes}", estilo_total)
     ])
 
-    tabela_itens = Table(dados_itens, colWidths=[2.2*inch, 3.6*inch, 1.2*inch])
-    tabela_itens.setStyle(TableStyle([
+    tab_servicos = Table(dados_servicos, colWidths=[2.3*inch, 4.0*inch, 1.2*inch])
+    tab_servicos.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0f172a")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
         ('ALIGN', (2,0), (2,-1), 'RIGHT'),
         ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ('GRID', (0,0), (-1,-2), 0.5, colors.HexColor("#cbd5e1")),
         ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor("#f1f5f9")),
-        ('LINEABOVE', (0,-1), (-1,-1), 1.5, colors.HexColor("#0f172a")),
+        ('LINEABOVE', (0,-1), (-1,-1), 1.2, colors.HexColor("#0f172a")),
+        ('PADDING', (0,0), (-1,-1), 5),
+    ]))
+    elementos.append(tab_servicos)
+    elementos.append(Spacer(1, 10))
+
+    # =========================================================================
+    # 4. CONDIÇÕES FINANCEIRAS, SINAL E PARCELAS
+    # =========================================================================
+    elementos.append(Paragraph("2. CONDIÇÕES COMERCIAIS & MOBILIZAÇÃO", estilo_secao))
+    elementos.append(Spacer(1, 4))
+
+    linhas_condicoes = []
+
+    if proposta.tipo_cobranca == 'recorrente':
+        periodo_txt = _limpar_texto(proposta.periodicidade or 'mensal').capitalize()
+        dia_venc_txt = proposta.dia_vencimento or 10
+        linhas_condicoes.append(f"• <b>Modelo Contratual:</b> Contrato de Prestação de Serviços Contínuos ({periodo_txt}).")
+        linhas_condicoes.append(f"• <b>Vencimento das Mensalidades:</b> Todo dia <b>{dia_venc_txt}</b> de cada mês via Boleto Bancário.")
+    else:
+        if proposta.exige_entrada and (proposta.valor_entrada or 0) > 0:
+            forma_ent = _limpar_texto(proposta.forma_pagamento_entrada or 'PIX')
+            linhas_condicoes.append(f"• <b>Sinal de Entrada:</b> <font color='#b91c1c'><b>R$ {proposta.valor_entrada:,.2f}</b></font> ({forma_ent}) para confirmação e liberação da agenda técnica.")
+            
+            saldo = max(0.0, proposta.valor_total - (proposta.valor_entrada or 0))
+            if saldo > 0:
+                qtd_p = max(1, proposta.qtd_parcelas or 1)
+                v_p = saldo / qtd_p
+                forma_parc = _limpar_texto(proposta.forma_pagamento_parcelas or 'Boleto Bancário')
+                inter_dias = proposta.intervalo_dias or 30
+                linhas_condicoes.append(f"• <b>Saldo Restante:</b> R$ {saldo:,.2f} parcelado em <b>{qtd_p}x de R$ {v_p:,.2f}</b> no {forma_parc} (intervalo de {inter_dias} dias).")
+        elif (proposta.qtd_parcelas or 1) > 1:
+            qtd_p = proposta.qtd_parcelas
+            v_p = proposta.valor_total / qtd_p
+            forma_parc = _limpar_texto(proposta.forma_pagamento_parcelas or 'Boleto Bancário')
+            inter_dias = proposta.intervalo_dias or 30
+            linhas_condicoes.append(f"• <b>Condição Parcelada:</b> Dividido em <b>{qtd_p}x de R$ {v_p:,.2f}</b> no {forma_parc} a cada {inter_dias} dias (Sem entrada).")
+        else:
+            linhas_condicoes.append("• <b>Condição de Pagamento:</b> À Vista / Faturamento em parcela única.")
+
+    if proposta.condicoes_pagamento:
+        linhas_condicoes.append(f"• <b>Termos Gerais:</b> {_limpar_texto(proposta.condicoes_pagamento)}")
+    if proposta.observacoes:
+        linhas_condicoes.append(f"• <b>Observações Técnicas:</b> {_limpar_texto(proposta.observacoes)}")
+
+    tab_cond = Table([[Paragraph("<br/>".join(linhas_condicoes), estilo_corpo)]], colWidths=[7.5*inch])
+    tab_cond.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f8fafc")),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
         ('PADDING', (0,0), (-1,-1), 6),
     ]))
-    elementos.append(tabela_itens)
-    elementos.append(Spacer(1, 15))
+    elementos.append(tab_cond)
+    elementos.append(Spacer(1, 24))
 
-    elementos.append(Paragraph("CONDIÇÕES COMERCIAIS & PAGAMENTO", estilo_sub))
-    elementos.append(Spacer(1, 6))
-    elementos.append(Paragraph(f"• <b>Condição de Pagamento:</b> {proposta.condicoes_pagamento}", estilo_corpo))
-    if proposta.observacoes:
-        elementos.append(Paragraph(f"• <b>Observações:</b> {proposta.observacoes}", estilo_corpo))
-    elementos.append(Paragraph("• <b>Incluso:</b> Emissão de ART (Anotação de Responsabilidade Técnica), taxas e assessoria completa.", estilo_corpo))
-
-    elementos.append(Spacer(1, 35))
+    # =========================================================================
+    # 5. TERMO DE ACEITE & ASSINATURAS
+    # =========================================================================
+    cargo_resp = _limpar_texto(current_user.cargo or 'Responsável Técnico')
+    nome_usuario = _limpar_texto(current_user.nome)
 
     dados_assinaturas = [
         [
-            Paragraph("____________________________________________<br/><b>DRD2 ENGENHARIA</b><br/>Responsável Técnico", estilo_corpo),
-            Paragraph("____________________________________________<br/><b>DE ACORDO DO CLIENTE</b><br/>Assinatura / Carimbo", estilo_corpo)
+            Paragraph(f"____________________________________________<br/><b>{razao_empresa.upper()}</b><br/>{nome_usuario} - {cargo_resp}", estilo_corpo),
+            Paragraph("____________________________________________<br/><b>DE ACORDO DO CLIENTE / CONTRATANTE</b><br/>Carimbo / Assinatura / Data", estilo_corpo)
         ]
     ]
-    tab_ass = Table(dados_assinaturas, colWidths=[3.5*inch, 3.5*inch])
+    tab_ass = Table(dados_assinaturas, colWidths=[3.75*inch, 3.75*inch])
     tab_ass.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -637,62 +809,110 @@ def gerar_pdf_proposta(id):
     doc.build(elementos)
     buffer.seek(0)
 
+    nome_arquivo_pdf = f"Carta_Proposta_{num_prop.replace('/', '_')}.pdf"
     return send_file(
         buffer,
         as_attachment=True,
-        download_name=f"Carta_Proposta_{proposta.numero_proposta}.pdf",
+        download_name=nome_arquivo_pdf,
         mimetype='application/pdf'
     )
 
 # -----------------------------------------------------------------------------
-# 6. ROTAS DE OPERAÇÃO & SERVIÇOS
+# 6. ROTAS DE OPERAÇÃO & AGENDA DE SERVIÇOS
 # -----------------------------------------------------------------------------
-
 @app.route('/servicos')
+@login_required
 def consultar_servicos():
-    filtro_status = request.args.get('status', 'Em Andamento')
-    
-    query = ServicoCliente.query
-    if filtro_status != 'Todos':
-        query = query.filter_by(status=filtro_status)
-        
-    servicos_operacionais = query.order_by(ServicoCliente.data_previsao.asc(), ServicoCliente.id.desc()).all()
-    catalogo = TipoServico.query.order_by(TipoServico.nome).all()
-    clientes = Cliente.query.order_by(Cliente.nome).all()
+    filtro_atual = request.args.get('status', 'agenda')
+    periodo_atual = request.args.get('periodo', 'todos')
+    hoje = date.today()
 
-    qtd_em_andamento = ServicoCliente.query.filter_by(status='Em Andamento').count()
-    qtd_pendentes = ServicoCliente.query.filter_by(status='Pendente').count()
-    qtd_concluidos = ServicoCliente.query.filter_by(status='Concluido').count()
+    query_base = ServicoCliente.query.filter_by(empresa_id=current_user.empresa_id)
+
+    # 1. Filtro por Categoria / Tipo de Atividade
+    if filtro_atual == 'agenda':
+        query = query_base.filter(ServicoCliente.status.in_(['Em Andamento', 'Pendente', 'Bloqueado']))
+    elif filtro_atual == 'recorrentes':
+        query = query_base.filter(ServicoCliente.contrato_id.isnot(None))
+    elif filtro_atual == 'avulsos':
+        query = query_base.filter(ServicoCliente.contrato_id.is_(None))
+    elif filtro_atual == 'concluidos':
+        query = query_base.filter_by(status='Concluido')
+    else:
+        query = query_base
+
+    # 2. Filtro Temporal Dinâmico a partir de HOJE
+    if periodo_atual == 'semana':
+        fim_periodo = hoje + timedelta(days=7)
+        if filtro_atual in ['agenda', 'recorrentes', 'avulsos']:
+            query = query.filter(ServicoCliente.data_previsao <= fim_periodo)
+        else:
+            query = query.filter(ServicoCliente.data_previsao.between(hoje, fim_periodo))
+
+    elif periodo_atual == 'mes':
+        fim_periodo = hoje + relativedelta(months=1)
+        if filtro_atual in ['agenda', 'recorrentes', 'avulsos']:
+            query = query.filter(ServicoCliente.data_previsao <= fim_periodo)
+        else:
+            query = query.filter(ServicoCliente.data_previsao.between(hoje, fim_periodo))
+
+    elif periodo_atual == 'ano':
+        fim_periodo = hoje + relativedelta(years=1)
+        if filtro_atual in ['agenda', 'recorrentes', 'avulsos']:
+            query = query.filter(ServicoCliente.data_previsao <= fim_periodo)
+        else:
+            query = query.filter(ServicoCliente.data_previsao.between(hoje, fim_periodo))
+
+    # Ordenação Cronológica
+    servicos_operacionais = query.order_by(ServicoCliente.data_previsao.asc().nullslast()).all()
+
+    # Métricas gerais dos cards
+    qtd_em_andamento = query_base.filter_by(status='Em Andamento').count()
+    qtd_pendentes = query_base.filter(ServicoCliente.status.in_(['Pendente', 'Bloqueado'])).count()
+    qtd_concluidos = query_base.filter_by(status='Concluido').count()
+
+    catalogo = TipoServico.query.filter_by(empresa_id=current_user.empresa_id).all()
+    clientes = Cliente.query.filter_by(empresa_id=current_user.empresa_id).order_by(Cliente.nome).all()
 
     return render_template(
-        'servicos.html', 
-        catalogo=catalogo, 
-        servicos_operacionais=servicos_operacionais, 
-        clientes=clientes,
-        filtro_atual=filtro_status,
+        'servicos.html',
+        servicos_operacionais=servicos_operacionais,
+        filtro_atual=filtro_atual,
+        periodo_atual=periodo_atual,
         qtd_em_andamento=qtd_em_andamento,
         qtd_pendentes=qtd_pendentes,
         qtd_concluidos=qtd_concluidos,
-        hoje=date.today()
+        catalogo=catalogo,
+        clientes=clientes,
+        hoje=hoje
     )
 
 
 @app.route('/servicos/catalogo/novo', methods=['POST'])
+@login_required
 def novo_tipo_servico():
     nome = request.form.get('nome')
     descricao = request.form.get('descricao')
     valor_sugerido = float(request.form.get('valor_sugerido') or 0.0)
+    modelo = request.form.get('modelo_cobranca', 'pontual')
 
     if nome:
-        novo_tipo = TipoServico(nome=nome, descricao_padrao=descricao, valor_sugerido=valor_sugerido)
+        novo_tipo = TipoServico(
+            empresa_id=current_user.empresa_id,
+            nome=nome,
+            descricao_padrao=descricao,
+            valor_sugerido=valor_sugerido,
+            modelo_cobranca=modelo
+        )
         db.session.add(novo_tipo)
         db.session.commit()
-        flash(f'Serviço "{nome}" cadastrado no catálogo!', 'success')
+        flash(f'Serviço "{nome}" adicionado ao catálogo!', 'success')
         
     return redirect(url_for('consultar_servicos'))
 
 
 @app.route('/servicos/vincular', methods=['POST'])
+@login_required
 def vincular_servico_cliente():
     cliente_id = int(request.form.get('cliente_id'))
     tipo_servico_id = int(request.form.get('tipo_servico_id'))
@@ -703,6 +923,7 @@ def vincular_servico_cliente():
     data_previsao = datetime.strptime(data_previsao_str, '%Y-%m-%d').date() if data_previsao_str else None
 
     novo_vinculo = ServicoCliente(
+        empresa_id=current_user.empresa_id,
         cliente_id=cliente_id,
         tipo_servico_id=tipo_servico_id,
         valor_cobrado=valor_cobrado,
@@ -713,14 +934,20 @@ def vincular_servico_cliente():
     )
     db.session.add(novo_vinculo)
     db.session.commit()
-    flash('Atividade manual criada e em execução!', 'success')
+    flash('Atividade criada e em execução!', 'success')
     return redirect(url_for('consultar_servicos'))
 
 
 @app.route('/servicos/atualizar-operacao/<int:id>', methods=['POST'])
+@login_required
 def atualizar_operacao_servico(id):
-    servico = ServicoCliente.query.get_or_404(id)
+    servico = ServicoCliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     
+    # Trava de segurança no backend para não permitir iniciar sem sinal
+    if servico.status == 'Bloqueado':
+        flash('Esta atividade está bloqueada pelo Financeiro aguardando o pagamento do sinal.', 'danger')
+        return redirect(url_for('consultar_servicos', status=request.form.get('filtro_retorno', 'agenda')))
+
     servico.status = request.form.get('status', servico.status)
     data_prev_str = request.form.get('data_previsao')
     servico.data_previsao = datetime.strptime(data_prev_str, '%Y-%m-%d').date() if data_prev_str else None
@@ -733,107 +960,324 @@ def atualizar_operacao_servico(id):
     else:
         flash('Acompanhamento técnico atualizado.', 'info')
 
-    return redirect(url_for('consultar_servicos', status=request.form.get('filtro_retorno', 'Em Andamento')))
+    return redirect(url_for('consultar_servicos', status=request.form.get('filtro_retorno', 'agenda')))
 
 # -----------------------------------------------------------------------------
 # 7. ROTAS DO MÓDULO FINANCEIRO
 # -----------------------------------------------------------------------------
 
 @app.route('/financeiro')
+@login_required
 def financeiro():
-    filtro_status = request.args.get('status', 'todos')
+    filtro_atual = request.args.get('status', 'todos')
     hoje = date.today()
 
-    servicos_concluidos = ServicoCliente.query.filter_by(status='Concluido').order_by(
-        ServicoCliente.data_vencimento_boleto.asc(),
-        ServicoCliente.id.desc()
-    ).all()
+    query_faturas = Fatura.query.filter_by(empresa_id=current_user.empresa_id)
+    todas_faturas = query_faturas.all()
 
-    lista_processada = []
-    for s in servicos_concluidos:
-        status_exibicao = s.status_pagamento
-        if s.status_pagamento in ['Boleto Emitido', 'A Faturar'] and s.data_vencimento_boleto and s.data_vencimento_boleto < hoje:
-            status_exibicao = 'Em Atraso'
-        
-        item_dict = {
-            'servico': s,
-            'status_calculado': status_exibicao,
-            'esta_vencido': s.data_vencimento_boleto and s.data_vencimento_boleto < hoje and s.status_pagamento != 'Pago'
-        }
+    # Métricas globais
+    todas_parcelas = ParcelaFatura.query.filter_by(empresa_id=current_user.empresa_id).all()
+    total_a_faturar = sum(p.valor for p in todas_parcelas if p.status == 'A Faturar')
+    total_aguardando = sum(p.valor for p in todas_parcelas if p.status == 'Boleto Emitido' and (not p.data_vencimento or p.data_vencimento >= hoje))
+    total_recebido = sum(p.valor for p in todas_parcelas if p.status == 'Pago')
+    
+    parcelas_atrasadas = [p for p in todas_parcelas if p.status != 'Pago' and p.data_vencimento and p.data_vencimento < hoje]
+    total_atrasado = sum(p.valor for p in parcelas_atrasadas)
+    qtd_atrasados = len(parcelas_atrasadas)
 
-        if filtro_status == 'aguardando' and status_exibicao == 'Boleto Emitido':
-            lista_processada.append(item_dict)
-        elif filtro_status == 'atrasados' and status_exibicao == 'Em Atraso':
-            lista_processada.append(item_dict)
-        elif filtro_status == 'afaturar' and status_exibicao == 'A Faturar':
-            lista_processada.append(item_dict)
-        elif filtro_status == 'pagos' and status_exibicao == 'Pago':
-            lista_processada.append(item_dict)
-        elif filtro_status == 'todos':
-            lista_processada.append(item_dict)
+    # Filtragem
+    if filtro_atual == 'afaturar':
+        faturas_filtradas = [f for f in todas_faturas if f.status_geral == 'A Faturar']
+    elif filtro_atual == 'aguardando':
+        faturas_filtradas = [f for f in todas_faturas if f.status_geral == 'Aguardando Pagamento']
+    elif filtro_atual == 'atrasados':
+        faturas_filtradas = [f for f in todas_faturas if f.status_geral == 'Em Atraso']
+    elif filtro_atual == 'pagos':
+        faturas_filtradas = [f for f in todas_faturas if f.status_geral == 'Pago']
+    else:
+        faturas_filtradas = todas_faturas
 
-    total_recebido = sum(s.valor_cobrado for s in servicos_concluidos if s.status_pagamento == 'Pago')
-    total_aguardando = sum(s.valor_cobrado for s in servicos_concluidos if s.status_pagamento == 'Boleto Emitido' and (not s.data_vencimento_boleto or s.data_vencimento_boleto >= hoje))
-    total_atrasado = sum(s.valor_cobrado for s in servicos_concluidos if (s.status_pagamento == 'Em Atraso') or (s.data_vencimento_boleto and s.data_vencimento_boleto < hoje and s.status_pagamento != 'Pago'))
-    total_a_faturar = sum(s.valor_cobrado for s in servicos_concluidos if s.status_pagamento == 'A Faturar' and not s.data_vencimento_boleto)
+    itens = []
+    for f in faturas_filtradas:
+        parcs_pendentes = [p for p in f.parcelas if p.status != 'Pago']
+        primeira_parc = parcs_pendentes[0] if parcs_pendentes else (f.parcelas[0] if f.parcelas else None)
+        data_venc = primeira_parc.data_vencimento if primeira_parc else None
+        esta_vencida = f.status_geral == 'Em Atraso'
 
-    qtd_atrasados = len([s for s in servicos_concluidos if s.data_vencimento_boleto and s.data_vencimento_boleto < hoje and s.status_pagamento != 'Pago'])
+        boleto_anexo = None
+        for p in f.parcelas:
+            if p.arquivo_comprovante_boleto:
+                boleto_anexo = p.arquivo_comprovante_boleto
+                break
+
+        itens.append({
+            'fatura': f,
+            'data_vencimento': data_venc,
+            'esta_vencido': esta_vencida,
+            'status_calculado': f.status_geral,
+            'arquivo_boleto': boleto_anexo,
+            'arquivo_nf': f.arquivo_nf
+        })
 
     return render_template(
         'financeiro.html',
-        itens=lista_processada,
-        filtro_atual=filtro_status,
-        total_recebido=total_recebido,
+        itens=itens,
+        filtro_atual=filtro_atual,
+        total_a_faturar=total_a_faturar,
         total_aguardando=total_aguardando,
         total_atrasado=total_atrasado,
-        total_a_faturar=total_a_faturar,
+        total_recebido=total_recebido,
         qtd_atrasados=qtd_atrasados,
         hoje=hoje
     )
 
 
-@app.route('/financeiro/servico/<int:id>/atualizar', methods=['POST'])
-def atualizar_cobranca_servico(id):
-    servico = ServicoCliente.query.get_or_404(id)
+@app.route('/financeiro/fatura/<int:id>/atualizar', methods=['POST'])
+@login_required
+def atualizar_cobranca_fatura(id):
+    fatura = Fatura.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     
-    data_venc_str = request.form.get('data_vencimento_boleto')
-    servico.data_vencimento_boleto = datetime.strptime(data_venc_str, '%Y-%m-%d').date() if data_venc_str else None
-    servico.status_pagamento = request.form.get('status_pagamento', servico.status_pagamento)
+    novo_status = request.form.get('status_pagamento')
+    dt_venc = request.form.get('data_vencimento')
+    data_formatada = datetime.strptime(dt_venc, '%Y-%m-%d').date() if dt_venc else None
 
-    nova_nota = request.form.get('nova_ocorrencia')
-    if nova_nota and nova_nota.strip():
-        data_registro = datetime.now().strftime('%d/%m/%Y %H:%M')
-        registro = f"[{data_registro}] {nova_nota.strip()}"
-        servico.historico_cobranca = f"{registro}\n{servico.historico_cobranca}" if servico.historico_cobranca else registro
-
-    if 'arquivo_boleto' in request.files:
-        file_boleto = request.files['arquivo_boleto']
-        if file_boleto and file_boleto.filename != '':
-            nome_limpo = secure_filename(file_boleto.filename)
-            nome_salvo = f"boleto_{servico.id}_{int(datetime.utcnow().timestamp())}_{nome_limpo}"
-            file_boleto.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_salvo))
-            servico.arquivo_boleto = nome_salvo
-
+    # Upload da NF
     if 'arquivo_nf' in request.files:
-        file_nf = request.files['arquivo_nf']
-        if file_nf and file_nf.filename != '':
-            nome_limpo = secure_filename(file_nf.filename)
-            nome_salvo = f"nf_{servico.id}_{int(datetime.utcnow().timestamp())}_{nome_limpo}"
-            file_nf.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_salvo))
-            servico.arquivo_nf = nome_salvo
+        f = request.files['arquivo_nf']
+        if f.filename:
+            nome_arq = secure_filename(f"nf_fat_{fatura.id}_{int(datetime.utcnow().timestamp())}_{f.filename}")
+            f.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_arq))
+            fatura.arquivo_nf = nome_arq
+
+    # Upload do Boleto Principal
+    boleto_salvo = None
+    if 'arquivo_boleto' in request.files:
+        f_bol = request.files['arquivo_boleto']
+        if f_bol.filename:
+            boleto_salvo = secure_filename(f"boleto_fat_{fatura.id}_{int(datetime.utcnow().timestamp())}_{f_bol.filename}")
+            f_bol.save(os.path.join(app.config['UPLOAD_FOLDER'], boleto_salvo))
+
+    nova_obs = request.form.get('nova_ocorrencia')
+
+    # Atualiza as parcelas
+    if fatura.parcelas:
+        for p in fatura.parcelas:
+            if novo_status in ['Pago', 'Boleto Emitido', 'A Faturar', 'Em Atraso']:
+                p.status = novo_status
+            if data_formatada and len(fatura.parcelas) == 1:
+                p.data_vencimento = data_formatada
+            if boleto_salvo:
+                p.arquivo_comprovante_boleto = boleto_salvo
+            if nova_obs:
+                registro = f"[{datetime.now().strftime('%d/%m/%Y %H:%M')}] {nova_obs}\n"
+                p.historico_cobranca = (p.historico_cobranca or "") + registro
+
+    # Liberação automática da Agenda caso pago
+    if novo_status == 'Pago':
+        servicos_bloqueados = ServicoCliente.query.filter_by(fatura_id=fatura.id).filter(ServicoCliente.status.in_(['Bloqueado', 'Pendente'])).all()
+        for sc in servicos_bloqueados:
+            sc.status = 'Em Andamento'
+            sc.observacoes = (sc.observacoes or "") + " | [Pagamento Confirmado: Execução Liberada]"
 
     db.session.commit()
-    flash(f'Dados de cobrança de {servico.cliente.nome} atualizados com sucesso!', 'success')
+    flash(f'Fatura "{fatura.descricao}" atualizada com sucesso!', 'success')
     return redirect(url_for('financeiro', status=request.form.get('filtro_retorno', 'todos')))
 
+
+@app.route('/financeiro/parcela/<int:id>/atualizar', methods=['POST'])
+@login_required
+def atualizar_cobranca_parcela(id):
+    parcela = ParcelaFatura.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    
+    dt_venc = request.form.get('data_vencimento')
+    if dt_venc:
+        parcela.data_vencimento = datetime.strptime(dt_venc, '%Y-%m-%d').date()
+
+    status_anterior = parcela.status
+    novo_status = request.form.get('status_pagamento')
+    parcela.status = novo_status
+    parcela.forma_pagamento = request.form.get('forma_pagamento', parcela.forma_pagamento)
+
+    if 'arquivo_comprovante_boleto' in request.files:
+        f = request.files['arquivo_comprovante_boleto']
+        if f.filename:
+            nome_arq = secure_filename(f"parc_{parcela.id}_{int(datetime.utcnow().timestamp())}_{f.filename}")
+            f.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_arq))
+            parcela.arquivo_comprovante_boleto = nome_arq
+
+    nova_obs = request.form.get('nova_ocorrencia')
+    if nova_obs:
+        registro = f"[{datetime.now().strftime('%d/%m/%Y %H:%M')}] {nova_obs}\n"
+        parcela.historico_cobranca = (parcela.historico_cobranca or "") + registro
+
+    # Gatilho de Liberação da Entrada na Agenda
+    if parcela.is_entrada and novo_status == 'Pago' and status_anterior != 'Pago':
+        fatura = parcela.fatura
+        servicos_bloqueados = ServicoCliente.query.filter_by(fatura_id=fatura.id, status='Bloqueado').all()
+        for sc in servicos_bloqueados:
+            sc.status = 'Em Andamento'
+            sc.observacoes = (sc.observacoes or "") + " | [Sinal Confirmado: Execução Liberada]"
+        flash(f'Sinal de Entrada quitado! {len(servicos_bloqueados)} atividade(s) liberadas na Agenda.', 'success')
+
+    db.session.commit()
+    flash(f'{parcela.descricao_parcela} atualizada com sucesso!', 'info')
+    return redirect(url_for('financeiro', status=request.form.get('filtro_retorno', 'todos')))
+
+
+@app.route('/contratos/faturar-mes', methods=['POST'])
+@login_required
+def faturar_mes_contratos():
+    hoje = date.today()
+    mes_ano_ref = hoje.strftime('%m/%Y')
+    
+    contratos_ativos = ContratoRecorrente.query.filter_by(
+        empresa_id=current_user.empresa_id,
+        status='Ativo'
+    ).all()
+
+    gerados = 0
+    for c in contratos_ativos:
+        obs_identificador = f"[Ciclo {mes_ano_ref}]"
+        
+        ja_faturado = Fatura.query.filter(
+            Fatura.contrato_id == c.id,
+            Fatura.descricao.ilike(f"%{obs_identificador}%")
+        ).first()
+
+        if not ja_faturado:
+            dia = min(c.dia_vencimento, 28)
+            vencimento = date(hoje.year, hoje.month, dia)
+            if vencimento < hoje:
+                vencimento += relativedelta(months=1)
+
+            nova_fatura = Fatura(
+                empresa_id=current_user.empresa_id,
+                cliente_id=c.cliente_id,
+                contrato_id=c.id,
+                descricao=f"{obs_identificador} Mensalidade - {c.titulo}",
+                valor_total=c.valor_periodo,
+                data_emissao=hoje
+            )
+            db.session.add(nova_fatura)
+            db.session.flush()
+
+            # Cria Parcela do Ciclo
+            parc_ciclo = ParcelaFatura(
+                empresa_id=current_user.empresa_id,
+                fatura_id=nova_fatura.id,
+                numero_parcela=1,
+                total_parcelas=1,
+                descricao_parcela=f"Mensalidade {mes_ano_ref}",
+                forma_pagamento="Boleto Bancário",
+                valor=c.valor_periodo,
+                data_vencimento=vencimento,
+                status="A Faturar"
+            )
+            db.session.add(parc_ciclo)
+
+            nova_ordem = ServicoCliente(
+                empresa_id=current_user.empresa_id,
+                cliente_id=c.cliente_id,
+                tipo_servico_id=c.tipo_servico_id,
+                contrato_id=c.id,
+                fatura_id=nova_fatura.id,
+                valor_cobrado=c.valor_periodo,
+                status='Pendente',
+                data_solicitacao=hoje,
+                data_previsao=vencimento,
+                observacoes=f"{obs_identificador} Vistoria/Assessoria Mensal"
+            )
+            db.session.add(nova_ordem)
+            gerados += 1
+
+    db.session.commit()
+    
+    if gerados > 0:
+        flash(f'{gerados} fatura(s) e ordem(ns) de serviço foram geradas para o ciclo {mes_ano_ref}!', 'success')
+    else:
+        flash(f'Todos os contratos ativos já foram faturados para o ciclo {mes_ano_ref}.', 'info')
+
+    return redirect(url_for('financeiro'))
+
 # -----------------------------------------------------------------------------
-# 8. INICIALIZAÇÃO DO SISTEMA
+# 8. PERFIL DA EMPRESA & WHITE-LABEL
 # -----------------------------------------------------------------------------
-@app.route('/admin/init-db')
-def init_db_manual():
-    with app.app_context():
-        db.create_all()
-    return "<h1>✅ Tabelas criadas com sucesso no PostgreSQL!</h1><p><a href='/'>Ir para o Dashboard</a></p>"
+
+@app.route('/configuracoes/perfil', methods=['GET', 'POST'])
+@login_required
+def perfil_empresa():
+    empresa = current_user.empresa
+    usuario = current_user
+    
+    if request.method == 'POST':
+        form_type = request.form.get('form_type')
+
+        if form_type == 'dados_empresa':
+            tipo_pessoa = request.form.get('tipo_pessoa')
+            
+            if tipo_pessoa == 'PF':
+                empresa.razao_social = request.form.get('nome_profissional')
+                empresa.nome_fantasia = "Profissional Autônomo"
+                empresa.cnpj = request.form.get('cpf')
+            else:
+                empresa.razao_social = request.form.get('razao_social')
+                empresa.nome_fantasia = request.form.get('nome_fantasia')
+                empresa.cnpj = request.form.get('cnpj')
+
+            empresa.telefone = request.form.get('telefone')
+            empresa.email = request.form.get('email')
+            empresa.site = request.form.get('site')
+            empresa.endereco_completo = request.form.get('endereco_completo')
+            empresa.cor_primaria = request.form.get('cor_primaria', '#1e3a8a')
+
+            logo_file = request.files.get('logo')
+            if logo_file and logo_file.filename != '':
+                ext = logo_file.filename.rsplit('.', 1)[-1].lower()
+                if ext in ['png', 'jpg', 'jpeg', 'webp']:
+                    filename = f"logo_emp_{empresa.id}_{int(datetime.utcnow().timestamp())}.{ext}"
+                    logo_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    empresa.logo_filename = filename
+
+            db.session.commit()
+            flash('Dados cadastrais e identidade visual atualizados com sucesso!', 'success')
+
+        elif form_type == 'dados_usuario':
+            novo_nome = request.form.get('nome_usuario')
+            novo_email = request.form.get('email_login', '').strip().lower()
+            senha_atual = request.form.get('senha_atual')
+            nova_senha = request.form.get('nova_senha')
+            confirma_senha = request.form.get('confirma_senha')
+
+            outro_usuario = Usuario.query.filter(Usuario.email == novo_email, Usuario.id != usuario.id).first()
+            if outro_usuario:
+                flash('Este e-mail já está sendo utilizado por outro usuário.', 'danger')
+                return redirect(url_for('perfil_empresa'))
+
+            usuario.nome = novo_nome
+            usuario.email = novo_email
+
+            if nova_senha:
+                if not usuario.check_senha(senha_atual):
+                    flash('A senha atual digitada está incorreta.', 'danger')
+                    return redirect(url_for('perfil_empresa'))
+                if nova_senha != confirma_senha:
+                    flash('A nova senha e a confirmação não conferem.', 'warning')
+                    return redirect(url_for('perfil_empresa'))
+                
+                usuario.set_senha(nova_senha)
+                flash('Senha e dados de acesso alterados com sucesso!', 'success')
+            else:
+                flash('Dados da conta atualizados com sucesso!', 'success')
+
+            db.session.commit()
+
+        return redirect(url_for('perfil_empresa'))
+
+    return render_template('perfil_empresa.html', perfil=empresa)
+
+# -----------------------------------------------------------------------------
+# 9. INICIALIZAÇÃO DO SERVIDOR
+# -----------------------------------------------------------------------------
 
 if __name__ == '__main__':
     with app.app_context():
