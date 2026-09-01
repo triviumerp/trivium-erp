@@ -113,10 +113,14 @@ def registro():
         db.session.commit()
 
         # 5. Geração do Token e Envio do E-mail
-        token = gerar_token_ativacao(email)
-        link = url_for('auth.ativar_conta', token=token, _external=True)
-        enviar_email_ativacao(email, nome_usuario, link)
-
+        
+        try: 
+            token = gerar_token_ativacao(email)
+            link = url_for('auth.ativar_conta', token=token, _external=True)
+            enviar_email_ativacao(email, nome_usuario, link)
+        except Exception as e:
+            print(f"[ERRO DISPARO EMAIL]: {e}")
+            
         flash('Cadastro realizado com sucesso! Enviamos um link de confirmação para o seu e-mail. Ative sua conta para fazer login.', 'success')
         return redirect(url_for('auth.login'))
 
