@@ -53,7 +53,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     "pool_pre_ping": True,
     "pool_recycle": 300
-
+}
 # Inicialização
 db.init_app(app)
 login_manager.init_app(app)
