@@ -9,9 +9,9 @@ SMTP_USER = os.getenv('SMTP_USER', '')
 SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', '')
 
 def _enviar_email(destinatario, assunto, html_conteudo):
-    """Envia e-mail utilizando SSL direto na porta 465 com timeout de segurança."""
+    """Envia e-mail utilizando SSL na porta 465 com timeout de seguranca."""
     if not SMTP_USER or not SMTP_PASSWORD:
-        print("[EMAIL IGNORADO] Credenciais de SMTP não configuradas.")
+        print("[EMAIL IGNORADO] Credenciais de SMTP nao configuradas.")
         return False
 
     msg = MIMEMultipart('alternative')
@@ -21,7 +21,6 @@ def _enviar_email(destinatario, assunto, html_conteudo):
     msg.attach(MIMEText(html_conteudo, 'html'))
 
     try:
-        # Timeout de 8 segundos para evitar travamento do worker Gunicorn
         if SMTP_PORT == 465:
             with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=8) as server:
                 server.login(SMTP_USER, SMTP_PASSWORD)
@@ -36,6 +35,9 @@ def _enviar_email(destinatario, assunto, html_conteudo):
         print(f"[ERRO SMTP]: Falha ao enviar e-mail para {destinatario}: {e}")
         return False
 
+def enviar_email_ativacao(destinatario, nome, link_ativacao):
+    """Dispara o e-mail de confirmacao de cadastro e ativacao de conta."""
+    assunto = "Confirmacao de Cadastro - Trivium ERP"
     html_content = f"""
     <!DOCTYPE html>
     <html lang="pt-br">
@@ -43,12 +45,12 @@ def _enviar_email(destinatario, assunto, html_conteudo):
         <div style="max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
             <div style="text-align: center; margin-bottom: 24px;">
                 <h2 style="color: #1e3a8a; margin: 0; font-size: 26px;">Trivium <span style="color: #2563eb;">ERP</span></h2>
-                <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Plataforma de Gestão Inteligente</p>
+                <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Plataforma de Gestao Inteligente</p>
             </div>
             
-            <p style="font-size: 15px; color: #1e293b;">Olá, <b>{nome}</b>!</p>
+            <p style="font-size: 15px; color: #1e293b;">Ola, <b>{nome}</b>!</p>
             <p style="font-size: 14px; color: #475569; line-height: 1.6;">
-                Obrigado por se cadastrar no <b>Trivium ERP</b>. Para liberar seu acesso e ativar sua conta com segurança, confirme seu endereço de e-mail clicando no botão abaixo:
+                Obrigado por se cadastrar no <b>Trivium ERP</b>. Para liberar seu acesso e ativar sua conta com seguranca, confirme seu endereco de e-mail clicando no botao abaixo:
             </p>
             
             <div style="text-align: center; margin: 32px 0;">
@@ -58,7 +60,7 @@ def _enviar_email(destinatario, assunto, html_conteudo):
             </div>
 
             <p style="font-size: 12px; color: #e11d48; text-align: center; background: #ffe4e6; padding: 10px; border-radius: 6px;">
-                ⚠️ <b>Importante:</b> Caso não encontre este e-mail na Caixa de Entrada, verifique sua pasta de <b>Spam</b> ou <b>Lixo Eletrônico</b> e marque-o como "Não é spam".
+                Importante: Caso nao encontre este e-mail na Caixa de Entrada, verifique sua pasta de <b>Spam</b> ou <b>Lixo Eletronico</b> e marque-o como "Nao e spam".
             </p>
             
             <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;">
@@ -69,26 +71,11 @@ def _enviar_email(destinatario, assunto, html_conteudo):
     </body>
     </html>
     """
-    msg.attach(MIMEText(html_content, 'html'))
-
-    try:
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.sendmail(SMTP_USER, destinatario, msg.as_string())
-        server.quit()
-        return True
-    except Exception as e:
-        print(f"[ERRO GMAIL SMTP] Falha no disparo de ativação: {e}")
-        return False
+    return _enviar_email(destinatario, assunto, html_content)
 
 def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
-    """Dispara o e-mail de redefinição de senha com botão de ação."""
-    msg = MIMEMultipart('alternative')
-    msg['Subject'] = 'Redefinição de Senha - Trivium ERP'
-    msg['From'] = f"Trivium ERP <{SMTP_USER}>"
-    msg['To'] = destinatario
-
+    """Dispara o e-mail de redefinicao de senha com botao de acao."""
+    assunto = "Redefinicao de Senha - Trivium ERP"
     html_content = f"""
     <!DOCTYPE html>
     <html lang="pt-br">
@@ -96,12 +83,12 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
         <div style="max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
             <div style="text-align: center; margin-bottom: 24px;">
                 <h2 style="color: #1e3a8a; margin: 0; font-size: 26px;">Trivium <span style="color: #2563eb;">ERP</span></h2>
-                <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Recuperação de Acesso</p>
+                <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Recuperacao de Acesso</p>
             </div>
             
-            <p style="font-size: 15px; color: #1e293b;">Olá, <b>{nome}</b>!</p>
+            <p style="font-size: 15px; color: #1e293b;">Ola, <b>{nome}</b>!</p>
             <p style="font-size: 14px; color: #475569; line-height: 1.6;">
-                Recebemos uma solicitação para redefinir a senha da sua conta no <b>Trivium ERP</b>. Clique no botão abaixo para cadastrar uma nova senha:
+                Recebemos uma solicitacao para redefinir a senha da sua conta no <b>Trivium ERP</b>. Clique no botao abaixo para cadastrar uma nova senha:
             </p>
             
             <div style="text-align: center; margin: 32px 0;">
@@ -111,26 +98,15 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
             </div>
 
             <p style="font-size: 12px; color: #e11d48; text-align: center; background: #ffe4e6; padding: 10px; border-radius: 6px;">
-                ⚠️ <b>Atenção:</b> Caso não encontre nossos e-mails futuros, verifique sua pasta de <b>Spam</b> ou <b>Lixo Eletrônico</b> e adicione nosso contato.
+                Atencao: Caso nao encontre nossos e-mails futuros, verifique sua pasta de <b>Spam</b> ou <b>Lixo Eletronico</b> e adicione nosso contato.
             </p>
             
             <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;">
             <p style="font-size: 12px; color: #94a3b8; text-align: center; margin: 0;">
-                Este link é válido por 30 minutos. Se não solicitou a alteração, desconsidere esta mensagem.
+                Este link e valido por 30 minutos. Se nao solicitou a alteracao, desconsidere esta mensagem.
             </p>
         </div>
     </body>
     </html>
     """
-    msg.attach(MIMEText(html_content, 'html'))
-
-    try:
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.sendmail(SMTP_USER, destinatario, msg.as_string())
-        server.quit()
-        return True
-    except Exception as e:
-        print(f"[ERRO GMAIL SMTP] Falha no disparo de recuperação: {e}")
-        return False
+    return _enviar_email(destinatario, assunto, html_content)
