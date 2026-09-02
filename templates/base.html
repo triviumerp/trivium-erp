@@ -53,14 +53,15 @@
             font-weight: 700;
         }
 
-        /* --- BARRA LATERAL FIXA EM 250px --- */
+        /* --- BARRA LATERAL FIXA COM ROLAGEM VERTICAL INTELIGENTE --- */
         .sidebar {
             background-color: var(--sidebar-bg);
             border-right: 1px solid var(--border-color);
-            min-height: 100vh;
+            height: 100vh;
+            max-height: 100vh;
             width: var(--sidebar-width);
             max-width: var(--sidebar-width);
-            padding: 1.5rem 1rem;
+            padding: 1.25rem 1rem;
             display: flex;
             flex-direction: column;
             position: fixed;
@@ -68,6 +69,23 @@
             left: 0;
             bottom: 0;
             z-index: 1020;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        /* Scrollbar elegante para a barra lateral */
+        .sidebar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .sidebar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
         }
 
         /* --- CONTEÚDO PRINCIPAL AJUSTADO AO ESPAÇO RESTANTE --- */
@@ -94,14 +112,14 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 10px 14px;
+            padding: 9px 12px;
             color: var(--text-muted);
             font-weight: 600;
-            font-size: 0.92rem;
+            font-size: 0.90rem;
             border-radius: 10px;
             text-decoration: none;
             transition: all 0.2s ease;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
         }
 
         .nav-link-custom i { font-size: 1.15rem; }
@@ -121,13 +139,13 @@
             background: #eff6ff;
             color: var(--brand-accent);
             border-radius: 8px;
-            padding: 8px 12px;
-            font-size: 0.85rem;
+            padding: 6px 10px;
+            font-size: 0.82rem;
             font-weight: 700;
             display: flex;
             align-items: center;
             gap: 8px;
-            margin-bottom: 1.25rem;
+            margin-bottom: 1rem;
         }
 
         .top-navbar {
@@ -154,7 +172,6 @@
     </style>
 </head>
 <body>
-    <!-- Insira logo após a abertura da tag <body> -->
     {% if session.get('original_master_id') %}
     <div class="bg-warning text-dark py-2 px-3 fw-bold d-flex justify-content-between align-items-center shadow-sm" style="position: sticky; top: 0; z-index: 2000;">
         <span><i class="bi bi-eye-fill me-2"></i>MODO DE SUPORTE MASTER: Você está visualizando o ambiente de <u>{{ current_user.empresa.razao_social }}</u>.</span>
@@ -166,20 +183,20 @@
 
     <!-- BARRA LATERAL DESKTOP -->
     <aside class="sidebar d-none d-md-flex">
-        <a href="{{ url_for('index') }}" class="d-flex align-items-center gap-2 mb-4 px-2 text-decoration-none">
-            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Trivium ERP" style="height: 38px; width: auto; object-fit: contain;">
+        <a href="{{ url_for('index') }}" class="d-flex align-items-center gap-2 mb-3 px-2 text-decoration-none flex-shrink-0">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Trivium ERP" style="height: 34px; width: auto; object-fit: contain;">
             <span class="brand-logo-text mb-0">Trivium <span>ERP</span></span>
         </a>
 
-        <div class="sidebar-badge">
+        <div class="sidebar-badge flex-shrink-0">
             <i class="bi bi-shield-check text-primary"></i>
             <span>Trivium Gestão Pro</span>
         </div>
 
-        <nav class="nav flex-column">
+        <nav class="nav flex-column mb-3">
             {% if current_user.is_authenticated and current_user.nivel_acesso == 'master' %}
-            <div class="mt-3 mb-1 px-3">
-                <small class="text-uppercase fw-bold text-danger" style="font-size: 0.7rem; letter-spacing: 0.5px;">Gestão SaaS</small>
+            <div class="mt-2 mb-1 px-3">
+                <small class="text-uppercase fw-bold text-danger" style="font-size: 0.68rem; letter-spacing: 0.5px;">Gestão SaaS</small>
             </div>
             <a href="{{ url_for('admin_master_dashboard') }}" class="nav-link-custom text-danger {% if request.endpoint == 'admin_master_dashboard' %}active{% endif %}">
                 <i class="bi bi-shield-lock-fill"></i><span>Painel Master</span>
@@ -190,7 +207,9 @@
             <a href="{{ url_for('admin_master_chamados') }}" class="nav-link-custom text-danger {% if request.endpoint in ['admin_master_chamados', 'admin_atender_chamado'] %}active{% endif %}">
                 <i class="bi bi-headset"></i><span>Fila Global Tickets</span>
             </a>
+            <hr class="my-2 border-secondary opacity-25">
             {% endif %}
+
             <a href="{{ url_for('index') }}" id="tour-dashboard" class="nav-link-custom {% if request.endpoint == 'index' %}active{% endif %}">
                 <i class="bi bi-grid-1x2-fill"></i><span>Painel de Controle</span>
             </a>
@@ -214,14 +233,14 @@
             </a>
         </nav>
 
-        <a href="{{ url_for('faq') }}" class="nav-link-custom {% if request.endpoint == 'faq' %}active{% endif %}">
-            <i class="bi bi-question-circle-fill"></i><span>Ajuda & FAQ</span>
-        </a>
-        <a href="{{ url_for('suporte') }}" class="nav-link-custom {% if request.endpoint in ['suporte', 'detalhe_chamado'] %}active{% endif %}">
-            <i class="bi bi-headset"></i><span>Suporte</span>
-        </a>
-        <div class="mt-auto pt-3 border-top">
-            <a href="{{ url_for('auth.logout') }}" class="nav-link-custom text-danger">
+        <div class="mt-auto pt-2 border-top flex-shrink-0">
+            <a href="{{ url_for('faq') }}" class="nav-link-custom {% if request.endpoint == 'faq' %}active{% endif %}">
+                <i class="bi bi-question-circle-fill"></i><span>Ajuda & FAQ</span>
+            </a>
+            <a href="{{ url_for('suporte') }}" class="nav-link-custom {% if request.endpoint in ['suporte', 'detalhe_chamado'] %}active{% endif %}">
+                <i class="bi bi-headset"></i><span>Suporte</span>
+            </a>
+            <a href="{{ url_for('auth.logout') }}" class="nav-link-custom text-danger mt-1">
                 <i class="bi bi-box-arrow-left"></i><span>Sair</span>
             </a>
         </div>
@@ -258,6 +277,12 @@
                 </a>
                 <a href="{{ url_for('perfil_empresa') }}" class="nav-link-custom {% if request.endpoint == 'perfil_empresa' %}active{% endif %}">
                     <i class="bi bi-gear-wide-connected"></i><span>Configurações</span>
+                </a>
+                <a href="{{ url_for('faq') }}" class="nav-link-custom {% if request.endpoint == 'faq' %}active{% endif %}">
+                    <i class="bi bi-question-circle-fill"></i><span>Ajuda & FAQ</span>
+                </a>
+                <a href="{{ url_for('suporte') }}" class="nav-link-custom {% if request.endpoint in ['suporte', 'detalhe_chamado'] %}active{% endif %}">
+                    <i class="bi bi-headset"></i><span>Suporte</span>
                 </a>
             </nav>
             <div class="pt-3 border-top mt-4">
