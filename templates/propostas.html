@@ -120,13 +120,18 @@
                             {% endif %}
                         </td>
                         <td class="text-end pe-3">
-                            <div class="d-flex gap-1 justify-content-end">
+                            <div class="d-flex gap-1 justify-content-end align-items-center">
                                 <a href="{{ url_for('gerar_pdf_proposta', id=prop.id) }}" class="btn btn-sm btn-danger fw-bold" target="_blank" title="Baixar PDF">
                                     <i class="bi bi-file-earmark-pdf me-1"></i>PDF
                                 </a>
                                 <button type="button" class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#modalStatus{{ prop.id }}" title="Mudar Status">
                                     Status <i class="bi bi-chevron-down ms-1"></i>
                                 </button>
+                                <form action="{{ url_for('excluir_proposta', id=prop.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Deseja realmente excluir a proposta {{ prop.numero_proposta }}?')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Proposta">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
                             </div>
                         </td>
                     </tr>
@@ -353,6 +358,26 @@
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Verifica parâmetros da URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const abrirModal = urlParams.get('abrir_modal');
+    const clienteId = urlParams.get('cliente_id');
+
+    if (abrirModal === 'true' && clienteId) {
+        const selectCliente = document.querySelector('#modalNovaProposta select[name="cliente_id"]');
+        if (selectCliente) {
+            selectCliente.value = clienteId;
+        }
+
+        const modalEl = document.getElementById('modalNovaProposta');
+        if (modalEl) {
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+    }
+});
+
 function alternarCamposRecorrencia() {
     const tipo = document.getElementById('tipo_cobranca_select').value;
     const camposRecorrentes = document.querySelectorAll('.campo-recorrente');

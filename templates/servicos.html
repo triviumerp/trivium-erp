@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
 
+{% block title %}Agenda Operacional & Serviços - Trivium ERP{% endblock %}
+
 {% block content %}
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
     <div>
@@ -7,12 +9,12 @@
         <p class="text-muted mb-0">Cronograma de visitas, execução técnica de obras e vistorias de contratos mensalistas</p>
     </div>
     <div class="d-flex gap-2">
-        <button class="btn btn-outline-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalCatalogo">
-            <i class="bi bi-journal-bookmark me-1"></i>Gerenciar Catálogo
-        </button>
-        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoServicoDireto">
-            <i class="bi bi-plus-circle me-1"></i>Agendar Nova Atividade
-        </button>
+        <a href="{{ url_for('listar_catalogo') }}" class="btn btn-outline-primary fw-bold">
+            <i class="bi bi-journal-bookmark me-1"></i>Ver Catálogo
+        </a>
+        <a href="{{ url_for('listar_propostas') }}" class="btn btn-primary fw-bold shadow-sm">
+            <i class="bi bi-file-earmark-plus me-1"></i>Nova Proposta
+        </a>
     </div>
 </div>
 
@@ -263,126 +265,4 @@
     </div>
 </div>
 {% endfor %}
-
-<!-- ==================================================================== -->
-<!-- MODAL: GERENCIAR CATÁLOGO DE SERVIÇOS -->
-<!-- ==================================================================== -->
-<div class="modal fade" id="modalCatalogo" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header bg-light">
-                <h5 class="modal-title fw-bold text-dark"><i class="bi bi-journal-bookmark me-2 text-primary"></i>Catálogo Geral de Serviços</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4">
-                <form action="{{ url_for('novo_tipo_servico') }}" method="POST" class="p-3 bg-light rounded border mb-4">
-                    <h6 class="fw-bold text-primary mb-3">Cadastrar Novo Serviço</h6>
-                    <div class="row g-2">
-                        <div class="col-md-5">
-                            <label class="form-label small fw-bold">Nome do Serviço *</label>
-                            <input type="text" name="nome" class="form-control form-control-sm" required placeholder="Ex: Manutenção Elétrica Preventiva">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small fw-bold">Modelo de Cobrança</label>
-                            <select name="modelo_cobranca" class="form-select form-select-sm">
-                                <option value="pontual">Pontual / Avulso</option>
-                                <option value="mensal">Recorrente Mensal</option>
-                                <option value="anual">Recorrente Anual</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-bold">Valor Base (R$)</label>
-                            <input type="number" step="0.01" name="valor_sugerido" class="form-control form-control-sm" placeholder="0.00">
-                        </div>
-                        <div class="col-12 mt-2">
-                            <label class="form-label small fw-bold">Descrição Padrão Técnica</label>
-                            <input type="text" name="descricao" class="form-control form-control-sm" placeholder="Escopo para cartas proposta...">
-                        </div>
-                        <div class="col-12 text-end mt-3">
-                            <button type="submit" class="btn btn-sm btn-success fw-bold px-3">Salvar no Catálogo</button>
-                        </div>
-                    </div>
-                </form>
-
-                <h6 class="fw-bold text-dark mb-2">Itens Ativos no Catálogo</h6>
-                <div class="table-responsive">
-                    <table class="table table-bordered table-sm align-middle mb-0 small">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Nome</th>
-                                <th>Modelo</th>
-                                <th>Valor Base</th>
-                                <th>Escopo Padrão</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for c in catalogo %}
-                            <tr>
-                                <td class="fw-bold">{{ c.nome }}</td>
-                                <td><span class="badge bg-secondary">{{ c.modelo_cobranca|capitalize }}</span></td>
-                                <td class="text-success fw-bold">R$ {{ "%.2f"|format(c.valor_sugerido) }}</td>
-                                <td><span class="text-muted">{{ c.descricao_padrao or '-' }}</span></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ==================================================================== -->
-<!-- MODAL: AGENDAR NOVA ATIVIDADE MANUAL -->
-<!-- ==================================================================== -->
-<div class="modal fade" id="modalNovoServicoDireto" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content border-0 shadow">
-            <form action="{{ url_for('vincular_servico_cliente') }}" method="POST">
-                <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-calendar-plus text-primary me-2"></i>Agendar Atividade Manual</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Cliente *</label>
-                        <select name="cliente_id" class="form-select form-select-sm" required>
-                            <option value="">Selecione o Cliente...</option>
-                            {% for cli in clientes %}
-                                <option value="{{ cli.id }}">{{ cli.nome }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Serviço *</label>
-                        <select name="tipo_servico_id" class="form-select form-select-sm" required>
-                            <option value="">Selecione o Serviço...</option>
-                            {% for s in catalogo %}
-                                <option value="{{ s.id }}">{{ s.nome }} (R$ {{ "%.2f"|format(s.valor_sugerido) }})</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <label class="form-label small fw-bold">Valor (R$)</label>
-                            <input type="number" step="0.01" name="valor_cobrado" class="form-control form-control-sm" required>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-bold">Data Agendada</label>
-                            <input type="date" name="data_previsao" class="form-control form-control-sm" required>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Observações / Detalhes de Campo</label>
-                        <textarea name="observacoes" class="form-control form-control-sm" rows="2" placeholder="Informações de acesso, equipe ou escopo..."></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary fw-bold px-4">Confirmar Agendamento</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 {% endblock %}

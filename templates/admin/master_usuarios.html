@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}Gestão Global de Usuários - Master{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+    <div>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-person-gear text-danger me-2"></i>Gestão Global de Usuários
+        </h2>
+        <p class="text-muted mb-0">Gerenciamento de acessos, permissões e suporte a contas de todas as empresas</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('admin_master_dashboard') }}" class="btn btn-outline-secondary fw-bold">
+            <i class="bi bi-buildings me-1"></i> Ver Empresas
+        </a>
+        <a href="{{ url_for('admin_master_chamados') }}" class="btn btn-danger fw-bold shadow-sm">
+            <i class="bi bi-headset me-1"></i> Fila de Chamados
+        </a>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold text-dark mb-0">Usuários Registrados na Plataforma</h6>
+        <span class="badge bg-light text-dark border">{{ usuarios|length }} usuário(s)</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small text-muted">
+                    <tr>
+                        <th>USUÁRIO / NOME</th>
+                        <th>E-MAIL</th>
+                        <th>EMPRESA VINCULADA</th>
+                        <th>NÍVEL DE ACESSO ATUAL</th>
+                        <th class="text-end pe-3">AÇÕES & SUPORTE</th>
+                    </tr>
+                </thead>
+                <tbody class="small">
+                    {% for u in usuarios %}
+                    <tr class="{% if u.nivel_acesso == 'master' %}table-danger bg-opacity-25{% endif %}">
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="bi bi-person-circle fs-4 text-secondary"></i>
+                                <div>
+                                    <span class="fw-bold text-dark d-block">{{ u.nome }}</span>
+                                    {% if u.id == current_user.id %}
+                                        <span class="badge bg-primary" style="font-size: 0.65rem;">Sua Conta (Logado)</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td class="fw-semibold text-muted">{{ u.email }}</td>
+                        <td>
+                            <span class="fw-bold text-dark d-block">{{ u.empresa.razao_social or u.empresa.nome_fantasia }}</span>
+                            <small class="text-muted">Plano: {{ u.empresa.plano or 'Founder' }}</small>
+                        </td>
+                        <td>
+                            {% if u.nivel_acesso == 'master' %}
+                                <span class="badge bg-danger p-2"><i class="bi bi-shield-shaded me-1"></i>MASTER (Super Admin)</span>
+                            {% elif u.nivel_acesso == 'admin' %}
+                                <span class="badge bg-primary p-2"><i class="bi bi-person-lock me-1"></i>Administrador</span>
+                            {% else %}
+                                <span class="badge bg-secondary p-2"><i class="bi bi-person me-1"></i>Operador</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-3">
+                            <div class="d-flex justify-content-end align-items-center gap-2">
+                                <!-- Formulário para alterar permissão -->
+                                <form action="{{ url_for('admin_alterar_nivel_usuario', id=u.id) }}" method="POST" class="d-inline-flex align-items-center gap-1">
+                                    <select name="nivel_acesso" class="form-select form-select-sm" style="width: 130px;" {% if u.id == current_user.id %}disabled title="Você não pode alterar o seu próprio nível"{% endif %}>
+                                        <option value="operador" {% if u.nivel_acesso == 'operador' %}selected{% endif %}>Operador</option>
+                                        <option value="admin" {% if u.nivel_acesso == 'admin' %}selected{% endif %}>Admin</option>
+                                        <option value="master" {% if u.nivel_acesso == 'master' %}selected{% endif %}>MASTER</option>
+                                    </select>
+                                    {% if u.id != current_user.id %}
+                                        <button type="submit" class="btn btn-sm btn-outline-dark fw-bold" title="Salvar permissão">
+                                            <i class="bi bi-check2"></i>
+                                        </button>
+                                    {% endif %}
+                                </form>
+
+                                <!-- Botão Redefinir Senha -->
+                                <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalSenha{{ u.id }}" title="Forçar Nova Senha">
+                                    <i class="bi bi-key-fill"></i>
+                                </button>
+                            </div>
+
+                            <!-- MODAL: REDEFINIR SENHA DO USUÁRIO -->
+                            <div class="modal fade text-start" id="modalSenha{{ u.id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content border-0 shadow">
+                                        <form action="{{ url_for('admin_redefinir_senha_usuario', id=u.id) }}" method="POST">
+                                            <div class="modal-header bg-light">
+                                                <h6 class="modal-title fw-bold text-dark">
+                                                    <i class="bi bi-key text-danger me-1"></i>Redefinir Senha: {{ u.nome }}
+                                                </h6>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body p-3">
+                                                <div class="alert alert-info py-2 small mb-3">
+                                                    Você está gerando uma nova senha provisória para o e-mail <b>{{ u.email }}</b>.
+                                                </div>
+                                                <label class="form-label small fw-bold">Nova Senha Provisória *</label>
+                                                <input type="text" name="nova_senha" class="form-control form-control-sm" placeholder="Ex: Trivium@2026" required minlength="6">
+                                            </div>
+                                            <div class="modal-footer bg-light">
+                                                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                <button type="submit" class="btn btn-sm btn-danger fw-bold">Salvar Nova Senha</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

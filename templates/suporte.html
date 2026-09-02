@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+
+{% block title %}Suporte Técnico - Trivium ERP{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+    <div>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-headset text-primary me-2"></i>Suporte Técnico & Chamados
+        </h2>
+        <p class="text-muted mb-0">Tire dúvidas, relate instabilidades ou envie sugestões de melhoria</p>
+    </div>
+    <div>
+        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoChamado">
+            <i class="bi bi-plus-circle me-1"></i> Abrir Chamado
+        </button>
+    </div>
+</div>
+
+<!-- LISTAGEM DE TICKETS -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold text-dark mb-0">Meus Chamados</h6>
+        <span class="badge bg-light text-dark border">{{ chamados|length }} ticket(s)</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small text-muted">
+                    <tr>
+                        <th>PROTOCOLO</th>
+                        <th>ASSUNTO</th>
+                        <th>CATEGORIA</th>
+                        <th>PRIORIDADE</th>
+                        <th>DATA</th>
+                        <th>STATUS</th>
+                        <th class="text-end pe-3">AÇÃO</th>
+                    </tr>
+                </thead>
+                <tbody class="small">
+                    {% for c in chamados %}
+                    <tr>
+                        <td class="fw-bold text-primary">{{ c.numero_protocolo }}</td>
+                        <td>
+                            <span class="fw-bold text-dark d-block">{{ c.assunto }}</span>
+                            <small class="text-muted">Aberto por: {{ c.usuario.nome }}</small>
+                        </td>
+                        <td><span class="badge bg-light text-dark border">{{ c.categoria }}</span></td>
+                        <td>
+                            {% if c.prioridade == 'Alta' or c.prioridade == 'Urgente' %}
+                                <span class="badge bg-danger">{{ c.prioridade }}</span>
+                            {% elif c.prioridade == 'Média' %}
+                                <span class="badge bg-warning text-dark">{{ c.prioridade }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ c.prioridade }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ c.data_abertura.strftime('%d/%m/%Y às %H:%M') }}</td>
+                        <td>
+                            {% if c.status == 'Aberto' %}
+                                <span class="badge bg-danger">Aberto</span>
+                            {% elif c.status == 'Em Atendimento' %}
+                                <span class="badge bg-warning text-dark">Em Atendimento</span>
+                            {% else %}
+                                <span class="badge bg-success">Resolvido</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-3">
+                            <a href="{{ url_for('detalhe_chamado', id=c.id) }}" class="btn btn-sm btn-outline-primary fw-bold">
+                                Ver Conversa <i class="bi bi-chevron-right ms-1"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="bi bi-chat-square-dots fs-2 d-block mb-2 text-secondary"></i>
+                            Nenhum chamado aberto. Caso precise de ajuda, clique em "Abrir Chamado".
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: ABRIR CHAMADO -->
+<div class="modal fade" id="modalNovoChamado" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow">
+            <form action="{{ url_for('novo_chamado') }}" method="POST" enctype="multipart/form-data">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-headset text-primary me-2"></i>Abrir Chamado de Suporte
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Assunto Resumido *</label>
+                        <input type="text" name="assunto" class="form-control" required placeholder="Ex: Dúvida sobre parcelamento de propostas">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Categoria *</label>
+                            <select name="categoria" class="form-select">
+                                <option value="Dúvida" selected>Dúvida Operacional</option>
+                                <option value="Erro/Bug">Reportar Erro ou Instabilidade</option>
+                                <option value="Financeiro/Plano">Dúvidas de Plano e Faturamento</option>
+                                <option value="Sugestão">Sugestão de Nova Funcionalidade</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Prioridade</label>
+                            <select name="prioridade" class="form-select">
+                                <option value="Baixa">Baixa</option>
+                                <option value="Média" selected>Média</option>
+                                <option value="Alta">Alta</option>
+                                <option value="Urgente">Urgente (Sistema Inoperante)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Detalhamento da Solicitação *</label>
+                        <textarea name="mensagem" class="form-control" rows="4" required placeholder="Descreva passo a passo o que aconteceu ou a sua dúvida..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Anexar Print ou Arquivo de Evidência (Opcional)</label>
+                        <input type="file" name="anexo" class="form-control">
+                        <small class="text-muted">Formatos suportados: PNG, JPG, PDF.</small>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4">Enviar Chamado</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

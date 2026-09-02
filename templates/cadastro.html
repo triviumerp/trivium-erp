@@ -134,12 +134,20 @@
             </div>
         </div>
 
-        <!-- Botões de Ação -->
-        <div class="d-flex justify-content-end gap-2">
-            <a href="{{ url_for('index') }}" class="btn btn-light px-4">Cancelar</a>
-            <button type="submit" class="btn btn-primary fw-bold px-4">
-                <i class="bi bi-check-lg me-1"></i> {% if cliente %}Salvar Alterações{% else %}Cadastrar Cliente{% endif %}
+        <!-- Botões de Ação no Rodapé -->
+        <div class="d-flex flex-column flex-md-row justify-content-end gap-2 mt-4 pt-3 border-top">
+            <a href="{{ url_for('listar_clientes') }}" class="btn btn-light px-4">Cancelar</a>
+            
+            <button type="submit" name="acao" value="salvar" class="btn btn-outline-primary fw-bold px-4">
+                <i class="bi bi-check-lg me-1"></i> {% if cliente %}Salvar Alterações{% else %}Salvar Cliente{% endif %}
             </button>
+
+            {% if not cliente %}
+            <!-- Botão de Ação Rápida para Primeiro Cadastro -->
+            <button type="submit" name="acao" value="salvar_e_proposta" class="btn btn-success fw-bold px-4 shadow-sm">
+                <i class="bi bi-file-earmark-plus me-1"></i> Salvar e Gerar Proposta
+            </button>
+            {% endif %}
         </div>
     </form>
 </div>

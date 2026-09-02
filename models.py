@@ -258,3 +258,35 @@ class ParcelaFatura(db.Model):
     status = db.Column(db.String(30), default='A Faturar') # 'A Faturar', 'Boleto Emitido', 'Pago', 'Em Atraso'
     arquivo_comprovante_boleto = db.Column(db.String(255), nullable=True)
     historico_cobranca = db.Column(db.Text, nullable=True)
+
+class ChamadoSuporte(db.Model):
+    __tablename__ = 'chamados_suporte'
+    id = db.Column(db.Integer, primary_key=True)
+    empresa_id = db.Column(db.Integer, db.ForeignKey('empresas.id'), nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    
+    numero_protocolo = db.Column(db.String(30), unique=True, nullable=False)
+    assunto = db.Column(db.String(150), nullable=False)
+    categoria = db.Column(db.String(50), default='Dúvida')
+    prioridade = db.Column(db.String(20), default='Média')
+    status = db.Column(db.String(30), default='Aberto')
+    data_abertura = db.Column(db.DateTime, default=datetime.utcnow)
+    data_fechamento = db.Column(db.DateTime, nullable=True)
+
+    empresa = db.relationship('Empresa', backref='chamados')
+    usuario = db.relationship('Usuario', backref='chamados_abertos')
+    mensagens = db.relationship('MensagemChamado', backref='chamado', lazy=True, cascade="all, delete-orphan")
+
+
+class MensagemChamado(db.Model):
+    __tablename__ = 'mensagens_chamado'
+    id = db.Column(db.Integer, primary_key=True)
+    chamado_id = db.Column(db.Integer, db.ForeignKey('chamados_suporte.id'), nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    
+    conteudo = db.Column(db.Text, nullable=False)
+    is_suporte = db.Column(db.Boolean, default=False)
+    anexo_filename = db.Column(db.String(255), nullable=True)
+    data_envio = db.Column(db.DateTime, default=datetime.utcnow)
+
+    usuario = db.relationship('Usuario')

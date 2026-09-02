@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+
+{% block title %}Catálogo de Serviços - Trivium ERP{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-journal-bookmark-fill text-primary me-2"></i>Catálogo de Serviços
+        </h2>
+        <p class="text-muted mb-0">Padronização de serviços, modelos de cobrança e escopos para cartas propostas</p>
+    </div>
+    <div>
+        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoServicoCatalogo">
+            <i class="bi bi-plus-circle me-1"></i>Novo Serviço
+        </button>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold text-dark mb-0">Serviços Cadastrados</h6>
+        <span class="badge bg-light text-dark border">{{ catalogo|length }} itens</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small text-muted">
+                    <tr>
+                        <th>NOME DO SERVIÇO</th>
+                        <th>MODELO DE COBRANÇA</th>
+                        <th>VALOR BASE SUGERIDO</th>
+                        <th>DESCRIÇÃO / ESCOPO PADRÃO</th>
+                        <th class="text-end pe-3">AÇÕES</th>
+                    </tr>
+                </thead>
+                <tbody class="small">
+                    {% for c in catalogo %}
+                    <tr>
+                        <td class="fw-bold text-dark">{{ c.nome }}</td>
+                        <td>
+                            {% if c.modelo_cobranca == 'mensal' %}
+                                <span class="badge bg-primary">Recorrente Mensal</span>
+                            {% elif c.modelo_cobranca == 'anual' %}
+                                <span class="badge bg-info text-dark">Recorrente Anual</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Pontual / Avulso</span>
+                            {% endif %}
+                        </td>
+                        <td class="fw-bold text-success fs-6">R$ {{ "%.2f"|format(c.valor_sugerido) }}</td>
+                        <td><span class="text-muted">{{ c.descricao_padrao or '--' }}</span></td>
+                        <td class="text-end pe-3">
+                            <form action="{{ url_for('excluir_tipo_servico', id=c.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Deseja realmente remover este serviço do catálogo?')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 text-muted">
+                            <i class="bi bi-journal-x fs-2 d-block mb-2 text-secondary"></i>
+                            Nenhum serviço cadastrado no catálogo. Comece clicando em "Novo Serviço".
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: NOVO SERVIÇO -->
+<div class="modal fade" id="modalNovoServicoCatalogo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <form action="{{ url_for('novo_tipo_servico') }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-journal-plus text-primary me-2"></i>Adicionar ao Catálogo
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nome do Serviço *</label>
+                        <input type="text" name="nome" class="form-control" required placeholder="Ex: Vistoria Técnica de Segurança">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Modelo de Cobrança</label>
+                            <select name="modelo_cobranca" class="form-select">
+                                <option value="pontual">Pontual / Avulso</option>
+                                <option value="mensal">Recorrente Mensal</option>
+                                <option value="anual">Recorrente Anual</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Valor Base (R$)</label>
+                            <input type="number" step="0.01" name="valor_sugerido" class="form-control" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Descrição Padrão / Escopo</label>
+                        <textarea name="descricao" class="form-control" rows="3" placeholder="Texto padrão que virá preenchido na emissão de cartas propostas..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success fw-bold px-4">Salvar no Catálogo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

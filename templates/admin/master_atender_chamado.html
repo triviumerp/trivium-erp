@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+
+{% block title %}Atendimento Master - Protocolo {{ chamado.numero_protocolo }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+    <div>
+        <a href="{{ url_for('admin_master_chamados') }}" class="text-decoration-none small text-muted mb-1 d-inline-block">
+            <i class="bi bi-arrow-left"></i> Voltar à Fila de Chamados
+        </a>
+        <h3 class="fw-bold text-dark mb-0">Protocolo {{ chamado.numero_protocolo }}</h3>
+        <span class="text-muted small">{{ chamado.empresa.razao_social }} &bull; Solicitante: {{ chamado.usuario.nome }} ({{ chamado.usuario.email }})</span>
+    </div>
+    <div>
+        {% if chamado.status == 'Aberto' %}
+            <span class="badge bg-danger px-3 py-2 fs-6">Aberto</span>
+        {% elif chamado.status == 'Em Atendimento' %}
+            <span class="badge bg-warning text-dark px-3 py-2 fs-6">Em Atendimento</span>
+        {% else %}
+            <span class="badge bg-success px-3 py-2 fs-6">Resolvido</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- COLUNA PRINCIPAL: HISTÓRICO E RESPOSTA -->
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm p-4 mb-4">
+            <h6 class="fw-bold text-dark mb-3"><i class="bi bi-chat-dots text-primary me-2"></i>Histórico do Atendimento</h6>
+            
+            <div class="d-flex flex-column gap-3 mb-4">
+                {% for msg in chamado.mensagens %}
+                <div class="p-3 rounded-3 {% if msg.is_suporte %}bg-primary-subtle border-start border-primary border-4 ms-md-4{% else %}bg-light border me-md-4{% endif %}">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-bold {% if msg.is_suporte %}text-primary{% else %}text-dark{% endif %} small">
+                            <i class="bi {% if msg.is_suporte %}bi-shield-check{% else %}bi-person-circle{% endif %} me-1"></i>
+                            {{ 'Equipe Trivium Suporte (Master)' if msg.is_suporte else msg.usuario.nome }}
+                        </span>
+                        <small class="text-muted">{{ msg.data_envio.strftime('%d/%m/%Y às %H:%M') }}</small>
+                    </div>
+                    <p class="mb-0 text-dark small" style="white-space: pre-line;">{{ msg.conteudo }}</p>
+                    {% if msg.anexo_filename %}
+                    <div class="mt-2 pt-2 border-top">
+                        <a href="{{ url_for('download_file', filename=msg.anexo_filename) }}" target="_blank" class="small text-decoration-none fw-bold">
+                            <i class="bi bi-paperclip me-1"></i> Ver Anexo Enviado
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- FORMULÁRIO DE RESPOSTA MASTER -->
+            <form method="POST" enctype="multipart/form-data" class="pt-3 border-top">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Alterar Status do Ticket</label>
+                        <select name="novo_status" class="form-select form-select-sm fw-bold">
+                            <option value="Em Atendimento" {% if chamado.status == 'Em Atendimento' %}selected{% endif %}>Em Atendimento</option>
+                            <option value="Aberto" {% if chamado.status == 'Aberto' %}selected{% endif %}>Aberto</option>
+                            <option value="Resolvido" {% if chamado.status == 'Resolvido' %}selected{% endif %}>Resolvido / Concluído</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Anexo da Resposta (Opcional)</label>
+                        <input type="file" name="anexo" class="form-control form-control-sm">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Resposta Oficial ao Cliente</label>
+                    <textarea name="mensagem" class="form-control form-control-sm" rows="4" placeholder="Escreva as instruções ou a solução técnica para o cliente..."></textarea>
+                </div>
+
+                <div class="text-end">
+                    <button type="submit" class="btn btn-primary fw-bold px-4">
+                        <i class="bi bi-send-check me-1"></i> Enviar Resposta Master
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- COLUNA LATERAL: DADOS DO CLIENTE E DO TICKET -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm p-3 mb-3">
+            <h6 class="fw-bold text-dark mb-3">Ficha do Assinante</h6>
+            <ul class="list-group list-group-flush small">
+                <li class="list-group-item d-flex justify-content-between px-0">
+                    <span class="text-muted">Empresa:</span>
+                    <span class="fw-semibold">{{ chamado.empresa.razao_social }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between px-0">
+                    <span class="text-muted">CNPJ/CPF:</span>
+                    <span class="fw-semibold">{{ chamado.empresa.cnpj or '--' }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between px-0">
+                    <span class="text-muted">WhatsApp:</span>
+                    <span class="fw-semibold">{{ chamado.empresa.telefone or '--' }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between px-0">
+                    <span class="text-muted">Plano:</span>
+                    <span class="badge bg-primary">{{ chamado.empresa.plano or 'Founder' }}</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="card border-0 shadow-sm p-3">
+            <h6 class="fw-bold text-dark mb-3">Detalhes do Ticket</h6>
+            <ul class="list-group list-group-flush small">
+                <li class="list-group-item d-flex justify-content-between px-0">
+                    <span class="text-muted">Assunto:</span>
+                    <span class="fw-semibold">{{ chamado.assunto }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between px-0">
+                    <span class="text-muted">Categoria:</span>
+                    <span class="badge bg-light text-dark border">{{ chamado.categoria }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between px-0">
+                    <span class="text-muted">Prioridade:</span>
+                    <span class="fw-semibold">{{ chamado.prioridade }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between px-0">
+                    <span class="text-muted">Data Abertura:</span>
+                    <span class="fw-semibold">{{ chamado.data_abertura.strftime('%d/%m/%Y às %H:%M') }}</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

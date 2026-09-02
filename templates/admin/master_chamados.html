@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+
+{% block title %}Central Global de Chamados - Master{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+    <div>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-headset text-danger me-2"></i>Fila Global de Chamados SaaS
+        </h2>
+        <p class="text-muted mb-0">Visualização unificada de todos os tickets de suporte abertos por empresas assinantes</p>
+    </div>
+    <div>
+        <a href="{{ url_for('admin_master_dashboard') }}" class="btn btn-outline-secondary fw-bold">
+            <i class="bi bi-buildings me-1"></i> Ver Empresas
+        </a>
+    </div>
+</div>
+
+<!-- CARDS DE MÉTRICAS GLOBAIS -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 bg-danger text-white rounded-3">
+            <span class="small text-white-50">Não Atendidos / Abertos</span>
+            <h3 class="fw-bold my-1">{{ qtd_abertos }}</h3>
+            <small class="text-white-50">Aguardando resposta master</small>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 bg-warning text-dark rounded-3">
+            <span class="small text-dark-50">Em Atendimento</span>
+            <h3 class="fw-bold my-1">{{ qtd_em_analise }}</h3>
+            <small class="text-dark-50">Em análise técnica</small>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 bg-success text-white rounded-3">
+            <span class="small text-white-50">Resolvidos</span>
+            <h3 class="fw-bold my-1">{{ qtd_resolvidos }}</h3>
+            <small class="text-white-50">Tickets concluídos</small>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 bg-dark text-white rounded-3">
+            <span class="small text-white-50">Histórico Geral</span>
+            <h3 class="fw-bold my-1">{{ total_historico }}</h3>
+            <small class="text-white-50">Total de tickets gerados</small>
+        </div>
+    </div>
+</div>
+
+<!-- FILTROS DE STATUS -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body py-2 d-flex justify-content-between align-items-center">
+        <div class="btn-group">
+            <a href="{{ url_for('admin_master_chamados', status='todos') }}" class="btn btn-sm {% if filtro_atual == 'todos' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">Todos</a>
+            <a href="{{ url_for('admin_master_chamados', status='abertos') }}" class="btn btn-sm {% if filtro_atual == 'abertos' %}btn-danger fw-bold{% else %}btn-outline-secondary{% endif %}">Abertos</a>
+            <a href="{{ url_for('admin_master_chamados', status='em_atendimento') }}" class="btn btn-sm {% if filtro_atual == 'em_atendimento' %}btn-warning text-dark fw-bold{% else %}btn-outline-secondary{% endif %}">Em Atendimento</a>
+            <a href="{{ url_for('admin_master_chamados', status='resolvidos') }}" class="btn btn-sm {% if filtro_atual == 'resolvidos' %}btn-success fw-bold{% else %}btn-outline-secondary{% endif %}">Resolvidos</a>
+        </div>
+        <small class="text-muted">Exibindo <b>{{ chamados|length }}</b> registros</small>
+    </div>
+</div>
+
+<!-- TABELA DE ATENDIMENTO MASTER -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small text-muted">
+                    <tr>
+                        <th>PROTOCOLO</th>
+                        <th>EMPRESA / SOLICITANTE</th>
+                        <th>ASSUNTO</th>
+                        <th>CATEGORIA</th>
+                        <th>PRIORIDADE</th>
+                        <th>STATUS</th>
+                        <th class="text-end pe-3">AÇÃO</th>
+                    </tr>
+                </thead>
+                <tbody class="small">
+                    {% for ticket in chamados %}
+                    <tr>
+                        <td class="fw-bold text-primary">{{ ticket.numero_protocolo }}</td>
+                        <td>
+                            <span class="fw-bold text-dark d-block">{{ ticket.empresa.razao_social }}</span>
+                            <small class="text-muted">{{ ticket.usuario.nome }} ({{ ticket.usuario.email }})</small>
+                        </td>
+                        <td>
+                            <span class="fw-semibold text-dark">{{ ticket.assunto }}</span>
+                            <small class="d-block text-muted">{{ ticket.data_abertura.strftime('%d/%m/%Y às %H:%M') }}</small>
+                        </td>
+                        <td><span class="badge bg-light text-dark border">{{ ticket.categoria }}</span></td>
+                        <td>
+                            {% if ticket.prioridade in ['Alta', 'Urgente'] %}
+                                <span class="badge bg-danger">{{ ticket.prioridade }}</span>
+                            {% elif ticket.prioridade == 'Média' %}
+                                <span class="badge bg-warning text-dark">{{ ticket.prioridade }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ ticket.prioridade }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if ticket.status == 'Aberto' %}
+                                <span class="badge bg-danger">Aberto</span>
+                            {% elif ticket.status == 'Em Atendimento' %}
+                                <span class="badge bg-warning text-dark">Em Atendimento</span>
+                            {% else %}
+                                <span class="badge bg-success">Resolvido</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-3">
+                            <a href="{{ url_for('admin_atender_chamado', id=ticket.id) }}" class="btn btn-sm btn-primary fw-bold">
+                                Atender <i class="bi bi-arrow-right ms-1"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">Nenhum chamado encontrado para este filtro.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

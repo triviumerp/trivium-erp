@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+
+{% block title %}Painel Master SaaS - Gestão de Empresas{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+    <div>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-shield-lock-fill text-danger me-2"></i>Painel Master SaaS
+        </h2>
+        <p class="text-muted mb-0">Visão global das empresas inquilinas, métricas de assinaturas e suporte</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('admin_master_chamados') }}" class="btn btn-danger fw-bold shadow-sm">
+            <i class="bi bi-headset me-1"></i> Fila de Chamados
+        </a>
+    </div>
+</div>
+
+<!-- CARDS DE ASSINATURAS E EMPRESAS -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 bg-primary text-white rounded-3">
+            <span class="small text-white-50">Total de Empresas</span>
+            <h3 class="fw-bold my-1">{{ total_empresas }}</h3>
+            <small class="text-white-50">Inquilinos cadastrados</small>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 bg-success text-white rounded-3">
+            <span class="small text-white-50">Assinaturas Ativas</span>
+            <h3 class="fw-bold my-1">{{ total_ativas }}</h3>
+            <small class="text-white-50">Pagantes regulares</small>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 bg-warning text-dark rounded-3">
+            <span class="small text-dark-50">Em Período de Testes</span>
+            <h3 class="fw-bold my-1">{{ total_trial }}</h3>
+            <small class="text-dark-50">Contas em Trial</small>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm p-3 bg-secondary text-white rounded-3">
+            <span class="small text-white-50">Bloqueadas / Inadimplentes</span>
+            <h3 class="fw-bold my-1">{{ total_bloqueadas }}</h3>
+            <small class="text-white-50">Acesso suspenso</small>
+        </div>
+    </div>
+</div>
+
+<!-- TABELA DE GESTÃO DE EMPRESAS -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold text-dark mb-0">Empresas Cadastradas</h6>
+        <span class="badge bg-light text-dark border">{{ empresas|length }} empresas</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small text-muted">
+                    <tr>
+                        <th>EMPRESA / RAZÃO SOCIAL</th>
+                        <th>CNPJ / CPF</th>
+                        <th>CONTATO / RESPONSÁVEL</th>
+                        <th>PLANO</th>
+                        <th>STATUS ASSINATURA</th>
+                        <th>CADASTRADA EM</th>
+                    </tr>
+                </thead>
+                <tbody class="small">
+                    {% for emp in empresas %}
+                    <tr>
+                        <td>
+                            <span class="fw-bold text-dark d-block">{{ emp.razao_social or emp.nome_fantasia }}</span>
+                            <small class="text-muted">{{ emp.nome_fantasia or '--' }}</small>
+                        </td>
+                        <td>{{ emp.cnpj or '--' }}</td>
+                        <td>
+                            <span class="d-block">{{ emp.email or '--' }}</span>
+                            <small class="text-muted">{{ emp.telefone or '--' }}</small>
+                        </td>
+                        <td><span class="badge bg-primary">{{ emp.plano or 'Founder' }}</span></td>
+                        <td>
+                            {% if emp.status_assinatura == 'ativo' %}
+                                <span class="badge bg-success">Ativa</span>
+                            {% elif emp.status_assinatura == 'trial' %}
+                                <span class="badge bg-warning text-dark">Trial</span>
+                            {% else %}
+                                <span class="badge bg-danger">{{ emp.status_assinatura|capitalize }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ emp.data_criacao.strftime('%d/%m/%Y') if emp.data_criacao else '--' }}</td>
+                        <td class="text-end pe-3">
+                            <div class="d-flex gap-1 justify-content-end align-items-center">
+                                <!-- Botão Entrar como Inquilino -->
+                                <a href="{{ url_for('admin_impersonar_empresa', empresa_id=emp.id) }}" class="btn btn-sm btn-outline-warning text-dark fw-bold" title="Acessar o ERP como esta empresa para investigar problemas">
+                                    <i class="bi bi-box-arrow-in-right me-1"></i> Acessar
+                                </a>
+
+                                <!-- Botão Alterar Status -->
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalStatusEmpresa{{ emp.id }}" title="Alterar Status">
+                                    <i class="bi bi-sliders"></i>
+                                </button>
+                            </div>
+
+                            <!-- MODAL ALTERAÇÃO DE STATUS -->
+                            <div class="modal fade text-start" id="modalStatusEmpresa{{ emp.id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content border-0 shadow">
+                                        <form action="{{ url_for('admin_alterar_status_empresa', id=emp.id) }}" method="POST">
+                                            <div class="modal-header bg-light">
+                                                <h6 class="modal-title fw-bold">Gerenciar Acesso: {{ emp.razao_social }}</h6>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body p-3">
+                                                <label class="form-label small fw-bold">Status da Assinatura</label>
+                                                <select name="status_assinatura" class="form-select form-select-sm">
+                                                    <option value="ativo" {% if emp.status_assinatura == 'ativo' %}selected{% endif %}>Ativo (Liberado)</option>
+                                                    <option value="trial" {% if emp.status_assinatura == 'trial' %}selected{% endif %}>Trial (Período de Testes)</option>
+                                                    <option value="bloqueado" {% if emp.status_assinatura == 'bloqueado' %}selected{% endif %}>Bloqueado (Inadimplente / Suspenso)</option>
+                                                    <option value="cancelado" {% if emp.status_assinatura == 'cancelado' %}selected{% endif %}>Cancelado</option>
+                                                </select>
+                                            </div>
+                                            <div class="modal-footer bg-light">
+                                                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                                                <button type="submit" class="btn btn-sm btn-primary fw-bold">Salvar Alterações</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">Nenhuma empresa registrada no banco.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

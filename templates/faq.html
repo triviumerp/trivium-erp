@@ -1,0 +1,186 @@
+{% extends 'base.html' %}
+
+{% block title %}Ajuda e FAQ - Trivium ERP{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+    <div>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-question-circle-fill text-primary me-2"></i>Central de Ajuda & FAQ
+        </h2>
+        <p class="text-muted mb-0">Guias rápidos, orientações de uso e dúvidas frequentes sobre os módulos da plataforma</p>
+    </div>
+    <div>
+        <button type="button" class="btn btn-outline-primary fw-bold" onclick="iniciarTourGuiado()">
+            <i class="bi bi-play-circle me-1"></i> Fazer Tour do Sistema
+        </button>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- NAVEGAÇÃO RÁPIDA POR TÓPICOS -->
+    <div class="col-lg-3">
+        <div class="card border-0 shadow-sm p-3 sticky-top" style="top: 90px;">
+            <h6 class="fw-bold text-dark mb-3 px-2">Categorias</h6>
+            <div class="nav flex-column nav-pills gap-1" id="faq-nav">
+                <a href="#topico-inicio" class="nav-link-custom active"><i class="bi bi-rocket-takeoff text-primary"></i>Primeiros Passos</a>
+                <a href="#topico-clientes" class="nav-link-custom"><i class="bi bi-people text-primary"></i>Clientes & Contatos</a>
+                <a href="#topico-catalogo" class="nav-link-custom"><i class="bi bi-journal-bookmark text-primary"></i>Catálogo de Serviços</a>
+                <a href="#topico-propostas" class="nav-link-custom"><i class="bi bi-file-earmark-text text-primary"></i>Propostas Comerciais</a>
+                <a href="#topico-servicos" class="nav-link-custom"><i class="bi bi-calendar-check text-primary"></i>Agenda & Serviços</a>
+                <a href="#topico-financeiro" class="nav-link-custom"><i class="bi bi-cash-coin text-primary"></i>Financeiro & Cobranças</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTEÚDO DOS ACORDEÕES -->
+    <div class="col-lg-9">
+        
+        <!-- TÓPICO 1: PRIMEIROS PASSOS -->
+        <div class="card border-0 shadow-sm p-4 mb-4" id="topico-inicio">
+            <h5 class="fw-bold text-dark mb-3">
+                <i class="bi bi-rocket-takeoff text-primary me-2"></i>1. Primeiros Passos e Configuração
+            </h5>
+            <div class="accordion" id="accInicio">
+                <div class="accordion-item border-0 mb-2 shadow-sm rounded-3 overflow-hidden">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#f1">
+                            Como cadastrar o logotipo e as cores da minha empresa?
+                        </button>
+                    </h2>
+                    <div id="f1" class="accordion-collapse collapse" data-bs-parent="#accInicio">
+                        <div class="accordion-body text-muted small">
+                            Acesse o menu <b>Configurações</b> na barra lateral. Na aba <i>Dados Cadastrais</i>, você poderá preencher os dados completos da sua empresa, selecionar sua cor corporativa e fazer upload do seu logotipo em formato PNG ou JPG com fundo transparente. Essas informações serão aplicadas automaticamente nos relatórios e cartas propostas em PDF.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-item border-0 shadow-sm rounded-3 overflow-hidden">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#f2">
+                            Posso usar o sistema como Pessoa Física (Autônomo/CPF)?
+                        </button>
+                    </h2>
+                    <div id="f2" class="accordion-collapse collapse" data-bs-parent="#accInicio">
+                        <div class="accordion-body text-muted small">
+                            Sim. O sistema foi desenvolvido para atender tanto empresas com CNPJ quanto consultores autônomos com CPF. Você pode alternar essa definição no menu de Configurações a qualquer momento.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TÓPICO 2: CLIENTES -->
+        <div class="card border-0 shadow-sm p-4 mb-4" id="topico-clientes">
+            <h5 class="fw-bold text-dark mb-3">
+                <i class="bi bi-people text-primary me-2"></i>2. Gestão de Clientes & Documentos
+            </h5>
+            <div class="accordion" id="accClientes">
+                <div class="accordion-item border-0 mb-2 shadow-sm rounded-3 overflow-hidden">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#f3">
+                            Como funciona o preenchimento automático de endereço por CEP?
+                        </button>
+                    </h2>
+                    <div id="f3" class="accordion-collapse collapse" data-bs-parent="#accClientes">
+                        <div class="accordion-body text-muted small">
+                            Ao cadastrar ou editar um cliente, digite os 8 dígitos do CEP e pressione <b>Enter</b> ou clique no ícone de busca. O sistema consulta automaticamente os correios, preenchendo Logradouro, Bairro, Cidade e UF.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-item border-0 shadow-sm rounded-3 overflow-hidden">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#f4">
+                            Como anexar arquivos e laudos técnicos a um cliente?
+                        </button>
+                    </h2>
+                    <div id="f4" class="accordion-collapse collapse" data-bs-parent="#accClientes">
+                        <div class="accordion-body text-muted small">
+                            Abra a ficha do cliente clicando em <b>Abrir</b> na lista de clientes. Na coluna direita, utilize o campo <i>Documentos e Anexos</i> informando a categoria do arquivo (ex: Planta, Laudo, Contrato) e selecione o arquivo do seu computador.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TÓPICO 3: CATÁLOGO DE SERVIÇOS -->
+        <div class="card border-0 shadow-sm p-4 mb-4" id="topico-catalogo">
+            <h5 class="fw-bold text-dark mb-3">
+                <i class="bi bi-journal-bookmark text-primary me-2"></i>3. Catálogo de Serviços
+            </h5>
+            <div class="accordion" id="accCatalogo">
+                <div class="accordion-item border-0 shadow-sm rounded-3 overflow-hidden">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#f5">
+                            Para que serve o Catálogo de Serviços?
+                        </button>
+                    </h2>
+                    <div id="f5" class="accordion-collapse collapse" data-bs-parent="#accCatalogo">
+                        <div class="accordion-body text-muted small">
+                            O catálogo padroniza sua tabela de preços e escopos técnicos. Ao emitir uma proposta, basta selecionar o serviço do catálogo que o valor sugerido e a descrição técnica serão preenchidos automaticamente.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TÓPICO 4: PROPOSTAS COMERCIAIS -->
+        <div class="card border-0 shadow-sm p-4 mb-4" id="topico-propostas">
+            <h5 class="fw-bold text-dark mb-3">
+                <i class="bi bi-file-earmark-text text-primary me-2"></i>4. Propostas & Condições de Pagamento
+            </h5>
+            <div class="accordion" id="accPropostas">
+                <div class="accordion-item border-0 mb-2 shadow-sm rounded-3 overflow-hidden">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#f6">
+                            Como funciona a trava de execução por sinal/entrada?
+                        </button>
+                    </h2>
+                    <div id="f6" class="accordion-collapse collapse" data-bs-parent="#accPropostas">
+                        <div class="accordion-body text-muted small">
+                            Ao criar uma proposta com a opção <b>Exigir Entrada / Sinal</b> ativada, o serviço gerado na Agenda ficará com o status <span class="badge bg-danger">Aguardando Sinal</span> e bloqueado para início até que a baixa da entrada seja confirmada no Financeiro.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-item border-0 shadow-sm rounded-3 overflow-hidden">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#f7">
+                            Qual a diferença entre Serviço Avulso e Contrato Recorrente?
+                        </button>
+                    </h2>
+                    <div id="f7" class="accordion-collapse collapse" data-bs-parent="#accPropostas">
+                        <div class="accordion-body text-muted small">
+                            <b>Serviço Avulso (Pontual):</b> Ocorre uma única vez (ex: Elaboração de um Laudo Pericial).<br>
+                            <b>Contrato Recorrente:</b> Gera ordens e mensalidades automáticas todo mês (ex: Assessoria Contínua de Segurança com vistorias mensais).
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TÓPICO 5: FINANCEIRO -->
+        <div class="card border-0 shadow-sm p-4" id="topico-financeiro">
+            <h5 class="fw-bold text-dark mb-3">
+                <i class="bi bi-cash-coin text-primary me-2"></i>5. Controle Financeiro & Faturas
+            </h5>
+            <div class="accordion" id="accFinanceiro">
+                <div class="accordion-item border-0 shadow-sm rounded-3 overflow-hidden">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#f8">
+                            Como dar baixa manual no pagamento de um boleto ou sinal?
+                        </button>
+                    </h2>
+                    <div id="f8" class="accordion-collapse collapse" data-bs-parent="#accFinanceiro">
+                        <div class="accordion-body text-muted small">
+                            Acesse o menu <b>Financeiro</b>, localize o título ou parcela do cliente e clique no botão de ações para marcar como <b>Pago</b>. Isso atualiza o faturamento do mês no Dashboard e destrava serviços bloqueados.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

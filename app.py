@@ -2,8 +2,10 @@ import html
 import io
 import os
 import re
+import time
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
+
 
 # Carrega as variáveis do arquivo .env automaticamente
 from dotenv import load_dotenv
@@ -25,9 +27,20 @@ from extensions import db, login_manager
 from models import (
     Empresa, Usuario, Cliente, Documento, TipoServico, 
     ServicoCliente, Proposta, ItemProposta, ContratoRecorrente, 
-    Fatura, ParcelaFatura
+    Fatura, ParcelaFatura, Documento, ChamadoSuporte, MensagemChamado, 
 )
 from auth.routes import auth_bp
+
+from datetime import datetime
+from functools import wraps
+from flask import abort, render_template, request, redirect, url_for, flash
+from flask_login import login_required, current_user, login_user
+import time
+import os
+from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash
+from extensions import db
+from models import Empresa, Usuario, ChamadoSuporte, MensagemChamado
 
 # -----------------------------------------------------------------------------
 # 1. CONFIGURAÇÃO DA APLICAÇÃO
@@ -95,6 +108,113 @@ def is_cpf_valido(cpf):
     resto = 11 - (soma % 11)
     digito2 = 0 if resto in [10, 11] else resto
     return digito2 == int(cpf_limpo[10])
+
+def master_required(f):
+  @wraps(f)
+  def decorated_function(*args, **kwargs):
+    if not current_user.is_authenticated or current_user.nivel_acesso != 'master':
+      abort(403)
+    return f(*args, **kwargs)
+
+  return decorated_function
+
+# 1. Painel Master Geral & Gestão de Empresas
+@app.route('/admin/master')
+@login_required
+@master_required
+def admin_master_dashboard():
+  empresas = Empresa.query.order_by(Empresa.data_criacao.desc()).all()
+  total_empresas = len(empresas)
+  total_ativas = len([e for e in empresas if e.status_assinatura == 'ativo'])
+  total_trial = len([e for e in empresas if e.status_assinatura == 'trial'])
+  total_bloqueadas = len(
+      [e for e in empresas if e.status_assinatura not in ['ativo', 'trial']]
+  )
+
+  return render_template(
+      'admin/master_dashboard.html',
+      empresas=empresas,
+      total_empresas=total_empresas,
+      total_ativas=total_ativas,
+      total_trial=total_trial,
+      total_bloqueadas=total_bloqueadas,
+  )
+
+
+# 2. Central Global de Chamados (Todos os Clientes)
+@app.route('/admin/master/chamados')
+@login_required
+@master_required
+def admin_master_chamados():
+  filtro = request.args.get('status', 'todos')
+  query = ChamadoSuporte.query
+
+  if filtro == 'abertos':
+    query = query.filter_by(status='Aberto')
+  elif filtro == 'em_atendimento':
+    query = query.filter_by(status='Em Atendimento')
+  elif filtro == 'resolvidos':
+    query = query.filter_by(status='Resolvido')
+
+  chamados = query.order_by(ChamadoSuporte.data_abertura.desc()).all()
+
+  qtd_abertos = ChamadoSuporte.query.filter_by(status='Aberto').count()
+  qtd_em_analise = ChamadoSuporte.query.filter_by(
+      status='Em Atendimento'
+  ).count()
+  qtd_resolvidos = ChamadoSuporte.query.filter_by(status='Resolvido').count()
+  total_historico = ChamadoSuporte.query.count()
+
+  return render_template(
+      'admin/master_chamados.html',
+      chamados=chamados,
+      filtro_atual=filtro,
+      qtd_abertos=qtd_abertos,
+      qtd_em_analise=qtd_em_analise,
+      qtd_resolvidos=qtd_resolvidos,
+      total_historico=total_historico,
+  )
+
+
+# 3. Atendimento e Resposta ao Chamado como Administrador Master
+@app.route('/admin/master/chamados/<int:id>', methods=['GET', 'POST'])
+@login_required
+@master_required
+def admin_atender_chamado(id):
+  chamado = ChamadoSuporte.query.get_or_404(id)
+
+  if request.method == 'POST':
+    conteudo = request.form.get('mensagem')
+    novo_status = request.form.get('novo_status')
+    arquivo = request.files.get('anexo')
+
+    filename = None
+    if arquivo and arquivo.filename:
+      filename = f'suporte_{chamado.id}_{int(time.time())}_{secure_filename(arquivo.filename)}'
+      upload_folder = app.config.get('UPLOAD_FOLDER', 'static/uploads')
+      os.makedirs(upload_folder, exist_ok=True)
+      arquivo.save(os.path.join(upload_folder, filename))
+
+    if conteudo:
+      msg_suporte = MensagemChamado(
+          chamado_id=chamado.id,
+          usuario_id=current_user.id,
+          conteudo=conteudo,
+          is_suporte=True,  # Identifica que a resposta partiu do Master
+          anexo_filename=filename,
+      )
+      db.session.add(msg_suporte)
+
+    if novo_status:
+      chamado.status = novo_status
+      if novo_status == 'Resolvido':
+        chamado.data_fechamento = datetime.utcnow()
+
+    db.session.commit()
+    flash(f'Chamado {chamado.numero_protocolo} atualizado!', 'success')
+    return redirect(url_for('admin_atender_chamado', id=chamado.id))
+
+  return render_template('admin/master_atender_chamado.html', chamado=chamado)
 
 
 @login_manager.user_loader
@@ -189,24 +309,24 @@ def listar_clientes():
 @login_required
 def novo_cliente():
     if request.method == 'POST':
-        tipo_pessoa = request.form.get('tipo_pessoa')
-        doc_identificacao = request.form.get('cnpj') if tipo_pessoa == 'PJ' else request.form.get('cpf')
-
-        if tipo_pessoa == 'PF' and doc_identificacao:
-            if not is_cpf_valido(doc_identificacao):
-                flash('O CPF informado é inválido. Por favor, revise os dígitos.', 'danger')
-                return render_template('cadastro.html', cliente=None)
-
-        cliente = Cliente(
+        tipo_pessoa = request.form.get('tipo_pessoa', 'PJ')
+        nome = request.form.get('nome')
+        nome_fantasia = request.form.get('nome_fantasia')
+        cnpj_cpf = request.form.get('cnpj') if tipo_pessoa == 'PJ' else request.form.get('cpf')
+        telefone = request.form.get('telefone')
+        email = request.form.get('email')
+        
+        # Criação e persistência do novo cliente
+        novo_cli = Cliente(
             empresa_id=current_user.empresa_id,
-            nome=request.form.get('nome'),
-            nome_fantasia=request.form.get('nome_fantasia') if tipo_pessoa == 'PJ' else None,
-            cnpj_cpf=doc_identificacao,
-            inscricao_estadual=request.form.get('inscricao_estadual') if tipo_pessoa == 'PJ' else None,
+            nome=nome,
+            nome_fantasia=nome_fantasia,
+            cnpj_cpf=cnpj_cpf,
+            inscricao_estadual=request.form.get('inscricao_estadual'),
             responsavel=request.form.get('responsavel'),
-            telefone=request.form.get('telefone'),
+            telefone=telefone,
             telefone_secundario=request.form.get('telefone_secundario'),
-            email=request.form.get('email'),
+            email=email,
             email_financeiro=request.form.get('email_financeiro'),
             cep=request.form.get('cep'),
             logradouro=request.form.get('logradouro'),
@@ -217,10 +337,18 @@ def novo_cliente():
             estado=request.form.get('estado'),
             observacoes=request.form.get('observacoes')
         )
-        db.session.add(cliente)
+        db.session.add(novo_cli)
         db.session.commit()
-        flash(f'Cliente "{cliente.nome}" cadastrado com sucesso!', 'success')
-        return redirect(url_for('detalhe_cliente', id=cliente.id))
+
+        flash(f'Cliente "{novo_cli.nome}" cadastrado com sucesso!', 'success')
+
+        # Se o usuário clicou em "Salvar e Gerar Proposta"
+        acao = request.form.get('acao')
+        if acao == 'salvar_e_proposta':
+            # Redireciona para a lista de propostas abrindo automaticamente o modal com o cliente pré-selecionado
+            return redirect(url_for('listar_propostas', cliente_id=novo_cli.id, abrir_modal='true'))
+
+        return redirect(url_for('listar_clientes'))
 
     return render_template('cadastro.html', cliente=None)
 
@@ -583,6 +711,21 @@ def editar_proposta(id):
     flash(f'Proposta {proposta.numero_proposta} atualizada com sucesso!', 'success')
     return redirect(url_for('listar_propostas'))
 
+@app.route('/proposta/excluir/<int:id>', methods=['POST'])
+@login_required
+def excluir_proposta(id):
+    prop = Proposta.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    
+    # Trava de segurança: impede exclusão se já houver fatura ou contrato vinculado
+    if prop.faturas or ContratoRecorrente.query.filter_by(proposta_origem_id=prop.id).first():
+        flash('Não é possível excluir esta proposta pois ela já gerou faturas ou contratos ativos.', 'danger')
+    else:
+        numero = prop.numero_proposta
+        db.session.delete(prop)
+        db.session.commit()
+        flash(f'Proposta "{numero}" excluída com sucesso!', 'info')
+        
+    return redirect(url_for('listar_propostas'))
 
 @app.route('/propostas/<int:id>/pdf')
 @login_required
@@ -900,55 +1043,46 @@ def consultar_servicos():
     )
 
 
-@app.route('/servicos/catalogo/novo', methods=['POST'])
+@app.route('/catalogo', methods=['GET'])
+@login_required
+def listar_catalogo():
+    catalogo = TipoServico.query.filter_by(empresa_id=current_user.empresa_id).all()
+    return render_template('catalogo.html', catalogo=catalogo)
+
+@app.route('/catalogo/novo', methods=['POST'])
 @login_required
 def novo_tipo_servico():
     nome = request.form.get('nome')
-    descricao = request.form.get('descricao')
+    modelo_cobranca = request.form.get('modelo_cobranca', 'pontual')
     valor_sugerido = float(request.form.get('valor_sugerido') or 0.0)
-    modelo = request.form.get('modelo_cobranca', 'pontual')
+    descricao = request.form.get('descricao')
 
-    if nome:
-        novo_tipo = TipoServico(
-            empresa_id=current_user.empresa_id,
-            nome=nome,
-            descricao_padrao=descricao,
-            valor_sugerido=valor_sugerido,
-            modelo_cobranca=modelo
-        )
-        db.session.add(novo_tipo)
-        db.session.commit()
-        flash(f'Serviço "{nome}" adicionado ao catálogo!', 'success')
-        
-    return redirect(url_for('consultar_servicos'))
-
-
-@app.route('/servicos/vincular', methods=['POST'])
-@login_required
-def vincular_servico_cliente():
-    cliente_id = int(request.form.get('cliente_id'))
-    tipo_servico_id = int(request.form.get('tipo_servico_id'))
-    valor_cobrado = float(request.form.get('valor_cobrado') or 0.0)
-    data_previsao_str = request.form.get('data_previsao')
-    observacoes = request.form.get('observacoes')
-
-    data_previsao = datetime.strptime(data_previsao_str, '%Y-%m-%d').date() if data_previsao_str else None
-
-    novo_vinculo = ServicoCliente(
+    novo_item = TipoServico(
         empresa_id=current_user.empresa_id,
-        cliente_id=cliente_id,
-        tipo_servico_id=tipo_servico_id,
-        valor_cobrado=valor_cobrado,
-        data_previsao=data_previsao,
-        observacoes=observacoes,
-        status='Em Andamento',
-        status_pagamento='A Faturar'
+        nome=nome,
+        modelo_cobranca=modelo_cobranca,
+        valor_sugerido=valor_sugerido,
+        descricao_padrao=descricao
     )
-    db.session.add(novo_vinculo)
+    db.session.add(novo_item)
     db.session.commit()
-    flash('Atividade criada e em execução!', 'success')
-    return redirect(url_for('consultar_servicos'))
+    flash(f'Serviço "{nome}" cadastrado no catálogo com sucesso!', 'success')
+    return redirect(url_for('listar_catalogo'))
 
+@app.route('/catalogo/excluir/<int:id>', methods=['POST'])
+@login_required
+def excluir_tipo_servico(id):
+    item = TipoServico.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    
+    # Valida se o serviço já possui propostas ou execuções vinculadas
+    if item.execucoes or ItemProposta.query.filter_by(tipo_servico_id=item.id).first():
+        flash('Não é possível excluir este item pois ele já está vinculado a propostas ou serviços emitidos.', 'danger')
+    else:
+        db.session.delete(item)
+        db.session.commit()
+        flash('Item removido do catálogo.', 'info')
+        
+    return redirect(url_for('listar_catalogo'))
 
 @app.route('/servicos/atualizar-operacao/<int:id>', methods=['POST'])
 @login_required
@@ -1286,6 +1420,230 @@ def perfil_empresa():
         return redirect(url_for('perfil_empresa'))
 
     return render_template('perfil_empresa.html', perfil=empresa)
+
+@app.route('/faq')
+@login_required
+def faq():
+    return render_template('faq.html')
+
+
+@app.route('/suporte')
+@login_required
+def suporte():
+    chamados = ChamadoSuporte.query.filter_by(
+        empresa_id=current_user.empresa_id
+    ).order_by(ChamadoSuporte.data_abertura.desc()).all()
+    
+    return render_template('suporte.html', chamados=chamados)
+
+
+@app.route('/suporte/novo', methods=['POST'])
+@login_required
+def novo_chamado():
+    assunto = request.form.get('assunto')
+    categoria = request.form.get('categoria', 'Dúvida')
+    prioridade = request.form.get('prioridade', 'Média')
+    mensagem_texto = request.form.get('mensagem')
+    arquivo = request.files.get('anexo')
+
+    # Gera protocolo único (ex: TIK-2026-178814)
+    protocolo = f"TIK-{int(time.time())}"
+
+    novo_ticket = ChamadoSuporte(
+        empresa_id=current_user.empresa_id,
+        usuario_id=current_user.id,
+        numero_protocolo=protocolo,
+        assunto=assunto,
+        categoria=categoria,
+        prioridade=prioridade,
+        status='Aberto'
+    )
+    db.session.add(novo_ticket)
+    db.session.flush()
+
+    # Salva anexo se houver
+    filename = None
+    if arquivo and arquivo.filename:
+        filename = f"chamado_{novo_ticket.id}_{int(time.time())}_{secure_filename(arquivo.filename)}"
+        upload_folder = app.config.get('UPLOAD_FOLDER', 'static/uploads')
+        os.makedirs(upload_folder, exist_ok=True)
+        arquivo.save(os.path.join(upload_folder, filename))
+
+    primeira_msg = MensagemChamado(
+        chamado_id=novo_ticket.id,
+        usuario_id=current_user.id,
+        conteudo=mensagem_texto,
+        is_suporte=False,
+        anexo_filename=filename
+    )
+    db.session.add(primeira_msg)
+    db.session.commit()
+
+    flash(f'Chamado {protocolo} aberto com sucesso! Nossa equipe analisará sua solicitação.', 'success')
+    return redirect(url_for('suporte'))
+
+
+@app.route('/suporte/<int:id>', methods=['GET', 'POST'])
+@login_required
+def detalhe_chamado(id):
+    chamado = ChamadoSuporte.query.filter_by(
+        id=id, 
+        empresa_id=current_user.empresa_id
+    ).first_or_404()
+
+    if request.method == 'POST':
+        conteudo = request.form.get('mensagem')
+        arquivo = request.files.get('anexo')
+
+        filename = None
+        if arquivo and arquivo.filename:
+            filename = f"chamado_{chamado.id}_{int(time.time())}_{secure_filename(arquivo.filename)}"
+            upload_folder = app.config.get('UPLOAD_FOLDER', 'static/uploads')
+            os.makedirs(upload_folder, exist_ok=True)
+            arquivo.save(os.path.join(upload_folder, filename))
+
+        nova_msg = MensagemChamado(
+            chamado_id=chamado.id,
+            usuario_id=current_user.id,
+            conteudo=conteudo,
+            is_suporte=False,
+            anexo_filename=filename
+        )
+        chamado.status = 'Em Atendimento'
+        db.session.add(nova_msg)
+        db.session.commit()
+        flash('Mensagem enviada com sucesso!', 'success')
+        return redirect(url_for('detalhe_chamado', id=chamado.id))
+
+    return render_template('detalhe_chamado.html', chamado=chamado)
+
+@app.route('/admin/master/usuarios')
+@login_required
+@master_required
+def admin_master_usuarios():
+  usuarios = (
+      Usuario.query.join(Empresa)
+      .order_by(Usuario.nivel_acesso.desc(), Usuario.nome.asc())
+      .all()
+  )
+  return render_template('admin/master_usuarios.html', usuarios=usuarios)
+
+
+@app.route(
+    '/admin/master/usuarios/<int:id>/alterar-nivel', methods=['POST']
+)
+@login_required
+@master_required
+def admin_alterar_nivel_usuario(id):
+  usuario = Usuario.query.get_or_404(id)
+  novo_nivel = request.form.get('nivel_acesso')
+
+  # Trava de segurança: impede que você remova seu próprio acesso master
+  if usuario.id == current_user.id and novo_nivel != 'master':
+    flash('Você não pode remover seu próprio privilégio de Master.', 'danger')
+    return redirect(url_for('admin_master_usuarios'))
+
+  if novo_nivel in ['operador', 'admin', 'master']:
+    usuario.nivel_acesso = novo_nivel
+    db.session.commit()
+    flash(
+        f'Nível de acesso de "{usuario.nome}" atualizado para "{novo_nivel.upper()}".',
+        'success',
+    )
+  else:
+    flash('Nível de acesso inválido informado.', 'danger')
+
+  return redirect(url_for('admin_master_usuarios'))
+
+from flask import session
+from werkzeug.security import generate_password_hash
+
+
+# 1. Impersonação de Conta (Logar como o Inquilino)
+@app.route('/admin/master/impersonar/<int:empresa_id>')
+@login_required
+@master_required
+def admin_impersonar_empresa(empresa_id):
+  alvo_empresa = Empresa.query.get_or_404(empresa_id)
+  usuario_alvo = Usuario.query.filter_by(empresa_id=alvo_empresa.id).first()
+
+  if not usuario_alvo:
+    flash(
+        'Esta empresa não possui nenhum usuário cadastrado para acesso.',
+        'danger',
+    )
+    return redirect(url_for('admin_master_dashboard'))
+
+  # Armazena o ID original do Master na sessão
+  session['original_master_id'] = current_user.id
+  login_user(usuario_alvo)
+
+  flash(
+      f'Modo Suporte Ativado: Você está navegando como "{usuario_alvo.nome}" ({alvo_empresa.razao_social}).',
+      'warning',
+  )
+  return redirect(url_for('index'))
+
+
+# 2. Sair da Impersonação e Voltar para a Conta Master
+@app.route('/admin/master/sair-impersonacao')
+@login_required
+def admin_sair_impersonacao():
+  master_id = session.pop('original_master_id', None)
+  if master_id:
+    usuario_master = Usuario.query.get(master_id)
+    if usuario_master and usuario_master.nivel_acesso == 'master':
+      login_user(usuario_master)
+      flash('Você retornou ao seu painel Master.', 'info')
+      return redirect(url_for('admin_master_dashboard'))
+
+  return redirect(url_for('auth.logout'))
+
+
+# 3. Alterar Status Manualmente (Ativar / Suspender / Trial)
+@app.route(
+    '/admin/master/empresa/<int:id>/alterar-status', methods=['POST']
+)
+@login_required
+@master_required
+def admin_alterar_status_empresa(id):
+  empresa = Empresa.query.get_or_404(id)
+  novo_status = request.form.get('status_assinatura')
+
+  if novo_status in ['ativo', 'trial', 'bloqueado', 'cancelado']:
+    empresa.status_assinatura = novo_status
+    db.session.commit()
+    flash(
+        f'Status da empresa "{empresa.razao_social}" atualizado para "{novo_status.upper()}".',
+        'success',
+    )
+  else:
+    flash('Status inválido.', 'danger')
+
+  return redirect(url_for('admin_master_dashboard'))
+
+
+# 4. Redefinir Senha Forçada de um Usuário
+@app.route(
+    '/admin/master/usuario/<int:id>/redefinir-senha', methods=['POST']
+)
+@login_required
+@master_required
+def admin_redefinir_senha_usuario(id):
+  usuario = Usuario.query.get_or_404(id)
+  nova_senha = request.form.get('nova_senha')
+
+  if not nova_senha or len(nova_senha) < 6:
+    flash('A nova senha deve ter pelo menos 6 caracteres.', 'danger')
+  else:
+    usuario.senha_hash = generate_password_hash(nova_senha)
+    db.session.commit()
+    flash(
+        f'Senha de "{usuario.nome}" redefinida com sucesso para: {nova_senha}',
+        'success',
+    )
+
+  return redirect(url_for('admin_master_usuarios'))
 
 # -----------------------------------------------------------------------------
 # 9. INICIALIZAÇÃO DO SERVIDOR
