@@ -20,10 +20,16 @@ class Empresa(db.Model):
     cor_secundaria = db.Column(db.String(7), default="#059669")
     cor_sidebar = db.Column(db.String(7), default="#ffffff")
 
-    # Assinatura
+    # Assinatura & Controle Master
     plano = db.Column(db.String(30), default="Founder")
-    status_assinatura = db.Column(db.String(20), default="ativo")
+    status_assinatura = db.Column(db.String(20), default="trial")
+    valor_mensalidade = db.Column(db.Float, default=0.0)
+    forma_pagamento_asaas = db.Column(db.String(30), nullable=True)
+    asaas_customer_id = db.Column(db.String(50), nullable=True)
+    asaas_subscription_id = db.Column(db.String(50), nullable=True)
     data_vencimento = db.Column(db.Date, nullable=True)
+    data_ultimo_pagamento = db.Column(db.Date, nullable=True)
+    observacoes_master = db.Column(db.Text, nullable=True)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relacionamentos
@@ -36,6 +42,19 @@ class Empresa(db.Model):
     faturas = db.relationship('Fatura', backref='empresa', lazy=True, cascade="all, delete-orphan")
     parcelas = db.relationship('ParcelaFatura', backref='empresa', lazy=True, cascade="all, delete-orphan")
 
+    # PROPRIEDADES DINÂMICAS DE CÁLCULO DE DIAS (OBRIGATÓRIAS):
+    @property
+    def dias_cadastrado(self):
+        if not self.data_criacao:
+            return 0
+        return (date.today() - self.data_criacao.date()).days
+
+    @property
+    def dias_restantes_trial(self):
+        if not self.data_vencimento:
+            return 0
+        return (self.data_vencimento - date.today()).days
+
 
 class Usuario(UserMixin, db.Model):
     __tablename__ = 'usuarios'
@@ -47,6 +66,11 @@ class Usuario(UserMixin, db.Model):
     cargo = db.Column(db.String(50), default="Administrador")
     nivel_acesso = db.Column(db.String(20), default="admin")
     ativo = db.Column(db.Boolean, default=True)
+    
+    # NOVOS CAMPOS DE AUDITORIA LEGAL:
+    aceitou_termos_beta = db.Column(db.Boolean, default=False)
+    data_aceite_termos = db.Column(db.DateTime, nullable=True)
+    
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
 
     def set_senha(self, senha):
@@ -290,3 +314,4 @@ class MensagemChamado(db.Model):
     data_envio = db.Column(db.DateTime, default=datetime.utcnow)
 
     usuario = db.relationship('Usuario')
+

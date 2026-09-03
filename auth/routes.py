@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
 from datetime import date
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import re
 
@@ -103,7 +104,9 @@ def registro():
             email=email,
             cargo="Administrador",
             nivel_acesso="admin",
-            ativo=True
+            ativo=True,
+            aceitou_termos_beta=True,
+            data_aceite_termos=datetime.utcnow()
         )
         novo_usuario.set_senha(senha)
         db.session.add(novo_usuario)

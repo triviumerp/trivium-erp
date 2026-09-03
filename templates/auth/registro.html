@@ -65,7 +65,7 @@
 
                 <div class="col-12">
                     <label class="form-label small fw-bold">Telefone / WhatsApp Comercial *</label>
-                    <input type="text" name="telefone" class="form-control" placeholder="(00) 00000-0000" required>
+                    <input type="text" name="telefone" id="campo_telefone" class="form-control" placeholder="(00) 00000-0000" required>
                 </div>
             </div>
 
@@ -77,15 +77,18 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label small fw-bold">E-mail de Acesso *</label>
-                    <input type="email" name="email" class="form-control" placeholder="seu@email.com" required>
+                    <input type="email" name="email" id="campo_email" class="form-control" placeholder="seu@email.com" required>
                 </div>
                 <div class="col-12">
                     <label class="form-label small fw-bold">Senha de Acesso *</label>
-                    <input type="password" name="senha" class="form-control" minlength="4" placeholder="••••••••" required>
+                    <input type="password" name="senha" id="campo_senha" class="form-control" minlength="4" placeholder="••••••••" required>
                 </div>
             </div>
 
-            <button type="submit" class="btn btn-brand w-100 mb-3">Concluir Cadastro e Ativar</button>
+            <!-- Botão que valida o formulário e abre o modal -->
+            <button type="button" class="btn btn-brand w-100 mb-3" onclick="verificarFormularioEAbrirModal()">
+                Concluir Cadastro e Ativar
+            </button>
         </form>
 
         <div class="text-center">
@@ -93,13 +96,60 @@
         </div>
     </div>
 
+    <!-- MODAL DE TERMOS E ISENÇÃO DE RESPONSABILIDADE BETA -->
+    <div class="modal fade" id="modalTermosBeta" tabindex="-1" aria-labelledby="modalTermosBetaLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header bg-warning bg-opacity-25 border-bottom border-warning">
+            <h5 class="modal-title fw-bold text-dark" id="modalTermosBetaLabel">
+              <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Aviso: Ambiente de Teste Beta
+            </h5>
+          </div>
+          <div class="modal-body p-4 text-start" style="font-size: 0.92rem; line-height: 1.5;">
+            <p class="mb-3">Seja bem-vindo(a) à versão experimental do <strong>Trivium ERP</strong>.</p>
+            <p class="mb-3">Antes de finalizar sua adesão, leia atentamente as condições deste ambiente de testes:</p>
+            
+            <ul class="list-unstyled mb-3">
+              <li class="mb-2 d-flex align-items-start gap-2">
+                <i class="bi bi-arrow-right-circle-fill text-primary mt-1"></i>
+                <span><strong>Ambiente Temporário:</strong> O sistema está em fase contínua de melhorias e validações. Recursos e cadastros podem sofrer instabilidades, manutenções ou exclusões sem aviso prévio.</span>
+              </li>
+              <li class="mb-2 d-flex align-items-start gap-2">
+                <i class="bi bi-arrow-right-circle-fill text-primary mt-1"></i>
+                <span><strong>Responsabilidade sobre Dados de Clientes:</strong> Você é o único e exclusivo responsável pelos dados cadastrais, comerciais e de clientes que inserir no sistema. O Trivium ERP não realiza validação, auditoria nem responde pela integridade ou origem desses dados.</span>
+              </li>
+              <li class="mb-2 d-flex align-items-start gap-2">
+                <i class="bi bi-arrow-right-circle-fill text-primary mt-1"></i>
+                <span><strong>Isenção de Responsabilidade:</strong> Não nos responsabilizamos por eventuais perdas de registros, indisponibilidade temporária ou falhas operacionais decorrentes desta fase experimental.</span>
+              </li>
+            </ul>
+
+            <div class="form-check p-3 bg-light rounded border">
+              <input class="form-check-input" type="checkbox" id="checkConcordoTermos" style="cursor: pointer;">
+              <label class="form-check-label fw-bold text-dark" for="checkConcordoTermos" style="cursor: pointer;">
+                Li, estou ciente e concordo com os termos do período Beta.
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer bg-light border-top">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Revisar Cadastro</button>
+            <button type="button" class="btn btn-success fw-bold px-4" id="btnConfirmarCadastroBeta" disabled onclick="submeterFormulario()">
+              Concordar e Finalizar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
     <script>
     function alternarTipoCadastro() {
         const isPj = document.getElementById('tipo_pj').checked;
         const camposPJ = document.querySelectorAll('.campo-pj');
         const camposPF = document.querySelectorAll('.campo-pf');
         const labelRazao = document.getElementById('label-razao');
-        const inputRazao = document.getElementById('campo_razao');
 
         if (isPj) {
             camposPJ.forEach(el => el.classList.remove('d-none'));
@@ -164,16 +214,38 @@
         }
     }
 
-    document.getElementById('formRegistro').addEventListener('submit', function(e) {
+    // Verifica campos obrigatórios antes de abrir o modal
+    function verificarFormularioEAbrirModal() {
+        const form = document.getElementById('formRegistro');
         const isPf = document.getElementById('tipo_pf').checked;
+
         if (isPf) {
             const cpfInput = document.getElementById('campo_cpf');
             if (!validarCampoCPF(cpfInput)) {
-                e.preventDefault();
                 cpfInput.focus();
+                return;
             }
         }
+
+        // Validação HTML5 nativa dos campos obrigatórios
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
+        // Se tudo estiver preenchido corretamente, abre o Modal de Termos
+        const modal = new bootstrap.Modal(document.getElementById('modalTermosBeta'));
+        modal.show();
+    }
+
+    // Controle do botão de aceite dentro do modal
+    document.getElementById('checkConcordoTermos').addEventListener('change', function() {
+        document.getElementById('btnConfirmarCadastroBeta').disabled = !this.checked;
     });
+
+    function submeterFormulario() {
+        document.getElementById('formRegistro').submit();
+    }
     </script>
 </body>
 </html>

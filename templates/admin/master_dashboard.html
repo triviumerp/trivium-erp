@@ -61,80 +61,141 @@
                 <thead class="table-light small text-muted">
                     <tr>
                         <th>EMPRESA / RAZÃO SOCIAL</th>
-                        <th>CNPJ / CPF</th>
-                        <th>CONTATO / RESPONSÁVEL</th>
-                        <th>PLANO</th>
-                        <th>STATUS ASSINATURA</th>
-                        <th>CADASTRADA EM</th>
+                        <th>DIAS DE CADASTRO / TRIAL</th>
+                        <th>STATUS</th>
+                        <th>PAGAMENTO / ASAAS</th>
+                        <th>VENCIMENTO</th>
+                        <th class="text-end pe-3">AÇÕES MASTER</th>
                     </tr>
                 </thead>
                 <tbody class="small">
                     {% for emp in empresas %}
-                    <tr>
+                    <tr class="{% if emp.status_assinatura == 'bloqueado' %}table-danger bg-opacity-25{% endif %}">
                         <td>
                             <span class="fw-bold text-dark d-block">{{ emp.razao_social or emp.nome_fantasia }}</span>
-                            <small class="text-muted">{{ emp.nome_fantasia or '--' }}</small>
+                            <small class="text-muted">{{ emp.cnpj or emp.telefone or '--' }}</small>
                         </td>
-                        <td>{{ emp.cnpj or '--' }}</td>
                         <td>
-                            <span class="d-block">{{ emp.email or '--' }}</span>
-                            <small class="text-muted">{{ emp.telefone or '--' }}</small>
-                        </td>
-                        <td><span class="badge bg-primary">{{ emp.plano or 'Founder' }}</span></td>
-                        <td>
-                            {% if emp.status_assinatura == 'ativo' %}
-                                <span class="badge bg-success">Ativa</span>
-                            {% elif emp.status_assinatura == 'trial' %}
-                                <span class="badge bg-warning text-dark">Trial</span>
+                            <span class="fw-semibold text-dark d-block">{{ emp.dias_cadastrado }} dia(s) atrás</span>
+                            {% if emp.status_assinatura == 'trial' %}
+                                {% if emp.dias_restantes_trial >= 0 %}
+                                    <span class="badge bg-warning text-dark">{{ emp.dias_restantes_trial }} dias restantes</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Expirado há {{ emp.dias_restantes_trial * -1 }} dias</span>
+                                {% endif %}
                             {% else %}
-                                <span class="badge bg-danger">{{ emp.status_assinatura|capitalize }}</span>
+                                <span class="badge bg-light text-dark border">Assinante</span>
                             {% endif %}
                         </td>
-                        <td>{{ emp.data_criacao.strftime('%d/%m/%Y') if emp.data_criacao else '--' }}</td>
+                        <td>
+                            {% if emp.status_assinatura == 'ativo' %}
+                                <span class="badge bg-success p-2">Ativo</span>
+                            {% elif emp.status_assinatura == 'trial' %}
+                                <span class="badge bg-warning text-dark p-2">Trial</span>
+                            {% elif emp.status_assinatura == 'bloqueado' %}
+                                <span class="badge bg-danger p-2"><i class="bi bi-lock-fill me-1"></i>Bloqueado</span>
+                            {% else %}
+                                <span class="badge bg-secondary p-2">{{ emp.status_assinatura|capitalize }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-info text-dark">{{ emp.forma_pagamento_asaas or 'Não informado' }}</span>
+                            {% if emp.valor_mensalidade > 0 %}
+                                <small class="d-block text-success fw-bold">R$ {{ "%.2f"|format(emp.valor_mensalidade) }}/mês</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ emp.data_vencimento.strftime('%d/%m/%Y') if emp.data_vencimento else '--' }}
+                        </td>
                         <td class="text-end pe-3">
                             <div class="d-flex gap-1 justify-content-end align-items-center">
-                                <!-- Botão Entrar como Inquilino -->
-                                <a href="{{ url_for('admin_impersonar_empresa', empresa_id=emp.id) }}" class="btn btn-sm btn-outline-warning text-dark fw-bold" title="Acessar o ERP como esta empresa para investigar problemas">
-                                    <i class="bi bi-box-arrow-in-right me-1"></i> Acessar
+                                <a href="{{ url_for('admin_impersonar_empresa', empresa_id=emp.id) }}" class="btn btn-sm btn-outline-warning text-dark fw-bold" title="Acessar conta">
+                                    <i class="bi bi-box-arrow-in-right"></i>
                                 </a>
-
-                                <!-- Botão Alterar Status -->
-                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalStatusEmpresa{{ emp.id }}" title="Alterar Status">
-                                    <i class="bi bi-sliders"></i>
+                                <button type="button" class="btn btn-sm btn-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalGestaoEmpresa{{ emp.id }}" title="Gerenciar Status e Pagamento">
+                                    <i class="bi bi-sliders me-1"></i>Gerenciar
                                 </button>
                             </div>
 
-                            <!-- MODAL ALTERAÇÃO DE STATUS -->
-                            <div class="modal fade text-start" id="modalStatusEmpresa{{ emp.id }}" tabindex="-1">
-                                <div class="modal-dialog">
+                            <!-- MODAL DE GESTÃO COMPLETA MASTER -->
+                            <div class="modal fade text-start" id="modalGestaoEmpresa{{ emp.id }}" tabindex="-1">
+                                <div class="modal-dialog modal-lg">
                                     <div class="modal-content border-0 shadow">
-                                        <form action="{{ url_for('admin_alterar_status_empresa', id=emp.id) }}" method="POST">
+                                        <form action="{{ url_for('admin_atualizar_gestao_empresa', id=emp.id) }}" method="POST">
                                             <div class="modal-header bg-light">
-                                                <h6 class="modal-title fw-bold">Gerenciar Acesso: {{ emp.razao_social }}</h6>
+                                                <div>
+                                                    <h6 class="modal-title fw-bold text-dark mb-0">Gestão de Acesso: {{ emp.razao_social }}</h6>
+                                                    <small class="text-muted">Cadastrado em {{ emp.data_criacao.strftime('%d/%m/%Y') if emp.data_criacao else '--' }} ({{ emp.dias_cadastrado }} dias ativo)</small>
+                                                </div>
                                                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                             </div>
-                                            <div class="modal-body p-3">
-                                                <label class="form-label small fw-bold">Status da Assinatura</label>
-                                                <select name="status_assinatura" class="form-select form-select-sm">
-                                                    <option value="ativo" {% if emp.status_assinatura == 'ativo' %}selected{% endif %}>Ativo (Liberado)</option>
-                                                    <option value="trial" {% if emp.status_assinatura == 'trial' %}selected{% endif %}>Trial (Período de Testes)</option>
-                                                    <option value="bloqueado" {% if emp.status_assinatura == 'bloqueado' %}selected{% endif %}>Bloqueado (Inadimplente / Suspenso)</option>
-                                                    <option value="cancelado" {% if emp.status_assinatura == 'cancelado' %}selected{% endif %}>Cancelado</option>
-                                                </select>
+                                            <div class="modal-body p-4">
+                                                <div class="row g-3 mb-3">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label small fw-bold">Status do Acesso *</label>
+                                                        <select name="status_assinatura" class="form-select form-select-sm fw-bold border-primary">
+                                                            <option value="trial" {% if emp.status_assinatura == 'trial' %}selected{% endif %}>Trial (Período Gratuito)</option>
+                                                            <option value="ativo" {% if emp.status_assinatura == 'ativo' %}selected{% endif %}>Ativo (Liberado)</option>
+                                                            <option value="bloqueado" {% if emp.status_assinatura == 'bloqueado' %}selected{% endif %} class="text-danger">Bloqueado (Suspender Acesso)</option>
+                                                            <option value="cancelado" {% if emp.status_assinatura == 'cancelado' %}selected{% endif %}>Cancelado</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label small fw-bold">Plano Contratado</label>
+                                                        <select name="plano" class="form-select form-select-sm">
+                                                            <option value="Founder" {% if emp.plano == 'Founder' %}selected{% endif %}>Founder (Beta)</option>
+                                                            <option value="Profissional" {% if emp.plano == 'Profissional' %}selected{% endif %}>Profissional</option>
+                                                            <option value="Empresarial" {% if emp.plano == 'Empresarial' %}selected{% endif %}>Empresarial</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <div class="row g-3 mb-3">
+                                                    <div class="col-md-4">
+                                                        <label class="form-label small fw-bold">Forma de Pagamento Asaas</label>
+                                                        <select name="forma_pagamento_asaas" class="form-select form-select-sm">
+                                                            <option value="">Não informado</option>
+                                                            <option value="PIX" {% if emp.forma_pagamento_asaas == 'PIX' %}selected{% endif %}>PIX</option>
+                                                            <option value="Boleto Bancário" {% if emp.forma_pagamento_asaas == 'Boleto Bancário' %}selected{% endif %}>Boleto Bancário</option>
+                                                            <option value="Cartão de Crédito" {% if emp.forma_pagamento_asaas == 'Cartão de Crédito' %}selected{% endif %}>Cartão de Crédito</option>
+                                                            <option value="Manual / Permuta" {% if emp.forma_pagamento_asaas == 'Manual / Permuta' %}selected{% endif %}>Manual / Acordo</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label small fw-bold">Valor da Mensalidade (R$)</label>
+                                                        <input type="number" step="0.01" name="valor_mensalidade" class="form-control form-control-sm" value="{{ emp.valor_mensalidade or 0.0 }}">
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label small fw-bold">ID Cliente Asaas</label>
+                                                        <input type="text" name="asaas_customer_id" class="form-control form-control-sm" placeholder="cus_00000123" value="{{ emp.asaas_customer_id or '' }}">
+                                                    </div>
+                                                </div>
+
+                                                <div class="row g-3 mb-3">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label small fw-bold">Data de Vencimento / Próxima Fatura</label>
+                                                        <input type="date" name="data_vencimento" class="form-control form-control-sm" value="{{ emp.data_vencimento.strftime('%Y-%m-%d') if emp.data_vencimento else '' }}">
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label small fw-bold">Data do Último Pagamento</label>
+                                                        <input type="date" name="data_ultimo_pagamento" class="form-control form-control-sm" value="{{ emp.data_ultimo_pagamento.strftime('%Y-%m-%d') if emp.data_ultimo_pagamento else '' }}">
+                                                    </div>
+                                                </div>
+
+                                                <div class="mb-2">
+                                                    <label class="form-label small fw-bold">Observações Internas Master</label>
+                                                    <textarea name="observacoes_master" class="form-control form-control-sm" rows="2" placeholder="Ex: Entrou em contato no WhatsApp pedindo prorrogação...">{{ emp.observacoes_master or '' }}</textarea>
+                                                </div>
                                             </div>
                                             <div class="modal-footer bg-light">
-                                                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                                                <button type="submit" class="btn btn-sm btn-primary fw-bold">Salvar Alterações</button>
+                                                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                <button type="submit" class="btn btn-sm btn-primary fw-bold px-4">Salvar Alterações</button>
                                             </div>
                                         </form>
                                     </div>
                                 </div>
                             </div>
                         </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="7" class="text-center py-5 text-muted">Nenhuma empresa registrada no banco.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
