@@ -22,7 +22,7 @@
                     <i class="bi bi-person-badge me-2"></i> Minha Conta & Senha
                 </button>
                 <button class="nav-link text-start fw-semibold py-2 px-3 rounded-3" id="tab-pagamento-btn" data-bs-toggle="pill" data-bs-target="#tab-pagamento" type="button" role="tab">
-                    <i class="bi bi-credit-card-2-front me-2"></i> Assinatura & Cartão
+                    <i class="bi bi-credit-card-2-front me-2"></i> Assinatura & Planos
                 </button>
             </div>
         </div>
@@ -53,7 +53,6 @@
                         </div>
 
                         <div class="row g-3">
-                            <!-- Campos PJ -->
                             <div class="col-md-6 campo-pj">
                                 <label class="form-label small fw-bold">Razão Social *</label>
                                 <input type="text" name="razao_social" class="form-control" value="{{ perfil.razao_social or '' }}" required>
@@ -67,7 +66,6 @@
                                 <input type="text" name="cnpj" class="form-control" placeholder="00.000.000/0000-00" value="{{ perfil.cnpj or '' }}">
                             </div>
 
-                            <!-- Campos PF -->
                             <div class="col-md-6 campo-pf d-none">
                                 <label class="form-label small fw-bold">Nome Completo do Profissional *</label>
                                 <input type="text" name="nome_profissional" id="nome_profissional" class="form-control" value="{{ perfil.razao_social or '' }}">
@@ -77,7 +75,6 @@
                                 <input type="text" name="cpf" id="cpf" class="form-control" placeholder="000.000.000-00" value="{{ perfil.cnpj or '' }}">
                             </div>
 
-                            <!-- Contatos Comuns -->
                             <div class="col-md-6">
                                 <label class="form-label small fw-bold">Telefone / WhatsApp Comercial *</label>
                                 <input type="text" name="telefone" class="form-control" value="{{ perfil.telefone or '' }}" required>
@@ -91,14 +88,13 @@
                                 <input type="text" name="site" class="form-control" placeholder="https://seusite.com.br" value="{{ perfil.site or '' }}">
                             </div>
                             <div class="col-12">
-                                <label class="form-label small fw-bold">Endereço Comercial Completo (Exibido nas Propostas PDF)</label>
+                                <label class="form-label small fw-bold">Endereço Comercial Completo</label>
                                 <input type="text" name="endereco_completo" class="form-control" placeholder="Rua, Número, Bairro, Cidade - UF, CEP" value="{{ perfil.endereco_completo or '' }}">
                             </div>
                         </div>
 
                         <hr class="my-4 text-muted">
 
-                        <!-- Personalização Visual & White-Label -->
                         <h6 class="fw-bold text-dark mb-3"><i class="bi bi-palette text-primary me-2"></i>Personalização Visual & Logotipo</h6>
                         <div class="row g-3 align-items-center mb-4">
                             <div class="col-md-6">
@@ -175,54 +171,76 @@
                 </div>
             </div>
 
-            <!-- ABA 3: ASSINATURA & CARTÃO DE CRÉDITO (FUTURO GATEWAY) -->
+            <!-- ABA 3: ASSINATURA, STATUS & CHECKOUT NATIVO -->
             <div class="tab-pane fade" id="tab-pagamento" role="tabpanel">
                 <div class="card-custom p-4 mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-star-fill text-warning me-2"></i>Plano Atual</h5>
-                        <span class="badge bg-success px-3 py-2 fs-6">Plano {{ perfil.plano or 'Founder' }} (Ativo)</span>
+                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-credit-card-2-back text-primary me-2"></i>Status da Assinatura</h5>
+                        <div>
+                            {% if perfil.status_assinatura == 'ativo' %}
+                                <span class="badge bg-success px-3 py-2 fs-6"><i class="bi bi-check-circle me-1"></i>Assinatura Ativa</span>
+                            {% elif perfil.status_assinatura == 'trial' %}
+                                <span class="badge bg-warning text-dark px-3 py-2 fs-6"><i class="bi bi-clock-history me-1"></i>Período de Testes</span>
+                            {% else %}
+                                <span class="badge bg-danger px-3 py-2 fs-6"><i class="bi bi-exclamation-triangle me-1"></i>Acesso Pendente</span>
+                            {% endif %}
+                        </div>
                     </div>
-                    <p class="text-muted small mb-0">Sua assinatura inclui emissão ilimitada de propostas, gestão multi-tenant e controle financeiro completo.</p>
-                </div>
 
-                <div class="card-custom p-4">
-                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-credit-card text-primary me-2"></i>Cadastrar Cartão de Crédito</h5>
-                    <p class="text-muted small mb-4">Mantenha sua forma de pagamento cadastrada para renovações automáticas do plano.</p>
+                    <div class="row g-3 bg-light rounded-3 p-3 border mb-4">
+                        <div class="col-sm-6 col-md-3">
+                            <span class="text-muted small d-block">Plano Atual:</span>
+                            <strong class="text-dark">{{ perfil.plano or 'Founder' }}</strong>
+                        </div>
+                        <div class="col-sm-6 col-md-3">
+                            <span class="text-muted small d-block">Valor Mensal:</span>
+                            <strong class="text-success">R$ {{ "%.2f"|format(perfil.valor_mensalidade or 97.00) }}/mês</strong>
+                        </div>
+                        <div class="col-sm-6 col-md-3">
+                            <span class="text-muted small d-block">Próximo Vencimento:</span>
+                            <strong class="text-dark">
+                                {{ perfil.data_vencimento.strftime('%d/%m/%Y') if perfil.data_vencimento else 'Em aberto' }}
+                            </strong>
+                        </div>
+                        <div class="col-sm-6 col-md-3">
+                            <span class="text-muted small d-block">Forma de Pagamento:</span>
+                            <strong class="text-primary">{{ perfil.forma_pagamento_asaas or 'Pix / Cartão' }}</strong>
+                        </div>
+                    </div>
 
-                    <form method="POST" action="{{ url_for('perfil_empresa') }}">
-                        <input type="hidden" name="form_type" value="dados_cartao">
-
-                        <div class="row g-3 mb-4">
-                            <div class="col-12">
-                                <label class="form-label small fw-bold">Número do Cartão de Crédito</label>
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="bi bi-credit-card-2-back"></i></span>
-                                    <input type="text" name="numero_cartao" class="form-control" placeholder="0000 0000 0000 0000" maxlength="19">
+                    <!-- OPÇÕES DE RENOVAÇÃO / UPGRADE -->
+                    <h6 class="fw-bold text-dark mb-3">Renovação ou Mudança de Plano</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="border rounded-3 p-3 h-100 d-flex flex-column justify-content-between bg-white shadow-sm">
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <strong class="text-dark fs-5">Plano Founder</strong>
+                                        <span class="badge bg-secondary">R$ 97/mês</span>
+                                    </div>
+                                    <p class="text-muted small mt-2 mb-3">Ideal para consultores individuais e profissionais autônomos.</p>
                                 </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold">Nome Impresso no Cartão</label>
-                                <input type="text" name="nome_cartao" class="form-control" placeholder="Ex: CARLOS E SILVA">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold">Validade</label>
-                                <input type="text" name="validade_cartao" class="form-control" placeholder="MM/AA" maxlength="5">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold">CVV</label>
-                                <input type="password" name="cvv_cartao" class="form-control" placeholder="123" maxlength="4">
+                                <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2" onclick="abrirCheckoutModal('Founder', 97.00)">
+                                    <i class="bi bi-credit-card me-2"></i>Assinar / Renovar Founder
+                                </button>
                             </div>
                         </div>
 
-                        <div class="alert alert-info small d-flex align-items-center gap-2 mb-4" role="alert">
-                            <i class="bi bi-shield-lock-fill fs-5"></i>
-                            <div>Os dados de cartão são criptografados com certificado SSL de 256 bits conforme normas PCI-DSS.</div>
+                        <div class="col-md-6">
+                            <div class="border border-primary rounded-3 p-3 h-100 d-flex flex-column justify-content-between bg-white shadow-sm">
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <strong class="text-primary fs-5">Plano Pro Enterprise</strong>
+                                        <span class="badge bg-primary">R$ 197/mês</span>
+                                    </div>
+                                    <p class="text-muted small mt-2 mb-3">Para consultorias com equipe técnica e usuários ilimitados.</p>
+                                </div>
+                                <button type="button" class="btn btn-primary fw-bold w-100 py-2 shadow-sm" onclick="abrirCheckoutModal('Pro Enterprise', 197.00)">
+                                    <i class="bi bi-lightning-charge-fill me-2"></i>Assinar / Fazer Upgrade Pro
+                                </button>
+                            </div>
                         </div>
-
-                        <div class="text-end">
-                            <button type="submit" class="btn btn-outline-primary fw-bold px-4">Salvar Forma de Pagamento</button>
-                        </div>
-                    </form>
+                    </div>
                 </div>
             </div>
 
@@ -230,7 +248,79 @@
     </div>
 </div>
 
+<!-- MODAL DE CHECKOUT TRANSPARENTE -->
+<div class="modal fade" id="modalCheckoutTransparente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="tituloModalPlano">Finalizar Assinatura</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <ul class="nav nav-pills nav-fill mb-3" id="pills-tab" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active fw-bold" id="tab-pix" data-bs-toggle="pill" data-bs-target="#conteudo-pix" type="button" role="tab">
+                            <i class="bi bi-qr-code me-1"></i> PIX Instantâneo
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link fw-bold" id="tab-cartao" data-bs-toggle="pill" data-bs-target="#conteudo-cartao" type="button" role="tab">
+                            <i class="bi bi-credit-card me-1"></i> Cartão de Crédito
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content pt-2">
+                    <!-- ABA PIX -->
+                    <div class="tab-pane fade show active text-center" id="conteudo-pix" role="tabpanel">
+                        <p class="text-muted small mb-3">Liberação imediata assim que o Pix for pago.</p>
+                        <button type="button" class="btn btn-success fw-bold w-100 py-2" onclick="processarPagamento('PIX')">
+                            <i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX
+                        </button>
+                        <div id="resultadoPix" class="mt-3 d-none">
+                            <div class="alert alert-info small" id="msgPix">Carregando código...</div>
+                        </div>
+                    </div>
+
+                    <!-- ABA CARTÃO DE CRÉDITO -->
+                    <div class="tab-pane fade" id="conteudo-cartao" role="tabpanel">
+                        <form id="formCartaoCheckout">
+                            <div class="mb-2">
+                                <label class="small text-muted fw-bold">Número do Cartão</label>
+                                <input type="text" id="cc_numero" class="form-control" placeholder="0000 0000 0000 0000" maxlength="19" required>
+                            </div>
+                            <div class="mb-2">
+                                <label class="small text-muted fw-bold">Nome Impresso no Cartão</label>
+                                <input type="text" id="cc_nome" class="form-control" placeholder="Ex: CARLOS E SILVA" required>
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-4">
+                                    <label class="small text-muted fw-bold">Mês</label>
+                                    <input type="text" id="cc_mes" class="form-control" placeholder="MM" maxlength="2" required>
+                                </div>
+                                <div class="col-4">
+                                    <label class="small text-muted fw-bold">Ano</label>
+                                    <input type="text" id="cc_ano" class="form-control" placeholder="AAAA" maxlength="4" required>
+                                </div>
+                                <div class="col-4">
+                                    <label class="small text-muted fw-bold">CVV</label>
+                                    <input type="text" id="cc_cvv" class="form-control" placeholder="123" maxlength="4" required>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-primary fw-bold w-100 py-2" onclick="processarPagamento('CREDIT_CARD')">
+                                Confirmar e Assinar
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+let planoEscolhido = 'Founder';
+
 function alternarTipoPessoa() {
     const isPj = document.getElementById('tipo_pj').checked;
     const camposPJ = document.querySelectorAll('.campo-pj');
@@ -242,14 +332,144 @@ function alternarTipoPessoa() {
     } else {
         camposPJ.forEach(el => el.classList.add('d-none'));
         camposPF.forEach(el => el.classList.remove('d-none'));
-        
-        // Copia o valor do campo Razão Social para Nome Profissional se estiver preenchido
         const inputRazao = document.querySelector('input[name="razao_social"]');
         const inputProf = document.getElementById('nome_profissional');
         if (inputRazao && !inputProf.value) {
             inputProf.value = inputRazao.value;
         }
     }
+}
+
+// Abre o modal de assinatura com o plano e valor selecionados
+function abrirCheckoutModal(plano, valor) {
+    planoEscolhido = plano || 'Founder';
+    
+    const tituloEl = document.getElementById('tituloModalPlano');
+    if (tituloEl) {
+        tituloEl.innerText = `Assinar ${planoEscolhido} (R$ ${parseFloat(valor).toFixed(2)}/mês)`;
+    }
+    
+    // Limpa estado anterior do Pix
+    const areaPix = document.getElementById('resultadoPix');
+    if (areaPix) {
+        areaPix.classList.add('d-none');
+        areaPix.innerHTML = '<div class="alert alert-info small" id="msgPix">Carregando código...</div>';
+    }
+
+    // Instancia e abre o modal via Bootstrap
+    const modalEl = document.getElementById('modalCheckoutTransparente');
+    if (modalEl) {
+        const modalObj = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modalObj.show();
+    }
+}
+
+function processarPagamento(tipo) {
+    const payload = {
+        plano: planoEscolhido,
+        forma_pagamento: tipo
+    };
+
+    if (tipo === 'CREDIT_CARD') {
+        const num = document.getElementById('cc_numero') ? document.getElementById('cc_numero').value : '';
+        const nome = document.getElementById('cc_nome') ? document.getElementById('cc_nome').value : '';
+        const mes = document.getElementById('cc_mes') ? document.getElementById('cc_mes').value : '';
+        const ano = document.getElementById('cc_ano') ? document.getElementById('cc_ano').value : '';
+        const cvv = document.getElementById('cc_cvv') ? document.getElementById('cc_cvv').value : '';
+
+        if (!num || !nome || !mes || !ano || !cvv) {
+            alert('Por favor, preencha todos os campos do cartão.');
+            return;
+        }
+
+        payload.cartao = {
+            holder_name: nome,
+            number: num,
+            expiry_month: mes,
+            expiry_year: ano,
+            ccv: cvv
+        };
+    }
+
+    const btnPix = document.querySelector('#conteudo-pix button');
+    if (tipo === 'PIX' && btnPix) {
+        btnPix.disabled = true;
+        btnPix.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gerando Pix...';
+    }
+
+    fetch('/api/assinatura/checkout-transparente', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (tipo === 'PIX' && btnPix) {
+            btnPix.disabled = false;
+            btnPix.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX';
+        }
+
+        if (res.status === 'success') {
+            if (tipo === 'PIX') {
+                const areaPix = document.getElementById('resultadoPix');
+                areaPix.classList.remove('d-none');
+
+                const copiaCola = (res.pix && res.pix.payload) ? res.pix.payload : '';
+                const encodedImg = (res.pix && res.pix.encodedImage) ? res.pix.encodedImage : '';
+                const linkFatura = res.invoiceUrl || (res.dados && res.dados.invoiceUrl) || '';
+
+                if (copiaCola || encodedImg) {
+                    let imgTag = '';
+                    if (encodedImg) {
+                        imgTag = `<img src="data:image/png;base64,${encodedImg}" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">`;
+                    } else {
+                        imgTag = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(copiaCola)}" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">`;
+                    }
+
+                    areaPix.innerHTML = `
+                        <div class="card p-3 border-success text-center shadow-sm mt-3">
+                            <h6 class="fw-bold text-success mb-2"><i class="bi bi-qr-code me-1"></i> QR Code Pix Gerado</h6>
+                            <div class="my-2 text-center">
+                                ${imgTag}
+                            </div>
+                            <label class="small text-muted fw-bold d-block text-start mb-1">Código Pix Copia e Cola:</label>
+                            <div class="input-group mb-3">
+                                <input type="text" id="pixCopiaColaInput" class="form-control form-control-sm font-monospace" value="${copiaCola}" readonly>
+                                <button class="btn btn-outline-primary btn-sm fw-bold" type="button" onclick="navigator.clipboard.writeText(document.getElementById('pixCopiaColaInput').value); alert('Código Pix copiado!');">
+                                    <i class="bi bi-clipboard me-1"></i>Copiar
+                                </button>
+                            </div>
+                            <small class="text-muted">Assim que realizar o pagamento pelo aplicativo do seu banco, sua conta será liberada automaticamente.</small>
+                        </div>
+                    `;
+                } else if (linkFatura) {
+                    areaPix.innerHTML = `
+                        <div class="card p-3 border-primary text-center shadow-sm mt-3">
+                            <h6 class="fw-bold text-primary mb-2"><i class="bi bi-receipt me-1"></i> Cobrança Gerada</h6>
+                            <p class="small text-muted mb-3">Clique no botão abaixo para abrir a fatura no Asaas:</p>
+                            <a href="${linkFatura}" target="_blank" rel="noopener noreferrer" class="btn btn-success fw-bold py-2 px-3">
+                                <i class="bi bi-box-arrow-up-right me-1"></i> Abrir Fatura no Asaas
+                            </a>
+                        </div>
+                    `;
+                } else {
+                    alert('Cobrança registrada, mas a URL não foi retornada pelo Asaas.');
+                }
+            } else {
+                alert('Assinatura processada com sucesso!');
+                window.location.reload();
+            }
+        } else {
+            alert('Atenção: ' + res.mensagem);
+        }
+    })
+    .catch(err => {
+        if (tipo === 'PIX' && btnPix) {
+            btnPix.disabled = false;
+            btnPix.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX';
+        }
+        alert('Erro de comunicação com o servidor.');
+    });
 }
 </script>
 {% endblock %}

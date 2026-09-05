@@ -1,7 +1,8 @@
-﻿=== ARQUIVO: E:\Trivium\trivium-erp\auth\routes.py ===
+﻿=================== ARQUIVO: E:\Trivium\trivium-erp\auth\routes.py ===================
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
 from datetime import date
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import re
 
@@ -104,7 +105,9 @@ def registro():
             email=email,
             cargo="Administrador",
             nivel_acesso="admin",
-            ativo=True
+            ativo=True,
+            aceitou_termos_beta=True,
+            data_aceite_termos=datetime.utcnow()
         )
         novo_usuario.set_senha(senha)
         db.session.add(novo_usuario)
@@ -203,12 +206,151 @@ def logout():
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\auth\__init__.py ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\auth\__init__.py ===================
 # MÃ³dulo de AutenticaÃ§Ã£o Trivium ERP
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\services\auth_token.py ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\services\asaas_service.py ===================
+import os
+import json
+import urllib.request
+import urllib.error
+from dotenv import load_dotenv
+import requests
+from datetime import date
+
+load_dotenv()
+
+def _get_api_key():
+    return os.getenv('ASAAS_API_KEY', '').strip()
+
+def _get_base_url():
+    return os.getenv('ASAAS_BASE_URL', 'https://api.asaas.com/v3').strip().rstrip('/')
+
+def _headers():
+    return {
+        "access_token": _get_api_key(),
+        "Content-Type": "application/json",
+        "User-Agent": "TriviumERP/1.0"
+    }
+
+def _fazer_requisicao(endpoint, metodo="GET", payload=None):
+    chave = _get_api_key()
+    if not chave:
+        print("[ASAAS] Chave ASAAS_API_KEY nÃ£o configurada no ambiente.")
+        return None
+
+    url = f"{_get_base_url()}/{endpoint.lstrip('/')}"
+    headers = _headers()
+    data = json.dumps(payload).encode('utf-8') if payload else None
+
+    req = urllib.request.Request(url, data=data, headers=headers, method=metodo)
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            if response.status in (200, 201):
+                return json.loads(response.read().decode('utf-8'))
+        return None
+    except urllib.error.HTTPError as e:
+        erro_detalhe = e.read().decode('utf-8')
+        print(f"[ERRO ASAAS HTTP {e.code}]: {erro_detalhe}")
+        return None
+    except Exception as e:
+        print(f"[ERRO ASAAS]: {e}")
+        return None
+
+def criar_ou_obter_cliente_asaas(empresa):
+    if empresa.asaas_customer_id:
+        return empresa.asaas_customer_id
+
+    payload = {
+        "name": empresa.razao_social or empresa.nome_fantasia,
+        "cpfCnpj": empresa.cnpj,
+        "email": empresa.email,
+        "phone": empresa.telefone,
+        "mobilePhone": empresa.telefone,
+        "externalReference": f"empresa_{empresa.id}"
+    }
+
+    resposta = _fazer_requisicao("customers", metodo="POST", payload=payload)
+    if resposta and "id" in resposta:
+        return resposta["id"]
+    return None
+
+def gerar_link_pagamento_plano(empresa, nome_plano, valor_mensal):
+    customer_id = criar_ou_obter_cliente_asaas(empresa)
+
+    payload = {
+        "name": f"Assinatura Trivium ERP - {nome_plano}",
+        "description": f"Mensalidade SaaS Trivium ERP para {empresa.razao_social}",
+        "value": valor_mensal,
+        "billingType": "UNDEFINED",
+        "chargeType": "RECURRENT",
+        "cycle": "MONTHLY",
+        "dueDateLimitDays": 3,
+        "customer": customer_id
+    }
+
+    resposta = _fazer_requisicao("paymentLinks", metodo="POST", payload=payload)
+    if resposta and "url" in resposta:
+        return resposta.get("url")
+    return None
+
+def consultar_cobranca(cobranca_id):
+    return _fazer_requisicao(f"payments/{cobranca_id}", metodo="GET")
+
+def criar_assinatura_transparente(empresa, nome_plano, valor, forma_pagamento, cartao_dados=None, remote_ip=None):
+    """
+    Cria a assinatura no Asaas de forma nativa (PIX ou CartÃ£o).
+    forma_pagamento: 'PIX', 'CREDIT_CARD' ou 'BOLETO'
+    """
+    customer_id = criar_ou_obter_cliente_asaas(empresa)
+    if not customer_id:
+        return {"sucesso": False, "mensagem": "NÃ£o foi possÃ­vel vincular o cliente no Asaas."}
+
+    payload = {
+        "customer": customer_id,
+        "billingType": forma_pagamento,
+        "value": float(valor),
+        "nextDueDate": date.today().strftime('%Y-%m-%d'),
+        "cycle": "MONTHLY",
+        "description": f"Assinatura Trivium ERP - {nome_plano}"
+    }
+
+    if forma_pagamento == 'CREDIT_CARD' and cartao_dados:
+        payload["creditCard"] = {
+            "holderName": cartao_dados.get('holder_name'),
+            "number": str(cartao_dados.get('number', '')).replace(" ", ""),
+            "expiryMonth": cartao_dados.get('expiry_month'),
+            "expiryYear": cartao_dados.get('expiry_year'),
+            "ccv": cartao_dados.get('ccv')
+        }
+        payload["creditCardHolderInfo"] = {
+            "name": cartao_dados.get('holder_name'),
+            "email": empresa.email or "contato@triviumerp.com.br",
+            "cpfCnpj": empresa.cnpj or cartao_dados.get('cpf_cnpj'),
+            "postalCode": "00000-000",
+            "addressNumber": "S/N",
+            "phone": empresa.telefone or "11999999999"
+        }
+        if remote_ip:
+            payload["remoteIp"] = remote_ip
+
+    resposta = _fazer_requisicao("subscriptions", metodo="POST", payload=payload)
+    
+    if resposta and "id" in resposta:
+        empresa.asaas_subscription_id = resposta.get("id")
+        empresa.plano = nome_plano
+        empresa.valor_mensalidade = float(valor)
+        empresa.forma_pagamento_asaas = forma_pagamento
+        return {"sucesso": True, "subscription": resposta}
+    
+    return {"sucesso": False, "mensagem": "Erro ao processar assinatura junto ao Asaas. Verifique os dados informados."}
+
+
+
+=================== ARQUIVO: E:\Trivium\trivium-erp\services\auth_token.py ===================
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from flask import current_app
 
@@ -240,7 +382,7 @@ def validar_token_recuperacao(token, max_age_segundos=1800):
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\services\email_service.py ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\services\email_service.py ===================
 import os
 import json
 import urllib.request
@@ -364,7 +506,7 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\admin\master_atender_chamado.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\admin\master_atender_chamado.html ===================
 {% extends 'base.html' %}
 
 {% block title %}Atendimento Master - Protocolo {{ chamado.numero_protocolo }}{% endblock %}
@@ -499,7 +641,7 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\admin\master_chamados.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\admin\master_chamados.html ===================
 {% extends 'base.html' %}
 
 {% block title %}Central Global de Chamados - Master{% endblock %}
@@ -631,7 +773,7 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\admin\master_dashboard.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\admin\master_dashboard.html ===================
 {% extends 'base.html' %}
 
 {% block title %}Painel Master SaaS - GestÃ£o de Empresas{% endblock %}
@@ -695,80 +837,141 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
                 <thead class="table-light small text-muted">
                     <tr>
                         <th>EMPRESA / RAZÃƒO SOCIAL</th>
-                        <th>CNPJ / CPF</th>
-                        <th>CONTATO / RESPONSÃVEL</th>
-                        <th>PLANO</th>
-                        <th>STATUS ASSINATURA</th>
-                        <th>CADASTRADA EM</th>
+                        <th>DIAS DE CADASTRO / TRIAL</th>
+                        <th>STATUS</th>
+                        <th>PAGAMENTO / ASAAS</th>
+                        <th>VENCIMENTO</th>
+                        <th class="text-end pe-3">AÃ‡Ã•ES MASTER</th>
                     </tr>
                 </thead>
                 <tbody class="small">
                     {% for emp in empresas %}
-                    <tr>
+                    <tr class="{% if emp.status_assinatura == 'bloqueado' %}table-danger bg-opacity-25{% endif %}">
                         <td>
                             <span class="fw-bold text-dark d-block">{{ emp.razao_social or emp.nome_fantasia }}</span>
-                            <small class="text-muted">{{ emp.nome_fantasia or '--' }}</small>
+                            <small class="text-muted">{{ emp.cnpj or emp.telefone or '--' }}</small>
                         </td>
-                        <td>{{ emp.cnpj or '--' }}</td>
                         <td>
-                            <span class="d-block">{{ emp.email or '--' }}</span>
-                            <small class="text-muted">{{ emp.telefone or '--' }}</small>
-                        </td>
-                        <td><span class="badge bg-primary">{{ emp.plano or 'Founder' }}</span></td>
-                        <td>
-                            {% if emp.status_assinatura == 'ativo' %}
-                                <span class="badge bg-success">Ativa</span>
-                            {% elif emp.status_assinatura == 'trial' %}
-                                <span class="badge bg-warning text-dark">Trial</span>
+                            <span class="fw-semibold text-dark d-block">{{ emp.dias_cadastrado }} dia(s) atrÃ¡s</span>
+                            {% if emp.status_assinatura == 'trial' %}
+                                {% if emp.dias_restantes_trial >= 0 %}
+                                    <span class="badge bg-warning text-dark">{{ emp.dias_restantes_trial }} dias restantes</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Expirado hÃ¡ {{ emp.dias_restantes_trial * -1 }} dias</span>
+                                {% endif %}
                             {% else %}
-                                <span class="badge bg-danger">{{ emp.status_assinatura|capitalize }}</span>
+                                <span class="badge bg-light text-dark border">Assinante</span>
                             {% endif %}
                         </td>
-                        <td>{{ emp.data_criacao.strftime('%d/%m/%Y') if emp.data_criacao else '--' }}</td>
+                        <td>
+                            {% if emp.status_assinatura == 'ativo' %}
+                                <span class="badge bg-success p-2">Ativo</span>
+                            {% elif emp.status_assinatura == 'trial' %}
+                                <span class="badge bg-warning text-dark p-2">Trial</span>
+                            {% elif emp.status_assinatura == 'bloqueado' %}
+                                <span class="badge bg-danger p-2"><i class="bi bi-lock-fill me-1"></i>Bloqueado</span>
+                            {% else %}
+                                <span class="badge bg-secondary p-2">{{ emp.status_assinatura|capitalize }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-info text-dark">{{ emp.forma_pagamento_asaas or 'NÃ£o informado' }}</span>
+                            {% if emp.valor_mensalidade > 0 %}
+                                <small class="d-block text-success fw-bold">R$ {{ "%.2f"|format(emp.valor_mensalidade) }}/mÃªs</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ emp.data_vencimento.strftime('%d/%m/%Y') if emp.data_vencimento else '--' }}
+                        </td>
                         <td class="text-end pe-3">
                             <div class="d-flex gap-1 justify-content-end align-items-center">
-                                <!-- BotÃ£o Entrar como Inquilino -->
-                                <a href="{{ url_for('admin_impersonar_empresa', empresa_id=emp.id) }}" class="btn btn-sm btn-outline-warning text-dark fw-bold" title="Acessar o ERP como esta empresa para investigar problemas">
-                                    <i class="bi bi-box-arrow-in-right me-1"></i> Acessar
+                                <a href="{{ url_for('admin_impersonar_empresa', empresa_id=emp.id) }}" class="btn btn-sm btn-outline-warning text-dark fw-bold" title="Acessar conta">
+                                    <i class="bi bi-box-arrow-in-right"></i>
                                 </a>
-
-                                <!-- BotÃ£o Alterar Status -->
-                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalStatusEmpresa{{ emp.id }}" title="Alterar Status">
-                                    <i class="bi bi-sliders"></i>
+                                <button type="button" class="btn btn-sm btn-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalGestaoEmpresa{{ emp.id }}" title="Gerenciar Status e Pagamento">
+                                    <i class="bi bi-sliders me-1"></i>Gerenciar
                                 </button>
                             </div>
 
-                            <!-- MODAL ALTERAÃ‡ÃƒO DE STATUS -->
-                            <div class="modal fade text-start" id="modalStatusEmpresa{{ emp.id }}" tabindex="-1">
-                                <div class="modal-dialog">
+                            <!-- MODAL DE GESTÃƒO COMPLETA MASTER -->
+                            <div class="modal fade text-start" id="modalGestaoEmpresa{{ emp.id }}" tabindex="-1">
+                                <div class="modal-dialog modal-lg">
                                     <div class="modal-content border-0 shadow">
-                                        <form action="{{ url_for('admin_alterar_status_empresa', id=emp.id) }}" method="POST">
+                                        <form action="{{ url_for('admin_atualizar_gestao_empresa', id=emp.id) }}" method="POST">
                                             <div class="modal-header bg-light">
-                                                <h6 class="modal-title fw-bold">Gerenciar Acesso: {{ emp.razao_social }}</h6>
+                                                <div>
+                                                    <h6 class="modal-title fw-bold text-dark mb-0">GestÃ£o de Acesso: {{ emp.razao_social }}</h6>
+                                                    <small class="text-muted">Cadastrado em {{ emp.data_criacao.strftime('%d/%m/%Y') if emp.data_criacao else '--' }} ({{ emp.dias_cadastrado }} dias ativo)</small>
+                                                </div>
                                                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                             </div>
-                                            <div class="modal-body p-3">
-                                                <label class="form-label small fw-bold">Status da Assinatura</label>
-                                                <select name="status_assinatura" class="form-select form-select-sm">
-                                                    <option value="ativo" {% if emp.status_assinatura == 'ativo' %}selected{% endif %}>Ativo (Liberado)</option>
-                                                    <option value="trial" {% if emp.status_assinatura == 'trial' %}selected{% endif %}>Trial (PerÃ­odo de Testes)</option>
-                                                    <option value="bloqueado" {% if emp.status_assinatura == 'bloqueado' %}selected{% endif %}>Bloqueado (Inadimplente / Suspenso)</option>
-                                                    <option value="cancelado" {% if emp.status_assinatura == 'cancelado' %}selected{% endif %}>Cancelado</option>
-                                                </select>
+                                            <div class="modal-body p-4">
+                                                <div class="row g-3 mb-3">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label small fw-bold">Status do Acesso *</label>
+                                                        <select name="status_assinatura" class="form-select form-select-sm fw-bold border-primary">
+                                                            <option value="trial" {% if emp.status_assinatura == 'trial' %}selected{% endif %}>Trial (PerÃ­odo Gratuito)</option>
+                                                            <option value="ativo" {% if emp.status_assinatura == 'ativo' %}selected{% endif %}>Ativo (Liberado)</option>
+                                                            <option value="bloqueado" {% if emp.status_assinatura == 'bloqueado' %}selected{% endif %} class="text-danger">Bloqueado (Suspender Acesso)</option>
+                                                            <option value="cancelado" {% if emp.status_assinatura == 'cancelado' %}selected{% endif %}>Cancelado</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label small fw-bold">Plano Contratado</label>
+                                                        <select name="plano" class="form-select form-select-sm">
+                                                            <option value="Founder" {% if emp.plano == 'Founder' %}selected{% endif %}>Founder (Beta)</option>
+                                                            <option value="Profissional" {% if emp.plano == 'Profissional' %}selected{% endif %}>Profissional</option>
+                                                            <option value="Empresarial" {% if emp.plano == 'Empresarial' %}selected{% endif %}>Empresarial</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <div class="row g-3 mb-3">
+                                                    <div class="col-md-4">
+                                                        <label class="form-label small fw-bold">Forma de Pagamento Asaas</label>
+                                                        <select name="forma_pagamento_asaas" class="form-select form-select-sm">
+                                                            <option value="">NÃ£o informado</option>
+                                                            <option value="PIX" {% if emp.forma_pagamento_asaas == 'PIX' %}selected{% endif %}>PIX</option>
+                                                            <option value="Boleto BancÃ¡rio" {% if emp.forma_pagamento_asaas == 'Boleto BancÃ¡rio' %}selected{% endif %}>Boleto BancÃ¡rio</option>
+                                                            <option value="CartÃ£o de CrÃ©dito" {% if emp.forma_pagamento_asaas == 'CartÃ£o de CrÃ©dito' %}selected{% endif %}>CartÃ£o de CrÃ©dito</option>
+                                                            <option value="Manual / Permuta" {% if emp.forma_pagamento_asaas == 'Manual / Permuta' %}selected{% endif %}>Manual / Acordo</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label small fw-bold">Valor da Mensalidade (R$)</label>
+                                                        <input type="number" step="0.01" name="valor_mensalidade" class="form-control form-control-sm" value="{{ emp.valor_mensalidade or 0.0 }}">
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label small fw-bold">ID Cliente Asaas</label>
+                                                        <input type="text" name="asaas_customer_id" class="form-control form-control-sm" placeholder="cus_00000123" value="{{ emp.asaas_customer_id or '' }}">
+                                                    </div>
+                                                </div>
+
+                                                <div class="row g-3 mb-3">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label small fw-bold">Data de Vencimento / PrÃ³xima Fatura</label>
+                                                        <input type="date" name="data_vencimento" class="form-control form-control-sm" value="{{ emp.data_vencimento.strftime('%Y-%m-%d') if emp.data_vencimento else '' }}">
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label small fw-bold">Data do Ãšltimo Pagamento</label>
+                                                        <input type="date" name="data_ultimo_pagamento" class="form-control form-control-sm" value="{{ emp.data_ultimo_pagamento.strftime('%Y-%m-%d') if emp.data_ultimo_pagamento else '' }}">
+                                                    </div>
+                                                </div>
+
+                                                <div class="mb-2">
+                                                    <label class="form-label small fw-bold">ObservaÃ§Ãµes Internas Master</label>
+                                                    <textarea name="observacoes_master" class="form-control form-control-sm" rows="2" placeholder="Ex: Entrou em contato no WhatsApp pedindo prorrogaÃ§Ã£o...">{{ emp.observacoes_master or '' }}</textarea>
+                                                </div>
                                             </div>
                                             <div class="modal-footer bg-light">
-                                                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                                                <button type="submit" class="btn btn-sm btn-primary fw-bold">Salvar AlteraÃ§Ãµes</button>
+                                                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                <button type="submit" class="btn btn-sm btn-primary fw-bold px-4">Salvar AlteraÃ§Ãµes</button>
                                             </div>
                                         </form>
                                     </div>
                                 </div>
                             </div>
                         </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="7" class="text-center py-5 text-muted">Nenhuma empresa registrada no banco.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -780,7 +983,7 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\admin\master_usuarios.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\admin\master_usuarios.html ===================
 {% extends 'base.html' %}
 
 {% block title %}GestÃ£o Global de UsuÃ¡rios - Master{% endblock %}
@@ -908,7 +1111,7 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\auth\esqueci_senha.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\auth\esqueci_senha.html ===================
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -950,7 +1153,7 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\auth\login.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\auth\login.html ===================
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -1008,7 +1211,7 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\auth\redefinir_senha.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\auth\redefinir_senha.html ===================
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -1058,7 +1261,7 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\auth\registro.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\auth\registro.html ===================
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -1126,7 +1329,7 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
 
                 <div class="col-12">
                     <label class="form-label small fw-bold">Telefone / WhatsApp Comercial *</label>
-                    <input type="text" name="telefone" class="form-control" placeholder="(00) 00000-0000" required>
+                    <input type="text" name="telefone" id="campo_telefone" class="form-control" placeholder="(00) 00000-0000" required>
                 </div>
             </div>
 
@@ -1138,15 +1341,18 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
                 </div>
                 <div class="col-md-6">
                     <label class="form-label small fw-bold">E-mail de Acesso *</label>
-                    <input type="email" name="email" class="form-control" placeholder="seu@email.com" required>
+                    <input type="email" name="email" id="campo_email" class="form-control" placeholder="seu@email.com" required>
                 </div>
                 <div class="col-12">
                     <label class="form-label small fw-bold">Senha de Acesso *</label>
-                    <input type="password" name="senha" class="form-control" minlength="4" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" required>
+                    <input type="password" name="senha" id="campo_senha" class="form-control" minlength="4" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" required>
                 </div>
             </div>
 
-            <button type="submit" class="btn btn-brand w-100 mb-3">Concluir Cadastro e Ativar</button>
+            <!-- BotÃ£o que valida o formulÃ¡rio e abre o modal -->
+            <button type="button" class="btn btn-brand w-100 mb-3" onclick="verificarFormularioEAbrirModal()">
+                Concluir Cadastro e Ativar
+            </button>
         </form>
 
         <div class="text-center">
@@ -1154,13 +1360,60 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
         </div>
     </div>
 
+    <!-- MODAL DE TERMOS E ISENÃ‡ÃƒO DE RESPONSABILIDADE BETA -->
+    <div class="modal fade" id="modalTermosBeta" tabindex="-1" aria-labelledby="modalTermosBetaLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header bg-warning bg-opacity-25 border-bottom border-warning">
+            <h5 class="modal-title fw-bold text-dark" id="modalTermosBetaLabel">
+              <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Aviso: Ambiente de Teste Beta
+            </h5>
+          </div>
+          <div class="modal-body p-4 text-start" style="font-size: 0.92rem; line-height: 1.5;">
+            <p class="mb-3">Seja bem-vindo(a) Ã  versÃ£o experimental do <strong>Trivium ERP</strong>.</p>
+            <p class="mb-3">Antes de finalizar sua adesÃ£o, leia atentamente as condiÃ§Ãµes deste ambiente de testes:</p>
+            
+            <ul class="list-unstyled mb-3">
+              <li class="mb-2 d-flex align-items-start gap-2">
+                <i class="bi bi-arrow-right-circle-fill text-primary mt-1"></i>
+                <span><strong>Ambiente TemporÃ¡rio:</strong> O sistema estÃ¡ em fase contÃ­nua de melhorias e validaÃ§Ãµes. Recursos e cadastros podem sofrer instabilidades, manutenÃ§Ãµes ou exclusÃµes sem aviso prÃ©vio.</span>
+              </li>
+              <li class="mb-2 d-flex align-items-start gap-2">
+                <i class="bi bi-arrow-right-circle-fill text-primary mt-1"></i>
+                <span><strong>Responsabilidade sobre Dados de Clientes:</strong> VocÃª Ã© o Ãºnico e exclusivo responsÃ¡vel pelos dados cadastrais, comerciais e de clientes que inserir no sistema. O Trivium ERP nÃ£o realiza validaÃ§Ã£o, auditoria nem responde pela integridade ou origem desses dados.</span>
+              </li>
+              <li class="mb-2 d-flex align-items-start gap-2">
+                <i class="bi bi-arrow-right-circle-fill text-primary mt-1"></i>
+                <span><strong>IsenÃ§Ã£o de Responsabilidade:</strong> NÃ£o nos responsabilizamos por eventuais perdas de registros, indisponibilidade temporÃ¡ria ou falhas operacionais decorrentes desta fase experimental.</span>
+              </li>
+            </ul>
+
+            <div class="form-check p-3 bg-light rounded border">
+              <input class="form-check-input" type="checkbox" id="checkConcordoTermos" style="cursor: pointer;">
+              <label class="form-check-label fw-bold text-dark" for="checkConcordoTermos" style="cursor: pointer;">
+                Li, estou ciente e concordo com os termos do perÃ­odo Beta.
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer bg-light border-top">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Revisar Cadastro</button>
+            <button type="button" class="btn btn-success fw-bold px-4" id="btnConfirmarCadastroBeta" disabled onclick="submeterFormulario()">
+              Concordar e Finalizar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
     <script>
     function alternarTipoCadastro() {
         const isPj = document.getElementById('tipo_pj').checked;
         const camposPJ = document.querySelectorAll('.campo-pj');
         const camposPF = document.querySelectorAll('.campo-pf');
         const labelRazao = document.getElementById('label-razao');
-        const inputRazao = document.getElementById('campo_razao');
 
         if (isPj) {
             camposPJ.forEach(el => el.classList.remove('d-none'));
@@ -1225,23 +1478,45 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
         }
     }
 
-    document.getElementById('formRegistro').addEventListener('submit', function(e) {
+    // Verifica campos obrigatÃ³rios antes de abrir o modal
+    function verificarFormularioEAbrirModal() {
+        const form = document.getElementById('formRegistro');
         const isPf = document.getElementById('tipo_pf').checked;
+
         if (isPf) {
             const cpfInput = document.getElementById('campo_cpf');
             if (!validarCampoCPF(cpfInput)) {
-                e.preventDefault();
                 cpfInput.focus();
+                return;
             }
         }
+
+        // ValidaÃ§Ã£o HTML5 nativa dos campos obrigatÃ³rios
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
+        // Se tudo estiver preenchido corretamente, abre o Modal de Termos
+        const modal = new bootstrap.Modal(document.getElementById('modalTermosBeta'));
+        modal.show();
+    }
+
+    // Controle do botÃ£o de aceite dentro do modal
+    document.getElementById('checkConcordoTermos').addEventListener('change', function() {
+        document.getElementById('btnConfirmarCadastroBeta').disabled = !this.checked;
     });
+
+    function submeterFormulario() {
+        document.getElementById('formRegistro').submit();
+    }
     </script>
 </body>
 </html>
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\base.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\base.html ===================
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -1664,7 +1939,145 @@ def enviar_email_recuperacao_senha(destinatario, nome, link_recuperacao):
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\cadastro.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\bloqueio_pagamento.html ===================
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Regularize seu Acesso - Trivium ERP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background-color: #f8fafc; 
+            min-height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            padding: 2.5rem 1rem; 
+        }
+        .main-container { width: 100%; max-width: 860px; }
+        .pricing-card { 
+            background: #ffffff; 
+            border: 1px solid #e2e8f0; 
+            border-radius: 16px; 
+            transition: transform 0.2s ease, box-shadow 0.2s ease; 
+        }
+        .pricing-card:hover { 
+            transform: translateY(-4px); 
+            box-shadow: 0 12px 24px rgba(0,0,0,0.06); 
+        }
+        .pricing-card.destaque { 
+            border: 2px solid #2563eb; 
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- CABEÃ‡ALHO DE AVISO -->
+        <div class="text-center mb-4">
+            <span class="badge bg-danger bg-opacity-10 text-danger p-3 rounded-circle mb-3">
+                <i class="bi bi-shield-lock-fill fs-2"></i>
+            </span>
+            <h3 class="fw-bold text-dark mb-2">Acesso Temporariamente Suspenso</h3>
+            <p class="text-muted small mx-auto" style="max-width: 580px;">
+                O perÃ­odo de avaliaÃ§Ã£o da empresa <strong>{{ current_user.empresa.razao_social }}</strong> encerrou. Escolha um plano abaixo para liberar imediatamente o sistema com Pix, Boleto ou CartÃ£o via Asaas.
+            </p>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} small py-2 text-center mb-4">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- CARDS DE PLANOS -->
+        <div class="row g-4 mb-4">
+            <!-- PLANO FOUNDER -->
+            <div class="col-md-6">
+                <div class="card pricing-card h-100 p-4 d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="fw-bold text-dark mb-0">Plano Founder</h5>
+                        <span class="badge bg-secondary small">AutÃ´nomo / PF</span>
+                    </div>
+                    <div class="my-3">
+                        <span class="display-6 fw-bold text-dark">R$ 97</span>
+                        <span class="text-muted">/mÃªs</span>
+                    </div>
+                    <p class="text-muted small">Ideal para profissionais liberais, peritos e consultores tÃ©cnicos individuais.</p>
+                    
+                    <ul class="list-unstyled small mb-4 flex-grow-1">
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>EmissÃ£o Ilimitada de Propostas em PDF</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Controle Financeiro & Parcelas</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Agenda Operacional de Vistorias</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>1 UsuÃ¡rio de Acesso</li>
+                    </ul>
+
+                    <a href="{{ link_founder }}" target="_blank" class="btn btn-outline-primary fw-bold py-2 w-100">
+                        <i class="bi bi-credit-card-2-front me-2"></i>Assinar Founder (R$ 97/mÃªs)
+                    </a>
+                </div>
+            </div>
+
+            <!-- PLANO PRO ENTERPRISE -->
+            <div class="col-md-6">
+                <div class="card pricing-card destaque h-100 p-4 position-relative d-flex flex-column">
+                    <div class="position-absolute top-0 end-0 bg-primary text-white small fw-bold px-3 py-1 rounded-bottom-start">
+                        Mais Recomendado
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="fw-bold text-dark mb-0">Plano Pro Enterprise</h5>
+                    </div>
+                    <div class="my-3">
+                        <span class="display-6 fw-bold text-primary">R$ 197</span>
+                        <span class="text-muted">/mÃªs</span>
+                    </div>
+                    <p class="text-muted small">Para empresas de engenharia, seguranÃ§a e consultorias com equipe tÃ©cnica.</p>
+                    
+                    <ul class="list-unstyled small mb-4 flex-grow-1">
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Tudo do Plano Founder</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Logotipo e Cores Personalizadas (White-Label)</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>GestÃ£o de Contratos Mensalistas</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>UsuÃ¡rios Ilimitados</li>
+                    </ul>
+
+                    <a href="{{ link_pro }}" target="_blank" class="btn btn-primary fw-bold py-2 w-100 shadow-sm">
+                        <i class="bi bi-lightning-charge-fill me-2"></i>Assinar Pro (R$ 197/mÃªs)
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- SUPORTE WHATSAPP E SAIR -->
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-4 mb-3">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                <div class="text-center text-md-start">
+                    <h6 class="fw-bold text-dark mb-1">Precisa de ajuda ou ativaÃ§Ã£o manual via Pix?</h6>
+                    <small class="text-muted">Fale diretamente com nossa equipe para envio de comprovante.</small>
+                </div>
+                <a href="https://wa.me/5511999999999?text=OlÃ¡!%20Gostaria%20de%20regularizar%20o%20acesso%20do%20Trivium%20ERP%20da%20empresa%20{{ current_user.empresa.razao_social }}" target="_blank" class="btn btn-outline-success fw-bold px-3 py-2 text-nowrap">
+                    <i class="bi bi-whatsapp me-2"></i>Falar no WhatsApp
+                </a>
+            </div>
+        </div>
+
+        <div class="text-center">
+            <a href="{{ url_for('auth.logout') }}" class="btn btn-link text-danger text-decoration-none small fw-bold">
+                <i class="bi bi-box-arrow-left me-1"></i>Sair da Conta
+            </a>
+        </div>
+    </div>
+</body>
+</html>
+
+
+
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\cadastro.html ===================
 {% extends 'base.html' %}
 
 {% block title %}{% if cliente %}Editar Cliente{% else %}Novo Cliente{% endif %} - Trivium ERP{% endblock %}
@@ -1987,7 +2400,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\catalogo.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\catalogo.html ===================
 {% extends 'base.html' %}
 
 {% block title %}CatÃ¡logo de ServiÃ§os - Trivium ERP{% endblock %}
@@ -2108,7 +2521,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\clientes.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\clientes.html ===================
 {% extends 'base.html' %}
 
 {% block title %}Carteira de Clientes - Trivium ERP{% endblock %}
@@ -2185,7 +2598,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\detalhe_chamado.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\detalhe_chamado.html ===================
 {% extends 'base.html' %}
 
 {% block title %}Chamado {{ chamado.numero_protocolo }} - Trivium ERP{% endblock %}
@@ -2283,7 +2696,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\detalhe_cliente.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\detalhe_cliente.html ===================
 {% extends 'base.html' %}
 
 {% block title %}{{ cliente.nome }} - Trivium ERP{% endblock %}
@@ -2504,7 +2917,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\faq.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\faq.html ===================
 {% extends 'base.html' %}
 
 {% block title %}Ajuda e FAQ - Trivium ERP{% endblock %}
@@ -2694,7 +3107,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\financeiro.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\financeiro.html ===================
 {% extends 'base.html' %}
 
 {% block content %}
@@ -3179,7 +3592,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\index.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\index.html ===================
 {% extends 'base.html' %}
 
 {% block title %}Dashboard - Trivium ERP{% endblock %}
@@ -3345,7 +3758,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\perfil_empresa.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\perfil_empresa.html ===================
 {% extends 'base.html' %}
 
 {% block title %}ConfiguraÃ§Ãµes & Perfil - Trivium ERP{% endblock %}
@@ -3370,7 +3783,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
                     <i class="bi bi-person-badge me-2"></i> Minha Conta & Senha
                 </button>
                 <button class="nav-link text-start fw-semibold py-2 px-3 rounded-3" id="tab-pagamento-btn" data-bs-toggle="pill" data-bs-target="#tab-pagamento" type="button" role="tab">
-                    <i class="bi bi-credit-card-2-front me-2"></i> Assinatura & CartÃ£o
+                    <i class="bi bi-credit-card-2-front me-2"></i> Assinatura & Planos
                 </button>
             </div>
         </div>
@@ -3401,7 +3814,6 @@ document.querySelector('form').addEventListener('submit', function(e) {
                         </div>
 
                         <div class="row g-3">
-                            <!-- Campos PJ -->
                             <div class="col-md-6 campo-pj">
                                 <label class="form-label small fw-bold">RazÃ£o Social *</label>
                                 <input type="text" name="razao_social" class="form-control" value="{{ perfil.razao_social or '' }}" required>
@@ -3415,7 +3827,6 @@ document.querySelector('form').addEventListener('submit', function(e) {
                                 <input type="text" name="cnpj" class="form-control" placeholder="00.000.000/0000-00" value="{{ perfil.cnpj or '' }}">
                             </div>
 
-                            <!-- Campos PF -->
                             <div class="col-md-6 campo-pf d-none">
                                 <label class="form-label small fw-bold">Nome Completo do Profissional *</label>
                                 <input type="text" name="nome_profissional" id="nome_profissional" class="form-control" value="{{ perfil.razao_social or '' }}">
@@ -3425,7 +3836,6 @@ document.querySelector('form').addEventListener('submit', function(e) {
                                 <input type="text" name="cpf" id="cpf" class="form-control" placeholder="000.000.000-00" value="{{ perfil.cnpj or '' }}">
                             </div>
 
-                            <!-- Contatos Comuns -->
                             <div class="col-md-6">
                                 <label class="form-label small fw-bold">Telefone / WhatsApp Comercial *</label>
                                 <input type="text" name="telefone" class="form-control" value="{{ perfil.telefone or '' }}" required>
@@ -3439,14 +3849,13 @@ document.querySelector('form').addEventListener('submit', function(e) {
                                 <input type="text" name="site" class="form-control" placeholder="https://seusite.com.br" value="{{ perfil.site or '' }}">
                             </div>
                             <div class="col-12">
-                                <label class="form-label small fw-bold">EndereÃ§o Comercial Completo (Exibido nas Propostas PDF)</label>
+                                <label class="form-label small fw-bold">EndereÃ§o Comercial Completo</label>
                                 <input type="text" name="endereco_completo" class="form-control" placeholder="Rua, NÃºmero, Bairro, Cidade - UF, CEP" value="{{ perfil.endereco_completo or '' }}">
                             </div>
                         </div>
 
                         <hr class="my-4 text-muted">
 
-                        <!-- PersonalizaÃ§Ã£o Visual & White-Label -->
                         <h6 class="fw-bold text-dark mb-3"><i class="bi bi-palette text-primary me-2"></i>PersonalizaÃ§Ã£o Visual & Logotipo</h6>
                         <div class="row g-3 align-items-center mb-4">
                             <div class="col-md-6">
@@ -3523,54 +3932,76 @@ document.querySelector('form').addEventListener('submit', function(e) {
                 </div>
             </div>
 
-            <!-- ABA 3: ASSINATURA & CARTÃƒO DE CRÃ‰DITO (FUTURO GATEWAY) -->
+            <!-- ABA 3: ASSINATURA, STATUS & CHECKOUT NATIVO -->
             <div class="tab-pane fade" id="tab-pagamento" role="tabpanel">
                 <div class="card-custom p-4 mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-star-fill text-warning me-2"></i>Plano Atual</h5>
-                        <span class="badge bg-success px-3 py-2 fs-6">Plano {{ perfil.plano or 'Founder' }} (Ativo)</span>
+                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-credit-card-2-back text-primary me-2"></i>Status da Assinatura</h5>
+                        <div>
+                            {% if perfil.status_assinatura == 'ativo' %}
+                                <span class="badge bg-success px-3 py-2 fs-6"><i class="bi bi-check-circle me-1"></i>Assinatura Ativa</span>
+                            {% elif perfil.status_assinatura == 'trial' %}
+                                <span class="badge bg-warning text-dark px-3 py-2 fs-6"><i class="bi bi-clock-history me-1"></i>PerÃ­odo de Testes</span>
+                            {% else %}
+                                <span class="badge bg-danger px-3 py-2 fs-6"><i class="bi bi-exclamation-triangle me-1"></i>Acesso Pendente</span>
+                            {% endif %}
+                        </div>
                     </div>
-                    <p class="text-muted small mb-0">Sua assinatura inclui emissÃ£o ilimitada de propostas, gestÃ£o multi-tenant e controle financeiro completo.</p>
-                </div>
 
-                <div class="card-custom p-4">
-                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-credit-card text-primary me-2"></i>Cadastrar CartÃ£o de CrÃ©dito</h5>
-                    <p class="text-muted small mb-4">Mantenha sua forma de pagamento cadastrada para renovaÃ§Ãµes automÃ¡ticas do plano.</p>
+                    <div class="row g-3 bg-light rounded-3 p-3 border mb-4">
+                        <div class="col-sm-6 col-md-3">
+                            <span class="text-muted small d-block">Plano Atual:</span>
+                            <strong class="text-dark">{{ perfil.plano or 'Founder' }}</strong>
+                        </div>
+                        <div class="col-sm-6 col-md-3">
+                            <span class="text-muted small d-block">Valor Mensal:</span>
+                            <strong class="text-success">R$ {{ "%.2f"|format(perfil.valor_mensalidade or 97.00) }}/mÃªs</strong>
+                        </div>
+                        <div class="col-sm-6 col-md-3">
+                            <span class="text-muted small d-block">PrÃ³ximo Vencimento:</span>
+                            <strong class="text-dark">
+                                {{ perfil.data_vencimento.strftime('%d/%m/%Y') if perfil.data_vencimento else 'Em aberto' }}
+                            </strong>
+                        </div>
+                        <div class="col-sm-6 col-md-3">
+                            <span class="text-muted small d-block">Forma de Pagamento:</span>
+                            <strong class="text-primary">{{ perfil.forma_pagamento_asaas or 'Pix / CartÃ£o' }}</strong>
+                        </div>
+                    </div>
 
-                    <form method="POST" action="{{ url_for('perfil_empresa') }}">
-                        <input type="hidden" name="form_type" value="dados_cartao">
-
-                        <div class="row g-3 mb-4">
-                            <div class="col-12">
-                                <label class="form-label small fw-bold">NÃºmero do CartÃ£o de CrÃ©dito</label>
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="bi bi-credit-card-2-back"></i></span>
-                                    <input type="text" name="numero_cartao" class="form-control" placeholder="0000 0000 0000 0000" maxlength="19">
+                    <!-- OPÃ‡Ã•ES DE RENOVAÃ‡ÃƒO / UPGRADE -->
+                    <h6 class="fw-bold text-dark mb-3">RenovaÃ§Ã£o ou MudanÃ§a de Plano</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="border rounded-3 p-3 h-100 d-flex flex-column justify-content-between bg-white shadow-sm">
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <strong class="text-dark fs-5">Plano Founder</strong>
+                                        <span class="badge bg-secondary">R$ 97/mÃªs</span>
+                                    </div>
+                                    <p class="text-muted small mt-2 mb-3">Ideal para consultores individuais e profissionais autÃ´nomos.</p>
                                 </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold">Nome Impresso no CartÃ£o</label>
-                                <input type="text" name="nome_cartao" class="form-control" placeholder="Ex: CARLOS E SILVA">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold">Validade</label>
-                                <input type="text" name="validade_cartao" class="form-control" placeholder="MM/AA" maxlength="5">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold">CVV</label>
-                                <input type="password" name="cvv_cartao" class="form-control" placeholder="123" maxlength="4">
+                                <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2" onclick="abrirCheckoutModal('Founder', 97.00)">
+                                    <i class="bi bi-credit-card me-2"></i>Assinar / Renovar Founder
+                                </button>
                             </div>
                         </div>
 
-                        <div class="alert alert-info small d-flex align-items-center gap-2 mb-4" role="alert">
-                            <i class="bi bi-shield-lock-fill fs-5"></i>
-                            <div>Os dados de cartÃ£o sÃ£o criptografados com certificado SSL de 256 bits conforme normas PCI-DSS.</div>
+                        <div class="col-md-6">
+                            <div class="border border-primary rounded-3 p-3 h-100 d-flex flex-column justify-content-between bg-white shadow-sm">
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <strong class="text-primary fs-5">Plano Pro Enterprise</strong>
+                                        <span class="badge bg-primary">R$ 197/mÃªs</span>
+                                    </div>
+                                    <p class="text-muted small mt-2 mb-3">Para consultorias com equipe tÃ©cnica e usuÃ¡rios ilimitados.</p>
+                                </div>
+                                <button type="button" class="btn btn-primary fw-bold w-100 py-2 shadow-sm" onclick="abrirCheckoutModal('Pro Enterprise', 197.00)">
+                                    <i class="bi bi-lightning-charge-fill me-2"></i>Assinar / Fazer Upgrade Pro
+                                </button>
+                            </div>
                         </div>
-
-                        <div class="text-end">
-                            <button type="submit" class="btn btn-outline-primary fw-bold px-4">Salvar Forma de Pagamento</button>
-                        </div>
-                    </form>
+                    </div>
                 </div>
             </div>
 
@@ -3578,7 +4009,79 @@ document.querySelector('form').addEventListener('submit', function(e) {
     </div>
 </div>
 
+<!-- MODAL DE CHECKOUT TRANSPARENTE (PIX OU CARTÃƒO DIRETO NA TELA) -->
+<div class="modal fade" id="modalCheckoutTransparente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="tituloModalPlano">Finalizar Assinatura</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <ul class="nav nav-pills nav-fill mb-3" id="pills-tab" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active fw-bold" id="tab-pix" data-bs-toggle="pill" data-bs-target="#conteudo-pix" type="button">
+                            <i class="bi bi-qr-code me-1"></i> PIX InstantÃ¢neo
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link fw-bold" id="tab-cartao" data-bs-toggle="pill" data-bs-target="#conteudo-cartao" type="button">
+                            <i class="bi bi-credit-card me-1"></i> CartÃ£o de CrÃ©dito
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content pt-2">
+                    <!-- ABA PIX -->
+                    <div class="tab-pane fade show active text-center" id="conteudo-pix">
+                        <p class="text-muted small mb-3">LiberaÃ§Ã£o imediata assim que o Pix for pago.</p>
+                        <button type="button" class="btn btn-success fw-bold w-100 py-2" onclick="processarPagamento('PIX')">
+                            <i class="bi bi-lightning-charge me-1"></i> Gerar CobranÃ§a PIX
+                        </button>
+                        <div id="resultadoPix" class="mt-3 d-none">
+                            <div class="alert alert-info small" id="msgPix">Carregando cÃ³digo...</div>
+                        </div>
+                    </div>
+
+                    <!-- ABA CARTÃƒO DE CRÃ‰DITO -->
+                    <div class="tab-pane fade" id="conteudo-cartao">
+                        <form id="formCartaoCheckout">
+                            <div class="mb-2">
+                                <label class="small text-muted fw-bold">NÃºmero do CartÃ£o</label>
+                                <input type="text" id="cc_numero" class="form-control" placeholder="0000 0000 0000 0000" maxlength="19" required>
+                            </div>
+                            <div class="mb-2">
+                                <label class="small text-muted fw-bold">Nome Impresso no CartÃ£o</label>
+                                <input type="text" id="cc_nome" class="form-control" placeholder="Ex: CARLOS E SILVA" required>
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-4">
+                                    <label class="small text-muted fw-bold">MÃªs</label>
+                                    <input type="text" id="cc_mes" class="form-control" placeholder="MM" maxlength="2" required>
+                                </div>
+                                <div class="col-4">
+                                    <label class="small text-muted fw-bold">Ano</label>
+                                    <input type="text" id="cc_ano" class="form-control" placeholder="AAAA" maxlength="4" required>
+                                </div>
+                                <div class="col-4">
+                                    <label class="small text-muted fw-bold">CVV</label>
+                                    <input type="text" id="cc_cvv" class="form-control" placeholder="123" maxlength="4" required>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-primary fw-bold w-100 py-2" onclick="processarPagamento('CREDIT_CARD')">
+                                Confirmar e Assinar
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+let planoEscolhido = 'Founder';
+
 function alternarTipoPessoa() {
     const isPj = document.getElementById('tipo_pj').checked;
     const camposPJ = document.querySelectorAll('.campo-pj');
@@ -3590,8 +4093,6 @@ function alternarTipoPessoa() {
     } else {
         camposPJ.forEach(el => el.classList.add('d-none'));
         camposPF.forEach(el => el.classList.remove('d-none'));
-        
-        // Copia o valor do campo RazÃ£o Social para Nome Profissional se estiver preenchido
         const inputRazao = document.querySelector('input[name="razao_social"]');
         const inputProf = document.getElementById('nome_profissional');
         if (inputRazao && !inputProf.value) {
@@ -3599,12 +4100,51 @@ function alternarTipoPessoa() {
         }
     }
 }
+
+function abrirCheckoutModal(plano, valor) {
+    planoEscolhido = plano;
+    document.getElementById('tituloModalPlano').innerText = 'Assinar ' + plano + ' (R$ ' + valor.toFixed(2) + '/mÃªs)';
+    new bootstrap.Modal(document.getElementById('modalCheckoutTransparente')).show();
+}
+
+function processarPagamento(tipo) {
+    const payload = {
+        plano: planoEscolhido,
+        forma_pagamento: tipo
+    };
+
+    if (tipo === 'CREDIT_CARD') {
+        payload.cartao = {
+            holder_name: document.getElementById('cc_nome').value,
+            number: document.getElementById('cc_numero').value,
+            expiry_month: document.getElementById('cc_mes').value,
+            expiry_year: document.getElementById('cc_ano').value,
+            ccv: document.getElementById('cc_cvv').value
+        };
+    }
+
+    fetch('/api/assinatura/checkout-transparente', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.status === 'success') {
+            alert('Assinatura processada com sucesso!');
+            window.location.reload();
+        } else {
+            alert('AtenÃ§Ã£o: ' + res.mensagem);
+        }
+    })
+    .catch(err => alert('Erro de comunicaÃ§Ã£o com o servidor.'));
+}
 </script>
 {% endblock %}
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\propostas.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\propostas.html ===================
 {% extends 'base.html' %}
 
 {% block content %}
@@ -4077,7 +4617,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\servicos.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\servicos.html ===================
 {% extends 'base.html' %}
 
 {% block title %}Agenda Operacional & ServiÃ§os - Trivium ERP{% endblock %}
@@ -4349,7 +4889,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\templates\suporte.html ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\templates\suporte.html ===================
 {% extends 'base.html' %}
 
 {% block title %}Suporte TÃ©cnico - Trivium ERP{% endblock %}
@@ -4495,7 +5035,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\alimentar_tudo.py ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\alimentar_tudo.py ===================
 from datetime import date
 from dateutil.relativedelta import relativedelta
 from app import app
@@ -4704,50 +5244,53 @@ with app.app_context():
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\app.py ===
-import html
+=================== ARQUIVO: E:\Trivium\trivium-erp\app.py ===================
 import io
 import os
 import re
 import time
+import html
+from functools import wraps
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
+from services.asaas_service import criar_assinatura_transparente
 
-
-# Carrega as variÃ¡veis do arquivo .env automaticamente
+# Carrega variÃ¡veis de ambiente (.env)
 from dotenv import load_dotenv
 load_dotenv()
 
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, send_file
-from flask_login import login_required, current_user
+# Flask e AutenticaÃ§Ã£o
+from flask import (
+    Flask, render_template, request, redirect, 
+    url_for, flash, send_from_directory, send_file, 
+    abort, jsonify, session
+)
+from flask_login import login_required, current_user, login_user
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash
 
-# RelatÃ³rios PDF
+# RelatÃ³rios PDF (ReportLab)
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 
-# ExtensÃµes e Modelos Modulares
+# ExtensÃµes, Modelos e Blueprints
 from extensions import db, login_manager
 from models import (
     Empresa, Usuario, Cliente, Documento, TipoServico, 
     ServicoCliente, Proposta, ItemProposta, ContratoRecorrente, 
-    Fatura, ParcelaFatura, Documento, ChamadoSuporte, MensagemChamado, 
+    Fatura, ParcelaFatura, ChamadoSuporte, MensagemChamado
 )
 from auth.routes import auth_bp
 
-from datetime import datetime
-from functools import wraps
-from flask import abort, render_template, request, redirect, url_for, flash
-from flask_login import login_required, current_user, login_user
-import time
-import os
-from werkzeug.utils import secure_filename
-from werkzeug.security import generate_password_hash
-from extensions import db
-from models import Empresa, Usuario, ChamadoSuporte, MensagemChamado
+# ServiÃ§os Externos
+from services.asaas_service import (
+    gerar_link_pagamento_plano, 
+    criar_ou_obter_cliente_asaas, 
+    consultar_cobranca
+)
 
 # -----------------------------------------------------------------------------
 # 1. CONFIGURAÃ‡ÃƒO DA APLICAÃ‡ÃƒO
@@ -4759,10 +5302,9 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'trivium_erp_chave_secreta_producao_2026')
 
-# ConexÃ£o com o PostgreSQL Local
+# ConexÃ£o com o PostgreSQL Local e Nuvem
 URL_LOCAL_POSTGRES = "postgresql://postgres:admin@127.0.0.1:5432/trivium_db?client_encoding=utf8"
-# Ajuste obrigatÃ³rio da URL do PostgreSQL no Render
-uri_banco = os.getenv('DATABASE_URL', '')
+uri_banco = os.getenv('DATABASE_URL') or URL_LOCAL_POSTGRES
 if uri_banco.startswith("postgres://"):
     uri_banco = uri_banco.replace("postgres://", "postgresql://", 1)
 
@@ -4774,6 +5316,7 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     "pool_pre_ping": True,
     "pool_recycle": 300
 }
+
 # InicializaÃ§Ã£o
 db.init_app(app)
 login_manager.init_app(app)
@@ -4783,7 +5326,7 @@ login_manager.login_message_category = 'warning'
 
 app.register_blueprint(auth_bp)
 
-# Cria automaticamente todas as tabelas no PostgreSQL na inicializaÃ§Ã£o (mesmo rodando via Gunicorn)
+# Cria automaticamente todas as tabelas no PostgreSQL na inicializaÃ§Ã£o
 with app.app_context():
     try:
         db.create_all()
@@ -4795,7 +5338,6 @@ def _limpar_texto(texto):
     if not texto:
         return ""
     return html.escape(str(texto))
-
 
 def is_cpf_valido(cpf):
     if not cpf:
@@ -4817,119 +5359,214 @@ def is_cpf_valido(cpf):
     return digito2 == int(cpf_limpo[10])
 
 def master_required(f):
-  @wraps(f)
-  def decorated_function(*args, **kwargs):
-    if not current_user.is_authenticated or current_user.nivel_acesso != 'master':
-      abort(403)
-    return f(*args, **kwargs)
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.nivel_acesso != 'master':
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated_function
 
-  return decorated_function
+# -----------------------------------------------------------------------------
+# 2. ROTAS DO PAINEL MASTER
+# -----------------------------------------------------------------------------
 
-# 1. Painel Master Geral & GestÃ£o de Empresas
 @app.route('/admin/master')
 @login_required
 @master_required
 def admin_master_dashboard():
-  empresas = Empresa.query.order_by(Empresa.data_criacao.desc()).all()
-  total_empresas = len(empresas)
-  total_ativas = len([e for e in empresas if e.status_assinatura == 'ativo'])
-  total_trial = len([e for e in empresas if e.status_assinatura == 'trial'])
-  total_bloqueadas = len(
-      [e for e in empresas if e.status_assinatura not in ['ativo', 'trial']]
-  )
+    empresas = Empresa.query.order_by(Empresa.data_criacao.desc()).all()
+    total_empresas = len(empresas)
+    total_ativas = len([e for e in empresas if e.status_assinatura == 'ativo'])
+    total_trial = len([e for e in empresas if e.status_assinatura == 'trial'])
+    total_bloqueadas = len([e for e in empresas if e.status_assinatura not in ['ativo', 'trial']])
 
-  return render_template(
-      'admin/master_dashboard.html',
-      empresas=empresas,
-      total_empresas=total_empresas,
-      total_ativas=total_ativas,
-      total_trial=total_trial,
-      total_bloqueadas=total_bloqueadas,
-  )
+    return render_template(
+        'admin/master_dashboard.html',
+        empresas=empresas,
+        total_empresas=total_empresas,
+        total_ativas=total_ativas,
+        total_trial=total_trial,
+        total_bloqueadas=total_bloqueadas,
+    )
 
-
-# 2. Central Global de Chamados (Todos os Clientes)
 @app.route('/admin/master/chamados')
 @login_required
 @master_required
 def admin_master_chamados():
-  filtro = request.args.get('status', 'todos')
-  query = ChamadoSuporte.query
+    filtro = request.args.get('status', 'todos')
+    query = ChamadoSuporte.query
 
-  if filtro == 'abertos':
-    query = query.filter_by(status='Aberto')
-  elif filtro == 'em_atendimento':
-    query = query.filter_by(status='Em Atendimento')
-  elif filtro == 'resolvidos':
-    query = query.filter_by(status='Resolvido')
+    if filtro == 'abertos':
+        query = query.filter_by(status='Aberto')
+    elif filtro == 'em_atendimento':
+        query = query.filter_by(status='Em Atendimento')
+    elif filtro == 'resolvidos':
+        query = query.filter_by(status='Resolvido')
 
-  chamados = query.order_by(ChamadoSuporte.data_abertura.desc()).all()
+    chamados = query.order_by(ChamadoSuporte.data_abertura.desc()).all()
 
-  qtd_abertos = ChamadoSuporte.query.filter_by(status='Aberto').count()
-  qtd_em_analise = ChamadoSuporte.query.filter_by(
-      status='Em Atendimento'
-  ).count()
-  qtd_resolvidos = ChamadoSuporte.query.filter_by(status='Resolvido').count()
-  total_historico = ChamadoSuporte.query.count()
+    qtd_abertos = ChamadoSuporte.query.filter_by(status='Aberto').count()
+    qtd_em_analise = ChamadoSuporte.query.filter_by(status='Em Atendimento').count()
+    qtd_resolvidos = ChamadoSuporte.query.filter_by(status='Resolvido').count()
+    total_historico = ChamadoSuporte.query.count()
 
-  return render_template(
-      'admin/master_chamados.html',
-      chamados=chamados,
-      filtro_atual=filtro,
-      qtd_abertos=qtd_abertos,
-      qtd_em_analise=qtd_em_analise,
-      qtd_resolvidos=qtd_resolvidos,
-      total_historico=total_historico,
-  )
+    return render_template(
+        'admin/master_chamados.html',
+        chamados=chamados,
+        filtro_atual=filtro,
+        qtd_abertos=qtd_abertos,
+        qtd_em_analise=qtd_em_analise,
+        qtd_resolvidos=qtd_resolvidos,
+        total_historico=total_historico,
+    )
 
-
-# 3. Atendimento e Resposta ao Chamado como Administrador Master
 @app.route('/admin/master/chamados/<int:id>', methods=['GET', 'POST'])
 @login_required
 @master_required
 def admin_atender_chamado(id):
-  chamado = ChamadoSuporte.query.get_or_404(id)
+    chamado = ChamadoSuporte.query.get_or_404(id)
 
-  if request.method == 'POST':
-    conteudo = request.form.get('mensagem')
-    novo_status = request.form.get('novo_status')
-    arquivo = request.files.get('anexo')
+    if request.method == 'POST':
+        conteudo = request.form.get('mensagem')
+        novo_status = request.form.get('novo_status')
+        arquivo = request.files.get('anexo')
 
-    filename = None
-    if arquivo and arquivo.filename:
-      filename = f'suporte_{chamado.id}_{int(time.time())}_{secure_filename(arquivo.filename)}'
-      upload_folder = app.config.get('UPLOAD_FOLDER', 'static/uploads')
-      os.makedirs(upload_folder, exist_ok=True)
-      arquivo.save(os.path.join(upload_folder, filename))
+        filename = None
+        if arquivo and arquivo.filename:
+            filename = f'suporte_{chamado.id}_{int(time.time())}_{secure_filename(arquivo.filename)}'
+            upload_folder = app.config.get('UPLOAD_FOLDER', 'static/uploads')
+            os.makedirs(upload_folder, exist_ok=True)
+            arquivo.save(os.path.join(upload_folder, filename))
 
-    if conteudo:
-      msg_suporte = MensagemChamado(
-          chamado_id=chamado.id,
-          usuario_id=current_user.id,
-          conteudo=conteudo,
-          is_suporte=True,  # Identifica que a resposta partiu do Master
-          anexo_filename=filename,
-      )
-      db.session.add(msg_suporte)
+        if conteudo:
+            msg_suporte = MensagemChamado(
+                chamado_id=chamado.id,
+                usuario_id=current_user.id,
+                conteudo=conteudo,
+                is_suporte=True,
+                anexo_filename=filename,
+            )
+            db.session.add(msg_suporte)
 
-    if novo_status:
-      chamado.status = novo_status
-      if novo_status == 'Resolvido':
-        chamado.data_fechamento = datetime.utcnow()
+        if novo_status:
+            chamado.status = novo_status
+            if novo_status == 'Resolvido':
+                chamado.data_fechamento = datetime.utcnow()
+
+        db.session.commit()
+        flash(f'Chamado {chamado.numero_protocolo} atualizado!', 'success')
+        return redirect(url_for('admin_atender_chamado', id=chamado.id))
+
+    return render_template('admin/master_atender_chamado.html', chamado=chamado)
+
+@app.route('/admin/master/usuarios')
+@login_required
+@master_required
+def admin_master_usuarios():
+    usuarios = (
+        Usuario.query.join(Empresa)
+        .order_by(Usuario.nivel_acesso.desc(), Usuario.nome.asc())
+        .all()
+    )
+    return render_template('admin/master_usuarios.html', usuarios=usuarios)
+
+@app.route('/admin/master/usuarios/<int:id>/alterar-nivel', methods=['POST'])
+@login_required
+@master_required
+def admin_alterar_nivel_usuario(id):
+    usuario = Usuario.query.get_or_404(id)
+    novo_nivel = request.form.get('nivel_acesso')
+
+    if usuario.id == current_user.id and novo_nivel != 'master':
+        flash('VocÃª nÃ£o pode remover seu prÃ³prio privilÃ©gio de Master.', 'danger')
+        return redirect(url_for('admin_master_usuarios'))
+
+    if novo_nivel in ['operador', 'admin', 'master']:
+        usuario.nivel_acesso = novo_nivel
+        db.session.commit()
+        flash(f'NÃ­vel de acesso de "{usuario.nome}" atualizado para "{novo_nivel.upper()}".', 'success')
+    else:
+        flash('NÃ­vel de acesso invÃ¡lido informado.', 'danger')
+
+    return redirect(url_for('admin_master_usuarios'))
+
+@app.route('/admin/master/impersonar/<int:empresa_id>')
+@login_required
+@master_required
+def admin_impersonar_empresa(empresa_id):
+    alvo_empresa = Empresa.query.get_or_404(empresa_id)
+    usuario_alvo = Usuario.query.filter_by(empresa_id=alvo_empresa.id).first()
+
+    if not usuario_alvo:
+        flash('Esta empresa nÃ£o possui nenhum usuÃ¡rio cadastrado para acesso.', 'danger')
+        return redirect(url_for('admin_master_dashboard'))
+
+    session['original_master_id'] = current_user.id
+    login_user(usuario_alvo)
+
+    flash(f'Modo Suporte Ativado: VocÃª estÃ¡ navegando como "{usuario_alvo.nome}" ({alvo_empresa.razao_social}).', 'warning')
+    return redirect(url_for('index'))
+
+@app.route('/admin/master/sair-impersonacao')
+@login_required
+def admin_sair_impersonacao():
+    master_id = session.pop('original_master_id', None)
+    if master_id:
+        usuario_master = Usuario.query.get(master_id)
+        if usuario_master and usuario_master.nivel_acesso == 'master':
+            login_user(usuario_master)
+            flash('VocÃª retornou ao seu painel Master.', 'info')
+            return redirect(url_for('admin_master_dashboard'))
+
+    return redirect(url_for('auth.logout'))
+
+@app.route('/admin/master/empresa/<int:id>/atualizar-gestao', methods=['POST'])
+@login_required
+@master_required
+def admin_atualizar_gestao_empresa(id):
+    empresa = Empresa.query.get_or_404(id)
+    
+    empresa.status_assinatura = request.form.get('status_assinatura', empresa.status_assinatura)
+    empresa.plano = request.form.get('plano', empresa.plano)
+    empresa.forma_pagamento_asaas = request.form.get('forma_pagamento_asaas')
+    empresa.asaas_customer_id = request.form.get('asaas_customer_id')
+    empresa.valor_mensalidade = float(request.form.get('valor_mensalidade') or 0.0)
+    empresa.observacoes_master = request.form.get('observacoes_master')
+
+    dt_venc = request.form.get('data_vencimento')
+    if dt_venc:
+        empresa.data_vencimento = datetime.strptime(dt_venc, '%Y-%m-%d').date()
+
+    dt_pag = request.form.get('data_ultimo_pagamento')
+    if dt_pag:
+        empresa.data_ultimo_pagamento = datetime.strptime(dt_pag, '%Y-%m-%d').date()
 
     db.session.commit()
-    flash(f'Chamado {chamado.numero_protocolo} atualizado!', 'success')
-    return redirect(url_for('admin_atender_chamado', id=chamado.id))
+    flash(f'GestÃ£o da empresa "{empresa.razao_social}" atualizada com sucesso!', 'success')
+    return redirect(url_for('admin_master_dashboard'))
 
-  return render_template('admin/master_atender_chamado.html', chamado=chamado)
+@app.route('/admin/master/usuario/<int:id>/redefinir-senha', methods=['POST'])
+@login_required
+@master_required
+def admin_redefinir_senha_usuario(id):
+    usuario = Usuario.query.get_or_404(id)
+    nova_senha = request.form.get('nova_senha')
 
+    if not nova_senha or len(nova_senha) < 6:
+        flash('A nova senha deve ter pelo menos 6 caracteres.', 'danger')
+    else:
+        usuario.senha_hash = generate_password_hash(nova_senha)
+        db.session.commit()
+        flash(f'Senha de "{usuario.nome}" redefinida com sucesso para: {nova_senha}', 'success')
+
+    return redirect(url_for('admin_master_usuarios'))
 
 @login_manager.user_loader
 def load_user(user_id):
     return Usuario.query.get(int(user_id))
 
 # -----------------------------------------------------------------------------
-# 3. CONTEXT PROCESSOR (InjeÃ§Ã£o de Perfil)
+# 3. CONTEXT PROCESSOR & MIDDLEWARES
 # -----------------------------------------------------------------------------
 
 @app.context_processor
@@ -4938,6 +5575,31 @@ def utility_processor():
     if current_user.is_authenticated:
         perfil = current_user.empresa
     return dict(perfil_empresa=perfil)
+
+@app.before_request
+def interceptar_bloqueio_assinatura():
+    if current_user.is_authenticated:
+        if current_user.nivel_acesso == 'master':
+            return None
+
+        rotas_permitidas = [
+            'regularizar_assinatura',
+            'auth.logout',
+            'static',
+            'download_file',
+            'webhook_asaas'
+        ]
+
+        if request.endpoint and not any(request.endpoint.startswith(r) for r in rotas_permitidas):
+            if current_user.empresa:
+                if current_user.empresa.status_assinatura in ['bloqueado', 'cancelado']:
+                    return redirect(url_for('regularizar_assinatura'))
+
+                if current_user.empresa.status_assinatura == 'trial' and current_user.empresa.data_vencimento:
+                    if current_user.empresa.data_vencimento < date.today():
+                        current_user.empresa.status_assinatura = 'bloqueado'
+                        db.session.commit()
+                        return redirect(url_for('regularizar_assinatura'))
 
 # -----------------------------------------------------------------------------
 # 4. ROTAS DO PAINEL DASHBOARD & CARTEIRA DE CLIENTES
@@ -4949,7 +5611,6 @@ def index():
     hoje = date.today()
     proximos_7_dias = hoje + timedelta(days=7)
 
-    # 1. Indicadores de Contagem e Valores
     total_clientes = Cliente.query.filter_by(empresa_id=current_user.empresa_id).count()
 
     propostas_abertas = Proposta.query.filter_by(empresa_id=current_user.empresa_id, status='Aguardando AprovaÃ§Ã£o').all()
@@ -4960,16 +5621,13 @@ def index():
         ServicoCliente.status.in_(['Em Andamento', 'Bloqueado'])
     ).count()
 
-    # 2. Financeiro do MÃªs
     todas_parcelas = ParcelaFatura.query.filter_by(empresa_id=current_user.empresa_id).all()
     total_recebido_mes = sum(p.valor for p in todas_parcelas if p.status == 'Pago')
 
-    # 3. TÃ­tulos em Atraso
     titulos_atrasados = [p for p in todas_parcelas if p.status != 'Pago' and p.data_vencimento and p.data_vencimento < hoje]
     qtd_titulos_atrasados = len(titulos_atrasados)
     valor_titulos_atrasados = sum(p.valor for p in titulos_atrasados)
 
-    # 4. Listagens DinÃ¢micas da Tela Inicial
     proximos_servicos = ServicoCliente.query.filter_by(empresa_id=current_user.empresa_id).filter(
         ServicoCliente.status.in_(['Em Andamento', 'Pendente', 'Bloqueado'])
     ).order_by(ServicoCliente.data_previsao.asc().nullslast()).limit(6).all()
@@ -4994,7 +5652,6 @@ def index():
         titulos_proximos=titulos_proximos
     )
 
-
 @app.route('/clientes')
 @login_required
 def listar_clientes():
@@ -5011,7 +5668,6 @@ def listar_clientes():
     clientes = query.order_by(Cliente.nome).all()
     return render_template('clientes.html', clientes=clientes, busca=busca)
 
-
 @app.route('/cliente/novo', methods=['GET', 'POST'])
 @login_required
 def novo_cliente():
@@ -5023,7 +5679,6 @@ def novo_cliente():
         telefone = request.form.get('telefone')
         email = request.form.get('email')
         
-        # CriaÃ§Ã£o e persistÃªncia do novo cliente
         novo_cli = Cliente(
             empresa_id=current_user.empresa_id,
             nome=nome,
@@ -5049,16 +5704,13 @@ def novo_cliente():
 
         flash(f'Cliente "{novo_cli.nome}" cadastrado com sucesso!', 'success')
 
-        # Se o usuÃ¡rio clicou em "Salvar e Gerar Proposta"
         acao = request.form.get('acao')
         if acao == 'salvar_e_proposta':
-            # Redireciona para a lista de propostas abrindo automaticamente o modal com o cliente prÃ©-selecionado
             return redirect(url_for('listar_propostas', cliente_id=novo_cli.id, abrir_modal='true'))
 
         return redirect(url_for('listar_clientes'))
 
     return render_template('cadastro.html', cliente=None)
-
 
 @app.route('/cliente/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
@@ -5098,7 +5750,6 @@ def editar_cliente(id):
 
     return render_template('cadastro.html', cliente=cliente)
 
-
 @app.route('/cliente/deletar/<int:id>')
 @login_required
 def deletar_cliente(id):
@@ -5108,14 +5759,12 @@ def deletar_cliente(id):
     flash('Cliente e todo o histÃ³rico vinculado foram removidos.', 'warning')
     return redirect(url_for('index'))
 
-
 @app.route('/cliente/<int:id>')
 @login_required
 def detalhe_cliente(id):
     cliente = Cliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     documentos = Documento.query.filter_by(cliente_id=id).order_by(Documento.data_upload.desc()).all()
     return render_template('detalhe_cliente.html', cliente=cliente, documentos=documentos)
-
 
 @app.route('/cliente/<int:id>/upload', methods=['POST'])
 @login_required
@@ -5145,7 +5794,6 @@ def upload_documento(id):
 
     return redirect(url_for('detalhe_cliente', id=id))
 
-
 @app.route('/documento/deletar/<int:doc_id>')
 @login_required
 def deletar_documento(doc_id):
@@ -5160,7 +5808,6 @@ def deletar_documento(doc_id):
     db.session.commit()
     flash('Documento removido com sucesso.', 'info')
     return redirect(url_for('detalhe_cliente', id=cliente_id))
-
 
 @app.route('/uploads/<path:filename>')
 @login_required
@@ -5205,7 +5852,6 @@ def listar_propostas():
         tipos_servico=tipos_servico
     )
 
-
 @app.route('/propostas/nova', methods=['POST'])
 @login_required
 def criar_proposta():
@@ -5218,7 +5864,6 @@ def criar_proposta():
     periodicidade = request.form.get('periodicidade', 'mensal')
     dia_vencimento = int(request.form.get('dia_vencimento') or 10)
 
-    # Dados de Entrada e Parcelamento
     exige_entrada = request.form.get('exige_entrada') == 'on' or request.form.get('exige_entrada') == 'true'
     valor_entrada = float(request.form.get('valor_entrada') or 0.0)
     forma_pagamento_entrada = request.form.get('forma_pagamento_entrada', 'PIX')
@@ -5268,7 +5913,6 @@ def criar_proposta():
     flash(f'Proposta {nova_prop.numero_proposta} gerada com sucesso!', 'success')
     return redirect(url_for('listar_propostas'))
 
-
 @app.route('/propostas/<int:id>/status', methods=['POST'])
 @login_required
 def atualizar_status_proposta(id):
@@ -5282,7 +5926,6 @@ def atualizar_status_proposta(id):
         if novo_status == 'Aprovado' and status_anterior != 'Aprovado':
             hoje = date.today()
 
-            # 1. CRIA A FATURA PAI
             fatura = Fatura(
                 empresa_id=current_user.empresa_id,
                 cliente_id=proposta.cliente_id,
@@ -5294,7 +5937,6 @@ def atualizar_status_proposta(id):
             db.session.add(fatura)
             db.session.flush()
 
-            # 2. CONTRATO RECORRENTE (SE MENSALISTA)
             if proposta.tipo_cobranca == 'recorrente':
                 contrato = ContratoRecorrente(
                     empresa_id=current_user.empresa_id,
@@ -5313,7 +5955,6 @@ def atualizar_status_proposta(id):
                 db.session.flush()
                 fatura.contrato_id = contrato.id
 
-            # 3. GERAÃ‡ÃƒO DINÃ‚MICA DAS PARCELAS (ENTRADA + PARCELAS 1 A 12X)
             exige_entrada = proposta.exige_entrada and (proposta.valor_entrada or 0) > 0
             valor_entrada = float(proposta.valor_entrada or 0) if exige_entrada else 0.0
             saldo_parcelar = max(0.0, proposta.valor_total - valor_entrada)
@@ -5322,7 +5963,6 @@ def atualizar_status_proposta(id):
 
             num_seq = 1
 
-            # A) Parcela de Entrada / Sinal
             if exige_entrada:
                 p_entrada = ParcelaFatura(
                     empresa_id=current_user.empresa_id,
@@ -5339,7 +5979,6 @@ def atualizar_status_proposta(id):
                 db.session.add(p_entrada)
                 num_seq += 1
 
-            # B) Parcelas Restantes
             if saldo_parcelar > 0:
                 valor_cada_parcela = round(saldo_parcelar / qtd_parc, 2)
                 intervalo = proposta.intervalo_dias or 30
@@ -5361,7 +6000,6 @@ def atualizar_status_proposta(id):
                     db.session.add(p_normal)
                     num_seq += 1
 
-            # 4. CRIA AS ORDENS DE SERVIÃ‡O NA AGENDA COM TRAVA DE SINAL
             status_inicial_os = 'Bloqueado' if exige_entrada else ('Em Andamento' if proposta.tipo_cobranca != 'recorrente' else 'Pendente')
 
             for item in proposta.itens:
@@ -5386,7 +6024,6 @@ def atualizar_status_proposta(id):
         flash(f'Status da Proposta alterado para "{novo_status}"!', 'info')
     
     return redirect(url_for('listar_propostas'))
-
 
 @app.route('/propostas/<int:id>/editar', methods=['POST'])
 @login_required
@@ -5423,7 +6060,6 @@ def editar_proposta(id):
 def excluir_proposta(id):
     prop = Proposta.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     
-    # Trava de seguranÃ§a: impede exclusÃ£o se jÃ¡ houver fatura ou contrato vinculado
     if prop.faturas or ContratoRecorrente.query.filter_by(proposta_origem_id=prop.id).first():
         flash('NÃ£o Ã© possÃ­vel excluir esta proposta pois ela jÃ¡ gerou faturas ou contratos ativos.', 'danger')
     else:
@@ -5442,7 +6078,6 @@ def gerar_pdf_proposta(id):
     empresa = current_user.empresa
     buffer = io.BytesIO()
 
-    # Margens de 36pt (0.5 pol) = 540pt de largura Ãºtil (7.5 polegadas exatas)
     doc = SimpleDocTemplate(
         buffer,
         pagesize=letter,
@@ -5458,7 +6093,6 @@ def gerar_pdf_proposta(id):
     cor_primaria_hex = empresa.cor_primaria if empresa.cor_primaria and empresa.cor_primaria.startswith('#') else "#1e3a8a"
     cor_marca = colors.HexColor(cor_primaria_hex)
 
-    # Estilos TipogrÃ¡ficos Seguros
     estilo_empresa_nome = ParagraphStyle('PDF_EmpresaNome', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=13, leading=16, textColor=cor_marca)
     estilo_empresa_sub = ParagraphStyle('PDF_EmpresaSub', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=11, textColor=colors.HexColor("#475569"))
     estilo_secao = ParagraphStyle('PDF_SecaoTit', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=cor_marca)
@@ -5467,9 +6101,6 @@ def gerar_pdf_proposta(id):
     estilo_escopo = ParagraphStyle('PDF_Escopo', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=11, textColor=colors.HexColor("#64748b"))
     estilo_total = ParagraphStyle('PDF_TotalNum', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=13, textColor=colors.HexColor("#16a34a"), alignment=2)
 
-    # =========================================================================
-    # 1. CABEÃ‡ALHO COM LOGOTIPO OU RAZÃƒO SOCIAL
-    # =========================================================================
     logo_elemento = None
     if empresa.logo_filename:
         caminho_logo = os.path.join(app.config['UPLOAD_FOLDER'], empresa.logo_filename)
@@ -5509,14 +6140,10 @@ def gerar_pdf_proposta(id):
     elementos.append(Spacer(1, 6))
     elementos.append(HRFlowable(width="100%", thickness=1.5, color=cor_marca, spaceAfter=10))
 
-    # =========================================================================
-    # 2. DADOS DA PROPOSTA & CLIENTE
-    # =========================================================================
     nome_cli = _limpar_texto(cliente.nome or 'Cliente')
     doc_cli = _limpar_texto(cliente.cnpj_cpf or '--')
     resp_cli = _limpar_texto(cliente.responsavel or cliente.nome or '--')
     tel_cli = _limpar_texto(cliente.telefone or '--')
-    email_cli = _limpar_texto(cliente.email or '--')
     num_prop = _limpar_texto(proposta.numero_proposta or f"PROP-{proposta.id}")
     dt_emissao = proposta.data_criacao.strftime('%d/%m/%Y') if proposta.data_criacao else datetime.today().strftime('%d/%m/%Y')
     
@@ -5553,9 +6180,6 @@ def gerar_pdf_proposta(id):
     elementos.append(tab_painel)
     elementos.append(Spacer(1, 10))
 
-    # =========================================================================
-    # 3. ESCOPO DOS SERVIÃ‡OS
-    # =========================================================================
     elementos.append(Paragraph("1. ESCOPO TÃ‰CNICO & INVESTIMENTO", estilo_secao))
     elementos.append(Spacer(1, 4))
 
@@ -5601,9 +6225,6 @@ def gerar_pdf_proposta(id):
     elementos.append(tab_servicos)
     elementos.append(Spacer(1, 10))
 
-    # =========================================================================
-    # 4. CONDIÃ‡Ã•ES FINANCEIRAS, SINAL E PARCELAS
-    # =========================================================================
     elementos.append(Paragraph("2. CONDIÃ‡Ã•ES COMERCIAIS & MOBILIZAÃ‡ÃƒO", estilo_secao))
     elementos.append(Spacer(1, 4))
 
@@ -5649,9 +6270,6 @@ def gerar_pdf_proposta(id):
     elementos.append(tab_cond)
     elementos.append(Spacer(1, 24))
 
-    # =========================================================================
-    # 5. TERMO DE ACEITE & ASSINATURAS
-    # =========================================================================
     cargo_resp = _limpar_texto(current_user.cargo or 'ResponsÃ¡vel TÃ©cnico')
     nome_usuario = _limpar_texto(current_user.nome)
 
@@ -5682,6 +6300,7 @@ def gerar_pdf_proposta(id):
 # -----------------------------------------------------------------------------
 # 6. ROTAS DE OPERAÃ‡ÃƒO & AGENDA DE SERVIÃ‡OS
 # -----------------------------------------------------------------------------
+
 @app.route('/servicos')
 @login_required
 def consultar_servicos():
@@ -5691,7 +6310,6 @@ def consultar_servicos():
 
     query_base = ServicoCliente.query.filter_by(empresa_id=current_user.empresa_id)
 
-    # 1. Filtro por Categoria / Tipo de Atividade
     if filtro_atual == 'agenda':
         query = query_base.filter(ServicoCliente.status.in_(['Em Andamento', 'Pendente', 'Bloqueado']))
     elif filtro_atual == 'recorrentes':
@@ -5703,7 +6321,6 @@ def consultar_servicos():
     else:
         query = query_base
 
-    # 2. Filtro Temporal DinÃ¢mico a partir de HOJE
     if periodo_atual == 'semana':
         fim_periodo = hoje + timedelta(days=7)
         if filtro_atual in ['agenda', 'recorrentes', 'avulsos']:
@@ -5725,10 +6342,8 @@ def consultar_servicos():
         else:
             query = query.filter(ServicoCliente.data_previsao.between(hoje, fim_periodo))
 
-    # OrdenaÃ§Ã£o CronolÃ³gica
     servicos_operacionais = query.order_by(ServicoCliente.data_previsao.asc().nullslast()).all()
 
-    # MÃ©tricas gerais dos cards
     qtd_em_andamento = query_base.filter_by(status='Em Andamento').count()
     qtd_pendentes = query_base.filter(ServicoCliente.status.in_(['Pendente', 'Bloqueado'])).count()
     qtd_concluidos = query_base.filter_by(status='Concluido').count()
@@ -5748,7 +6363,6 @@ def consultar_servicos():
         clientes=clientes,
         hoje=hoje
     )
-
 
 @app.route('/catalogo', methods=['GET'])
 @login_required
@@ -5781,7 +6395,6 @@ def novo_tipo_servico():
 def excluir_tipo_servico(id):
     item = TipoServico.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     
-    # Valida se o serviÃ§o jÃ¡ possui propostas ou execuÃ§Ãµes vinculadas
     if item.execucoes or ItemProposta.query.filter_by(tipo_servico_id=item.id).first():
         flash('NÃ£o Ã© possÃ­vel excluir este item pois ele jÃ¡ estÃ¡ vinculado a propostas ou serviÃ§os emitidos.', 'danger')
     else:
@@ -5796,7 +6409,6 @@ def excluir_tipo_servico(id):
 def atualizar_operacao_servico(id):
     servico = ServicoCliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     
-    # Trava de seguranÃ§a no backend para nÃ£o permitir iniciar sem sinal
     if servico.status == 'Bloqueado':
         flash('Esta atividade estÃ¡ bloqueada pelo Financeiro aguardando o pagamento do sinal.', 'danger')
         return redirect(url_for('consultar_servicos', status=request.form.get('filtro_retorno', 'agenda')))
@@ -5828,7 +6440,6 @@ def financeiro():
     query_faturas = Fatura.query.filter_by(empresa_id=current_user.empresa_id)
     todas_faturas = query_faturas.all()
 
-    # MÃ©tricas globais
     todas_parcelas = ParcelaFatura.query.filter_by(empresa_id=current_user.empresa_id).all()
     total_a_faturar = sum(p.valor for p in todas_parcelas if p.status == 'A Faturar')
     total_aguardando = sum(p.valor for p in todas_parcelas if p.status == 'Boleto Emitido' and (not p.data_vencimento or p.data_vencimento >= hoje))
@@ -5838,7 +6449,6 @@ def financeiro():
     total_atrasado = sum(p.valor for p in parcelas_atrasadas)
     qtd_atrasados = len(parcelas_atrasadas)
 
-    # Filtragem
     if filtro_atual == 'afaturar':
         faturas_filtradas = [f for f in todas_faturas if f.status_geral == 'A Faturar']
     elif filtro_atual == 'aguardando':
@@ -5884,7 +6494,6 @@ def financeiro():
         hoje=hoje
     )
 
-
 @app.route('/financeiro/fatura/<int:id>/atualizar', methods=['POST'])
 @login_required
 def atualizar_cobranca_fatura(id):
@@ -5894,7 +6503,6 @@ def atualizar_cobranca_fatura(id):
     dt_venc = request.form.get('data_vencimento')
     data_formatada = datetime.strptime(dt_venc, '%Y-%m-%d').date() if dt_venc else None
 
-    # Upload da NF
     if 'arquivo_nf' in request.files:
         f = request.files['arquivo_nf']
         if f.filename:
@@ -5902,7 +6510,6 @@ def atualizar_cobranca_fatura(id):
             f.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_arq))
             fatura.arquivo_nf = nome_arq
 
-    # Upload do Boleto Principal
     boleto_salvo = None
     if 'arquivo_boleto' in request.files:
         f_bol = request.files['arquivo_boleto']
@@ -5912,7 +6519,6 @@ def atualizar_cobranca_fatura(id):
 
     nova_obs = request.form.get('nova_ocorrencia')
 
-    # Atualiza as parcelas
     if fatura.parcelas:
         for p in fatura.parcelas:
             if novo_status in ['Pago', 'Boleto Emitido', 'A Faturar', 'Em Atraso']:
@@ -5925,7 +6531,6 @@ def atualizar_cobranca_fatura(id):
                 registro = f"[{datetime.now().strftime('%d/%m/%Y %H:%M')}] {nova_obs}\n"
                 p.historico_cobranca = (p.historico_cobranca or "") + registro
 
-    # LiberaÃ§Ã£o automÃ¡tica da Agenda caso pago
     if novo_status == 'Pago':
         servicos_bloqueados = ServicoCliente.query.filter_by(fatura_id=fatura.id).filter(ServicoCliente.status.in_(['Bloqueado', 'Pendente'])).all()
         for sc in servicos_bloqueados:
@@ -5935,7 +6540,6 @@ def atualizar_cobranca_fatura(id):
     db.session.commit()
     flash(f'Fatura "{fatura.descricao}" atualizada com sucesso!', 'success')
     return redirect(url_for('financeiro', status=request.form.get('filtro_retorno', 'todos')))
-
 
 @app.route('/financeiro/parcela/<int:id>/atualizar', methods=['POST'])
 @login_required
@@ -5963,7 +6567,6 @@ def atualizar_cobranca_parcela(id):
         registro = f"[{datetime.now().strftime('%d/%m/%Y %H:%M')}] {nova_obs}\n"
         parcela.historico_cobranca = (parcela.historico_cobranca or "") + registro
 
-    # Gatilho de LiberaÃ§Ã£o da Entrada na Agenda
     if parcela.is_entrada and novo_status == 'Pago' and status_anterior != 'Pago':
         fatura = parcela.fatura
         servicos_bloqueados = ServicoCliente.query.filter_by(fatura_id=fatura.id, status='Bloqueado').all()
@@ -5975,7 +6578,6 @@ def atualizar_cobranca_parcela(id):
     db.session.commit()
     flash(f'{parcela.descricao_parcela} atualizada com sucesso!', 'info')
     return redirect(url_for('financeiro', status=request.form.get('filtro_retorno', 'todos')))
-
 
 @app.route('/contratos/faturar-mes', methods=['POST'])
 @login_required
@@ -6014,7 +6616,6 @@ def faturar_mes_contratos():
             db.session.add(nova_fatura)
             db.session.flush()
 
-            # Cria Parcela do Ciclo
             parc_ciclo = ParcelaFatura(
                 empresa_id=current_user.empresa_id,
                 fatura_id=nova_fatura.id,
@@ -6053,7 +6654,7 @@ def faturar_mes_contratos():
     return redirect(url_for('financeiro'))
 
 # -----------------------------------------------------------------------------
-# 8. PERFIL DA EMPRESA & WHITE-LABEL
+# 8. PERFIL DA EMPRESA, SUPORTE & ASSINATURA ASAAS
 # -----------------------------------------------------------------------------
 
 @app.route('/configuracoes/perfil', methods=['GET', 'POST'])
@@ -6126,13 +6727,21 @@ def perfil_empresa():
 
         return redirect(url_for('perfil_empresa'))
 
-    return render_template('perfil_empresa.html', perfil=empresa)
+    # Gera links de renovaÃ§Ã£o/upgrade direto no perfil
+    link_founder = gerar_link_pagamento_plano(empresa, "Founder", 97.00)
+    link_pro = gerar_link_pagamento_plano(empresa, "Pro Enterprise", 197.00)
+
+    return render_template(
+        'perfil_empresa.html', 
+        perfil=empresa,
+        link_founder=link_founder or '#',
+        link_pro=link_pro or '#'
+    )
 
 @app.route('/faq')
 @login_required
 def faq():
     return render_template('faq.html')
-
 
 @app.route('/suporte')
 @login_required
@@ -6143,7 +6752,6 @@ def suporte():
     
     return render_template('suporte.html', chamados=chamados)
 
-
 @app.route('/suporte/novo', methods=['POST'])
 @login_required
 def novo_chamado():
@@ -6153,7 +6761,6 @@ def novo_chamado():
     mensagem_texto = request.form.get('mensagem')
     arquivo = request.files.get('anexo')
 
-    # Gera protocolo Ãºnico (ex: TIK-2026-178814)
     protocolo = f"TIK-{int(time.time())}"
 
     novo_ticket = ChamadoSuporte(
@@ -6168,7 +6775,6 @@ def novo_chamado():
     db.session.add(novo_ticket)
     db.session.flush()
 
-    # Salva anexo se houver
     filename = None
     if arquivo and arquivo.filename:
         filename = f"chamado_{novo_ticket.id}_{int(time.time())}_{secure_filename(arquivo.filename)}"
@@ -6188,7 +6794,6 @@ def novo_chamado():
 
     flash(f'Chamado {protocolo} aberto com sucesso! Nossa equipe analisarÃ¡ sua solicitaÃ§Ã£o.', 'success')
     return redirect(url_for('suporte'))
-
 
 @app.route('/suporte/<int:id>', methods=['GET', 'POST'])
 @login_required
@@ -6224,133 +6829,88 @@ def detalhe_chamado(id):
 
     return render_template('detalhe_chamado.html', chamado=chamado)
 
-@app.route('/admin/master/usuarios')
+@app.route('/assinatura/regularizar')
 @login_required
-@master_required
-def admin_master_usuarios():
-  usuarios = (
-      Usuario.query.join(Empresa)
-      .order_by(Usuario.nivel_acesso.desc(), Usuario.nome.asc())
-      .all()
-  )
-  return render_template('admin/master_usuarios.html', usuarios=usuarios)
+def regularizar_assinatura():
+    if current_user.empresa.status_assinatura in ['ativo', 'trial'] or current_user.nivel_acesso == 'master':
+        return redirect(url_for('index'))
 
+    link_founder = gerar_link_pagamento_plano(current_user.empresa, "Founder", 97.00)
+    link_pro = gerar_link_pagamento_plano(current_user.empresa, "Pro Enterprise", 197.00)
 
-@app.route(
-    '/admin/master/usuarios/<int:id>/alterar-nivel', methods=['POST']
-)
-@login_required
-@master_required
-def admin_alterar_nivel_usuario(id):
-  usuario = Usuario.query.get_or_404(id)
-  novo_nivel = request.form.get('nivel_acesso')
-
-  # Trava de seguranÃ§a: impede que vocÃª remova seu prÃ³prio acesso master
-  if usuario.id == current_user.id and novo_nivel != 'master':
-    flash('VocÃª nÃ£o pode remover seu prÃ³prio privilÃ©gio de Master.', 'danger')
-    return redirect(url_for('admin_master_usuarios'))
-
-  if novo_nivel in ['operador', 'admin', 'master']:
-    usuario.nivel_acesso = novo_nivel
-    db.session.commit()
-    flash(
-        f'NÃ­vel de acesso de "{usuario.nome}" atualizado para "{novo_nivel.upper()}".',
-        'success',
-    )
-  else:
-    flash('NÃ­vel de acesso invÃ¡lido informado.', 'danger')
-
-  return redirect(url_for('admin_master_usuarios'))
-
-from flask import session
-from werkzeug.security import generate_password_hash
-
-
-# 1. ImpersonaÃ§Ã£o de Conta (Logar como o Inquilino)
-@app.route('/admin/master/impersonar/<int:empresa_id>')
-@login_required
-@master_required
-def admin_impersonar_empresa(empresa_id):
-  alvo_empresa = Empresa.query.get_or_404(empresa_id)
-  usuario_alvo = Usuario.query.filter_by(empresa_id=alvo_empresa.id).first()
-
-  if not usuario_alvo:
-    flash(
-        'Esta empresa nÃ£o possui nenhum usuÃ¡rio cadastrado para acesso.',
-        'danger',
-    )
-    return redirect(url_for('admin_master_dashboard'))
-
-  # Armazena o ID original do Master na sessÃ£o
-  session['original_master_id'] = current_user.id
-  login_user(usuario_alvo)
-
-  flash(
-      f'Modo Suporte Ativado: VocÃª estÃ¡ navegando como "{usuario_alvo.nome}" ({alvo_empresa.razao_social}).',
-      'warning',
-  )
-  return redirect(url_for('index'))
-
-
-# 2. Sair da ImpersonaÃ§Ã£o e Voltar para a Conta Master
-@app.route('/admin/master/sair-impersonacao')
-@login_required
-def admin_sair_impersonacao():
-  master_id = session.pop('original_master_id', None)
-  if master_id:
-    usuario_master = Usuario.query.get(master_id)
-    if usuario_master and usuario_master.nivel_acesso == 'master':
-      login_user(usuario_master)
-      flash('VocÃª retornou ao seu painel Master.', 'info')
-      return redirect(url_for('admin_master_dashboard'))
-
-  return redirect(url_for('auth.logout'))
-
-
-# 3. Alterar Status Manualmente (Ativar / Suspender / Trial)
-@app.route(
-    '/admin/master/empresa/<int:id>/alterar-status', methods=['POST']
-)
-@login_required
-@master_required
-def admin_alterar_status_empresa(id):
-  empresa = Empresa.query.get_or_404(id)
-  novo_status = request.form.get('status_assinatura')
-
-  if novo_status in ['ativo', 'trial', 'bloqueado', 'cancelado']:
-    empresa.status_assinatura = novo_status
-    db.session.commit()
-    flash(
-        f'Status da empresa "{empresa.razao_social}" atualizado para "{novo_status.upper()}".',
-        'success',
-    )
-  else:
-    flash('Status invÃ¡lido.', 'danger')
-
-  return redirect(url_for('admin_master_dashboard'))
-
-
-# 4. Redefinir Senha ForÃ§ada de um UsuÃ¡rio
-@app.route(
-    '/admin/master/usuario/<int:id>/redefinir-senha', methods=['POST']
-)
-@login_required
-@master_required
-def admin_redefinir_senha_usuario(id):
-  usuario = Usuario.query.get_or_404(id)
-  nova_senha = request.form.get('nova_senha')
-
-  if not nova_senha or len(nova_senha) < 6:
-    flash('A nova senha deve ter pelo menos 6 caracteres.', 'danger')
-  else:
-    usuario.senha_hash = generate_password_hash(nova_senha)
-    db.session.commit()
-    flash(
-        f'Senha de "{usuario.nome}" redefinida com sucesso para: {nova_senha}',
-        'success',
+    return render_template(
+        'bloqueio_pagamento.html',
+        link_founder=link_founder or '#',
+        link_pro=link_pro or '#'
     )
 
-  return redirect(url_for('admin_master_usuarios'))
+@app.route('/webhook/asaas', methods=['POST'])
+def webhook_asaas():
+    dados = request.get_json(silent=True) or {}
+    evento = dados.get('event')
+    payment = dados.get('payment', {})
+
+    customer_id = payment.get('customer')
+    forma_pagamento = payment.get('billingType')
+    valor_pago = float(payment.get('value') or 0.0)
+
+    if not customer_id:
+        return {"status": "ignored", "reason": "No customer ID"}, 200
+
+    empresa = Empresa.query.filter_by(asaas_customer_id=customer_id).first()
+
+    if empresa:
+        if evento in ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED']:
+            empresa.status_assinatura = 'ativo'
+            empresa.data_ultimo_pagamento = date.today()
+            empresa.data_vencimento = date.today() + timedelta(days=30)
+            empresa.forma_pagamento_asaas = forma_pagamento
+            empresa.valor_mensalidade = valor_pago
+            db.session.commit()
+            print(f"[ASAAS WEBHOOK] Pagamento confirmado para: {empresa.razao_social}")
+
+        elif evento in ['PAYMENT_OVERDUE']:
+            empresa.status_assinatura = 'bloqueado'
+            db.session.commit()
+            print(f"[ASAAS WEBHOOK] Pagamento vencido. Acesso suspenso: {empresa.razao_social}")
+
+    return {"status": "success"}, 200
+
+
+from services.asaas_service import criar_assinatura_transparente
+
+@app.route('/api/assinatura/checkout-transparente', methods=['POST'])
+@login_required
+def processar_checkout_transparente():
+    dados = request.get_json(silent=True) or {}
+    plano_nome = dados.get('plano', 'Founder')
+    forma_pagamento = dados.get('forma_pagamento', 'PIX')
+    valor = 97.00 if plano_nome == 'Founder' else 197.00
+
+    cartao_dados = dados.get('cartao') if forma_pagamento == 'CREDIT_CARD' else None
+    ip_cliente = request.remote_addr
+
+    resultado = criar_assinatura_transparente(
+        empresa=current_user.empresa,
+        nome_plano=plano_nome,
+        valor=valor,
+        forma_pagamento=forma_pagamento,
+        cartao_dados=cartao_dados,
+        remote_ip=ip_cliente
+    )
+
+    if resultado.get('sucesso'):
+        db.session.commit()
+        return jsonify({
+            "status": "success", 
+            "mensagem": "Assinatura gerada com sucesso!", 
+            "dados": resultado.get('subscription')
+        })
+    else:
+        return jsonify({
+            "status": "error", 
+            "mensagem": resultado.get('mensagem')
+        }), 400
 
 # -----------------------------------------------------------------------------
 # 9. INICIALIZAÃ‡ÃƒO DO SERVIDOR
@@ -6363,7 +6923,7 @@ if __name__ == '__main__':
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\consertar_faturas.py ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\consertar_faturas.py ===================
 from datetime import date
 from app import app
 from extensions import db
@@ -6404,7 +6964,7 @@ with app.app_context():
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\extensions.py ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\extensions.py ===================
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 
@@ -6413,7 +6973,31 @@ login_manager = LoginManager()
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\migrar_parcelas.py ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\migrar_master_asaas.py ===================
+from app import app
+from extensions import db
+from sqlalchemy import text
+
+with app.app_context():
+    db.session.execute(text("""
+        DO $$ 
+        BEGIN 
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='empresas' AND column_name='forma_pagamento_asaas') THEN 
+                ALTER TABLE empresas ADD COLUMN valor_mensalidade FLOAT DEFAULT 0.0;
+                ALTER TABLE empresas ADD COLUMN forma_pagamento_asaas VARCHAR(30);
+                ALTER TABLE empresas ADD COLUMN asaas_customer_id VARCHAR(50);
+                ALTER TABLE empresas ADD COLUMN asaas_subscription_id VARCHAR(50);
+                ALTER TABLE empresas ADD COLUMN data_ultimo_pagamento DATE;
+                ALTER TABLE empresas ADD COLUMN observacoes_master TEXT;
+            END IF; 
+        END $$;
+    """))
+    db.session.commit()
+    print(">> Sucesso! Novas colunas de gestÃ£o de pagamentos e Asaas adicionadas na tabela de empresas.")
+
+
+
+=================== ARQUIVO: E:\Trivium\trivium-erp\migrar_parcelas.py ===================
 from app import app
 from extensions import db
 from sqlalchemy import text
@@ -6458,7 +7042,27 @@ with app.app_context():
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\models.py ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\migrar_termos.py ===================
+from app import app
+from extensions import db
+from sqlalchemy import text
+
+with app.app_context():
+    db.session.execute(text("""
+        DO $$ 
+        BEGIN 
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='usuarios' AND column_name='aceitou_termos_beta') THEN 
+                ALTER TABLE usuarios ADD COLUMN aceitou_termos_beta BOOLEAN DEFAULT FALSE;
+                ALTER TABLE usuarios ADD COLUMN data_aceite_termos TIMESTAMP;
+            END IF; 
+        END $$;
+    """))
+    db.session.commit()
+    print(">> Sucesso! Colunas de aceite dos termos Beta adicionadas na tabela de usuÃ¡rios.")
+
+
+
+=================== ARQUIVO: E:\Trivium\trivium-erp\models.py ===================
 from datetime import datetime, date
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
@@ -6481,10 +7085,16 @@ class Empresa(db.Model):
     cor_secundaria = db.Column(db.String(7), default="#059669")
     cor_sidebar = db.Column(db.String(7), default="#ffffff")
 
-    # Assinatura
+    # Assinatura & Controle Master
     plano = db.Column(db.String(30), default="Founder")
-    status_assinatura = db.Column(db.String(20), default="ativo")
+    status_assinatura = db.Column(db.String(20), default="trial")
+    valor_mensalidade = db.Column(db.Float, default=0.0)
+    forma_pagamento_asaas = db.Column(db.String(30), nullable=True)
+    asaas_customer_id = db.Column(db.String(50), nullable=True)
+    asaas_subscription_id = db.Column(db.String(50), nullable=True)
     data_vencimento = db.Column(db.Date, nullable=True)
+    data_ultimo_pagamento = db.Column(db.Date, nullable=True)
+    observacoes_master = db.Column(db.Text, nullable=True)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relacionamentos
@@ -6497,6 +7107,19 @@ class Empresa(db.Model):
     faturas = db.relationship('Fatura', backref='empresa', lazy=True, cascade="all, delete-orphan")
     parcelas = db.relationship('ParcelaFatura', backref='empresa', lazy=True, cascade="all, delete-orphan")
 
+    # PROPRIEDADES DINÃ‚MICAS DE CÃLCULO DE DIAS (OBRIGATÃ“RIAS):
+    @property
+    def dias_cadastrado(self):
+        if not self.data_criacao:
+            return 0
+        return (date.today() - self.data_criacao.date()).days
+
+    @property
+    def dias_restantes_trial(self):
+        if not self.data_vencimento:
+            return 0
+        return (self.data_vencimento - date.today()).days
+
 
 class Usuario(UserMixin, db.Model):
     __tablename__ = 'usuarios'
@@ -6508,6 +7131,11 @@ class Usuario(UserMixin, db.Model):
     cargo = db.Column(db.String(50), default="Administrador")
     nivel_acesso = db.Column(db.String(20), default="admin")
     ativo = db.Column(db.Boolean, default=True)
+    
+    # NOVOS CAMPOS DE AUDITORIA LEGAL:
+    aceitou_termos_beta = db.Column(db.Boolean, default=False)
+    data_aceite_termos = db.Column(db.DateTime, nullable=True)
+    
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
 
     def set_senha(self, senha):
@@ -6754,7 +7382,8 @@ class MensagemChamado(db.Model):
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\popular_banco.py ===
+
+=================== ARQUIVO: E:\Trivium\trivium-erp\popular_banco.py ===================
 from app import app
 from extensions import db
 from models import Empresa, Cliente
@@ -6891,7 +7520,7 @@ with app.app_context():
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\popular_propostas.py ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\popular_propostas.py ===================
 from datetime import date
 from dateutil.relativedelta import relativedelta
 from app import app
@@ -7072,7 +7701,7 @@ with app.app_context():
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\sincronizar_faturas.py ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\sincronizar_faturas.py ===================
 from datetime import date
 from dateutil.relativedelta import relativedelta
 from app import app
@@ -7151,7 +7780,38 @@ with app.app_context():
 
 
 
-=== ARQUIVO: E:\Trivium\trivium-erp\testar_virada_outubro.py ===
+=================== ARQUIVO: E:\Trivium\trivium-erp\testar_asaas.py ===================
+from dotenv import load_dotenv
+load_dotenv()
+
+from services.asaas_service import _fazer_requisicao, _get_api_key, _get_base_url
+
+print("=" * 60)
+print("TESTE DE CONEXÃƒO COM A API DO ASAAS (PRODUÃ‡ÃƒO)")
+print("=" * 60)
+
+url_base = _get_base_url()
+chave = _get_api_key()
+
+print(f"URL Base: {url_base}")
+if chave:
+    print(f"Chave detectada: {chave[:15]}... (ocultada por seguranÃ§a)")
+else:
+    print("âŒ Nenhuma chave detectada no .env!")
+print("-" * 60)
+
+resposta = _fazer_requisicao("customers?limit=1", metodo="GET")
+
+if resposta is not None and "data" in resposta:
+    print("âœ… SUCESSO! ConexÃ£o autenticada perfeitamente com a API do Asaas.")
+    print(f"Total de clientes cadastrados no Asaas: {resposta.get('totalCount', 0)}")
+else:
+    print("âŒ FALHA NA CONEXÃƒO! Verifique as mensagens de erro acima.")
+print("=" * 60)
+
+
+
+=================== ARQUIVO: E:\Trivium\trivium-erp\testar_virada_outubro.py ===================
 from datetime import date
 from app import app
 from extensions import db

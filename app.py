@@ -6,6 +6,7 @@ import html
 from functools import wraps
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
+from services.asaas_service import criar_assinatura_transparente
 
 # Carrega variáveis de ambiente (.env)
 from dotenv import load_dotenv
@@ -1479,7 +1480,16 @@ def perfil_empresa():
 
         return redirect(url_for('perfil_empresa'))
 
-    return render_template('perfil_empresa.html', perfil=empresa)
+    # Gera links de renovação/upgrade direto no perfil
+    link_founder = gerar_link_pagamento_plano(empresa, "Founder", 97.00)
+    link_pro = gerar_link_pagamento_plano(empresa, "Pro Enterprise", 197.00)
+
+    return render_template(
+        'perfil_empresa.html', 
+        perfil=empresa,
+        link_founder=link_founder or '#',
+        link_pro=link_pro or '#'
+    )
 
 @app.route('/faq')
 @login_required
@@ -1619,6 +1629,100 @@ def webhook_asaas():
 
     return {"status": "success"}, 200
 
+
+
+
+@app.route('/api/assinatura/checkout-transparente', methods=['POST'])
+@login_required
+def processar_checkout_transparente():
+    try:
+        dados = request.get_json(silent=True) or {}
+        plano_nome = dados.get('plano', 'Founder')
+        forma_pagamento = dados.get('forma_pagamento', 'PIX')
+        valor = 97.00 if plano_nome == 'Founder' else 197.00
+
+        # Validação da empresa vinculada ao usuário
+        empresa = getattr(current_user, 'empresa', None)
+        if not empresa:
+            return jsonify({"status": "error", "mensagem": "Empresa não vinculada ao usuário logado."}), 400
+
+        cartao_dados = dados.get('cartao') if forma_pagamento == 'CREDIT_CARD' else None
+        
+        ip_cliente = request.headers.get('X-Forwarded-For', request.remote_addr)
+        if ip_cliente and ',' in ip_cliente:
+            ip_cliente = ip_cliente.split(',')[0].strip()
+
+        resultado = criar_assinatura_transparente(
+            empresa=empresa,
+            nome_plano=plano_nome,
+            valor=valor,
+            forma_pagamento=forma_pagamento,
+            cartao_dados=cartao_dados,
+            remote_ip=ip_cliente
+        )
+
+        if resultado and resultado.get('sucesso'):
+            db.session.commit()
+            sub_info = resultado.get('subscription') or {}
+            invoice_url = resultado.get('invoiceUrl') or sub_info.get('invoiceUrl') or sub_info.get('bankSlipUrl') or ''
+            
+            return jsonify({
+                "status": "success", 
+                "mensagem": "Cobrança gerada com sucesso!", 
+                "dados": sub_info,
+                "pix": resultado.get('pix'),
+                "invoiceUrl": invoice_url
+            })
+        else:
+            msg = resultado.get('mensagem', 'Erro ao processar assinatura junto ao Asaas.') if isinstance(resultado, dict) else 'Resposta inválida do gateway.'
+            return jsonify({"status": "error", "mensagem": msg}), 400
+
+    except Exception as e:
+        print(f"[ERRO CHECKOUT INTERNO]: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "mensagem": f"Erro interno no servidor: {str(e)}"}), 500
+    
+@login_required
+def processar_checkout_transparente():
+    dados = request.get_json(silent=True) or {}
+    plano_nome = dados.get('plano', 'Founder')
+    forma_pagamento = dados.get('forma_pagamento', 'PIX')
+    valor = 97.00 if plano_nome == 'Founder' else 197.00
+
+    cartao_dados = dados.get('cartao') if forma_pagamento == 'CREDIT_CARD' else None
+    ip_cliente = request.headers.get('X-Forwarded-For', request.remote_addr)
+    if ip_cliente and ',' in ip_cliente:
+        ip_cliente = ip_cliente.split(',')[0].strip()
+
+    resultado = criar_assinatura_transparente(
+        empresa=current_user.empresa,
+        nome_plano=plano_nome,
+        valor=valor,
+        forma_pagamento=forma_pagamento,
+        cartao_dados=cartao_dados,
+        remote_ip=ip_cliente
+    )
+
+    if resultado.get('sucesso'):
+        db.session.commit()
+        
+        # Garante a extração da URL da fatura direto da resposta do Asaas
+        sub_info = resultado.get('subscription') or {}
+        invoice_url = resultado.get('invoiceUrl') or sub_info.get('invoiceUrl') or sub_info.get('bankSlipUrl') or ''
+        
+        return jsonify({
+            "status": "success", 
+            "mensagem": "Cobrança gerada com sucesso!", 
+            "dados": sub_info,
+            "pix": resultado.get('pix'),
+            "invoiceUrl": invoice_url
+        })
+    else:
+        return jsonify({
+            "status": "error", 
+            "mensagem": resultado.get('mensagem')
+        }), 400
 # -----------------------------------------------------------------------------
 # 9. INICIALIZAÇÃO DO SERVIDOR
 # -----------------------------------------------------------------------------
