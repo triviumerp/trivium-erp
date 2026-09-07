@@ -12,7 +12,16 @@ class Empresa(db.Model):
     telefone = db.Column(db.String(50))
     email = db.Column(db.String(120))
     site = db.Column(db.String(120))
-    endereco_completo = db.Column(db.String(255))
+    
+    # Endereço Estruturado (Padronizado com a tabela Cliente)
+    cep = db.Column(db.String(10), nullable=True)
+    logradouro = db.Column(db.String(150), nullable=True)
+    numero = db.Column(db.String(20), nullable=True)
+    complemento = db.Column(db.String(100), nullable=True)
+    bairro = db.Column(db.String(100), nullable=True)
+    cidade = db.Column(db.String(100), nullable=True)
+    estado = db.Column(db.String(2), nullable=True)
+    endereco_completo = db.Column(db.String(255), nullable=True)
     
     # White-label
     logo_filename = db.Column(db.String(200))
@@ -42,7 +51,7 @@ class Empresa(db.Model):
     faturas = db.relationship('Fatura', backref='empresa', lazy=True, cascade="all, delete-orphan")
     parcelas = db.relationship('ParcelaFatura', backref='empresa', lazy=True, cascade="all, delete-orphan")
 
-    # PROPRIEDADES DINÂMICAS DE CÁLCULO DE DIAS (OBRIGATÓRIAS):
+    # PROPRIEDADES DINÂMICAS DE CÁLCULO DE DIAS:
     @property
     def dias_cadastrado(self):
         if not self.data_criacao:
@@ -54,7 +63,6 @@ class Empresa(db.Model):
         if not self.data_vencimento:
             return 0
         return (self.data_vencimento - date.today()).days
-
 
 class Usuario(UserMixin, db.Model):
     __tablename__ = 'usuarios'
@@ -100,6 +108,7 @@ class Cliente(db.Model):
     bairro = db.Column(db.String(100), nullable=True)
     cidade = db.Column(db.String(100), nullable=True)
     estado = db.Column(db.String(2), nullable=True)
+    endereco_completo = db.Column(db.String(255), nullable=True)
     observacoes = db.Column(db.Text, nullable=True)
 
     # Relacionamentos

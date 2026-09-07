@@ -40,61 +40,116 @@
                     <form method="POST" action="{{ url_for('perfil_empresa') }}" enctype="multipart/form-data">
                         <input type="hidden" name="form_type" value="dados_empresa">
 
-                        <!-- Alternador PJ / PF -->
+                        <!-- SELETOR PF / PJ -->
                         <div class="mb-4">
-                            <label class="form-label small fw-bold text-muted d-block">Tipo de Cadastro</label>
-                            <div class="btn-group" role="group">
-                                <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pj" value="PJ" autocomplete="off" checked onchange="alternarTipoPessoa()">
-                                <label class="btn btn-outline-primary fw-bold px-4" for="tipo_pj"><i class="bi bi-briefcase me-1"></i> Pessoa Jurídica (PJ)</label>
+                            <label class="fw-bold text-dark d-block mb-2">Tipo de Cadastro</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pj" value="PJ" 
+                                    {% if not perfil.cnpj or (perfil.cnpj|replace('.', '')|replace('-', '')|replace('/', '')|length > 11) %}checked{% endif %} 
+                                    onchange="alternarTipoPessoa()">
+                                <label class="btn btn-outline-primary fw-bold py-2" for="tipo_pj">
+                                    <i class="bi bi-building me-1"></i> Pessoa Jurídica (PJ)
+                                </label>
 
-                                <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pf" value="PF" autocomplete="off" onchange="alternarTipoPessoa()">
-                                <label class="btn btn-outline-primary fw-bold px-4" for="tipo_pf"><i class="bi bi-person me-1"></i> Pessoa Física (PF / Autônomo)</label>
+                                <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pf" value="PF" 
+                                    {% if perfil.cnpj and (perfil.cnpj|replace('.', '')|replace('-', '')|replace('/', '')|length <= 11) %}checked{% endif %} 
+                                    onchange="alternarTipoPessoa()">
+                                <label class="btn btn-outline-primary fw-bold py-2" for="tipo_pf">
+                                    <i class="bi bi-person me-1"></i> Pessoa Física (Autônomo)
+                                </label>
                             </div>
                         </div>
 
                         <div class="row g-3">
+                            <!-- CAMPOS PJ -->
                             <div class="col-md-6 campo-pj">
-                                <label class="form-label small fw-bold">Razão Social *</label>
-                                <input type="text" name="razao_social" class="form-control" value="{{ perfil.razao_social or '' }}" required>
+                                <label class="form-label small fw-bold text-dark">Razão Social *</label>
+                                <input type="text" name="razao_social" id="razao_social" class="form-control" 
+                                    value="{{ perfil.razao_social or '' }}" 
+                                    placeholder="Ex: Minha Empresa de Consultoria LTDA">
                             </div>
                             <div class="col-md-6 campo-pj">
-                                <label class="form-label small fw-bold">Nome Fantasia</label>
-                                <input type="text" name="nome_fantasia" class="form-control" value="{{ perfil.nome_fantasia or '' }}">
+                                <label class="form-label small fw-bold text-dark">Nome Fantasia</label>
+                                <input type="text" name="nome_fantasia" id="nome_fantasia" class="form-control" 
+                                    value="{{ perfil.nome_fantasia if perfil.nome_fantasia != 'Profissional Autônomo' else '' }}" 
+                                    placeholder="Ex: Trivium Consultoria">
                             </div>
                             <div class="col-md-6 campo-pj">
-                                <label class="form-label small fw-bold">CNPJ</label>
-                                <input type="text" name="cnpj" class="form-control" placeholder="00.000.000/0000-00" value="{{ perfil.cnpj or '' }}">
+                                <label class="form-label small fw-bold text-dark">CNPJ *</label>
+                                <input type="text" name="cnpj" id="cnpj_input" class="form-control" 
+                                    value="{{ perfil.cnpj if (perfil.cnpj and (perfil.cnpj|replace('.', '')|replace('-', '')|replace('/', '')|length > 11)) else '' }}" 
+                                    placeholder="00.000.000/0000-00">
                             </div>
 
+                            <!-- CAMPOS PF -->
                             <div class="col-md-6 campo-pf d-none">
-                                <label class="form-label small fw-bold">Nome Completo do Profissional *</label>
-                                <input type="text" name="nome_profissional" id="nome_profissional" class="form-control" value="{{ perfil.razao_social or '' }}">
+                                <label class="form-label small fw-bold text-dark">Nome Completo do Profissional *</label>
+                                <input type="text" name="nome_profissional" id="nome_profissional" class="form-control" 
+                                    value="{{ perfil.razao_social or '' }}" 
+                                    placeholder="Ex: Carlos Eduardo Silva">
                             </div>
                             <div class="col-md-6 campo-pf d-none">
-                                <label class="form-label small fw-bold">CPF</label>
-                                <input type="text" name="cpf" id="cpf" class="form-control" placeholder="000.000.000-00" value="{{ perfil.cnpj or '' }}">
+                                <label class="form-label small fw-bold text-dark">CPF *</label>
+                                <input type="text" name="cpf" id="cpf_input" class="form-control" 
+                                    value="{{ perfil.cnpj if (perfil.cnpj and (perfil.cnpj|replace('.', '')|replace('-', '')|replace('/', '')|length <= 11)) else '' }}" 
+                                    placeholder="000.000.000-00">
                             </div>
 
+                            <!-- CAMPOS COMUNS (CONTATO) -->
                             <div class="col-md-6">
-                                <label class="form-label small fw-bold">Telefone / WhatsApp Comercial *</label>
-                                <input type="text" name="telefone" class="form-control" value="{{ perfil.telefone or '' }}" required>
+                                <label class="form-label small fw-bold text-dark">Telefone / WhatsApp *</label>
+                                <input type="text" name="telefone" class="form-control" value="{{ perfil.telefone or '' }}" required placeholder="(11) 99999-9999">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label small fw-bold">E-mail Comercial (Propostas / Notificações) *</label>
-                                <input type="email" name="email" class="form-control" value="{{ perfil.email or '' }}" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold">Site / Rede Social</label>
-                                <input type="text" name="site" class="form-control" placeholder="https://seusite.com.br" value="{{ perfil.site or '' }}">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label small fw-bold">Endereço Comercial Completo</label>
-                                <input type="text" name="endereco_completo" class="form-control" placeholder="Rua, Número, Bairro, Cidade - UF, CEP" value="{{ perfil.endereco_completo or '' }}">
+                                <label class="form-label small fw-bold text-dark">E-mail de Contato / Financeiro *</label>
+                                <input type="email" name="email" class="form-control" value="{{ perfil.email or '' }}" required placeholder="contato@empresa.com.br">
                             </div>
                         </div>
 
                         <hr class="my-4 text-muted">
 
+                        <!-- 2. ENDEREÇO ESTRUTURADO COM BUSCA AUTOMÁTICA DE CEP -->
+                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-geo-alt text-primary me-2"></i>Endereço da Sede</h6>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">CEP</label>
+                                <div class="input-group">
+                                    <input type="text" name="cep" id="cep_empresa" class="form-control" placeholder="00000-000" maxlength="9" value="{{ perfil.cep or '' }}">
+                                    <button class="btn btn-outline-secondary" type="button" id="btn-busca-cep-empresa" onclick="buscarCEPEmpresa()" title="Buscar endereço pelo CEP">
+                                        <i class="bi bi-search" id="icone-busca-cep-empresa"></i>
+                                    </button>
+                                </div>
+                                <small id="cep-empresa-status" class="text-muted d-block mt-1" style="font-size: 0.75rem;"></small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Logradouro (Rua, Av, etc)</label>
+                                <input type="text" name="logradouro" id="logradouro_empresa" class="form-control" value="{{ perfil.logradouro or '' }}">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small fw-bold">Número</label>
+                                <input type="text" name="numero" id="numero_empresa" class="form-control" value="{{ perfil.numero or '' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Complemento</label>
+                                <input type="text" name="complemento" id="complemento_empresa" class="form-control" placeholder="Sala, Bloco, Galpão..." value="{{ perfil.complemento or '' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Bairro</label>
+                                <input type="text" name="bairro" id="bairro_empresa" class="form-control" value="{{ perfil.bairro or '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Cidade</label>
+                                <input type="text" name="cidade" id="cidade_empresa" class="form-control" value="{{ perfil.cidade or '' }}">
+                            </div>
+                            <div class="col-md-1">
+                                <label class="form-label small fw-bold">UF</label>
+                                <input type="text" name="estado" id="estado_empresa" class="form-control text-uppercase" maxlength="2" placeholder="SP" value="{{ perfil.estado or '' }}">
+                            </div>
+                        </div>
+
+                        <hr class="my-4 text-muted">
+
+                        <!-- 3. IDENTIDADE VISUAL & WHITE-LABEL -->
                         <h6 class="fw-bold text-dark mb-3"><i class="bi bi-palette text-primary me-2"></i>Personalização Visual & Logotipo</h6>
                         <div class="row g-3 align-items-center mb-4">
                             <div class="col-md-6">
@@ -190,11 +245,11 @@
                     <div class="row g-3 bg-light rounded-3 p-3 border mb-4">
                         <div class="col-sm-6 col-md-3">
                             <span class="text-muted small d-block">Plano Atual:</span>
-                            <strong class="text-dark">{{ perfil.plano or 'Founder' }}</strong>
+                            <strong class="text-dark">{{ perfil.plano or 'Plano Flex' }}</strong>
                         </div>
                         <div class="col-sm-6 col-md-3">
-                            <span class="text-muted small d-block">Valor Mensal:</span>
-                            <strong class="text-success">R$ {{ "%.2f"|format(perfil.valor_mensalidade or 97.00) }}/mês</strong>
+                            <span class="text-muted small d-block">Valor Contratado:</span>
+                            <strong class="text-success">R$ {{ "%.2f"|format(perfil.valor_mensalidade or 39.90) }}/mês</strong>
                         </div>
                         <div class="col-sm-6 col-md-3">
                             <span class="text-muted small d-block">Próximo Vencimento:</span>
@@ -208,35 +263,94 @@
                         </div>
                     </div>
 
-                    <!-- OPÇÕES DE RENOVAÇÃO / UPGRADE -->
-                    <h6 class="fw-bold text-dark mb-3">Renovação ou Mudança de Plano</h6>
+                    <!-- OPÇÕES DE PLANOS: MENSAL, SEMESTRAL E ANUAL -->
+                    <h6 class="fw-bold text-dark mb-3">Escolha o Ciclo de Assinatura</h6>
                     <div class="row g-3">
-                        <div class="col-md-6">
-                            <div class="border rounded-3 p-3 h-100 d-flex flex-column justify-content-between bg-white shadow-sm">
+                        <!-- PLANO MENSAL -->
+                        <div class="col-lg-4">
+                            <div class="border rounded-4 p-4 h-100 d-flex flex-column justify-content-between bg-white shadow-sm">
                                 <div>
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <strong class="text-dark fs-5">Plano Founder</strong>
-                                        <span class="badge bg-secondary">R$ 97/mês</span>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge bg-light text-secondary border px-3 py-1">Mensal</span>
                                     </div>
-                                    <p class="text-muted small mt-2 mb-3">Ideal para consultores individuais e profissionais autônomos.</p>
+                                    <h5 class="fw-bold text-dark mb-1">Plano Flex</h5>
+                                    <p class="text-muted small">Sem fidelidade, cancele quando quiser.</p>
+                                    
+                                    <div class="my-3 pb-3 border-bottom">
+                                        <span class="display-6 fw-bold text-dark">R$ 39,90</span>
+                                        <span class="text-muted small">/mês</span>
+                                        <div class="small text-muted mt-1">Cobrança mensal recorrente</div>
+                                    </div>
+
+                                    <ul class="list-unstyled small text-muted mb-4 space-y-2">
+                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Acesso completo a todos os módulos</li>
+                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Emissão ilimitada de propostas e OS</li>
+                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Suporte técnico padrão</li>
+                                    </ul>
                                 </div>
-                                <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2" onclick="abrirCheckoutModal('Founder', 97.00)">
-                                    <i class="bi bi-credit-card me-2"></i>Assinar / Renovar Founder
+                                <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2" onclick="abrirCheckoutModal('MENSAL', 39.90, 1, 'R$ 39,90/mês')">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Assinar Mensal
                                 </button>
                             </div>
                         </div>
 
-                        <div class="col-md-6">
-                            <div class="border border-primary rounded-3 p-3 h-100 d-flex flex-column justify-content-between bg-white shadow-sm">
+                        <!-- PLANO SEMESTRAL -->
+                        <div class="col-lg-4">
+                            <div class="border rounded-4 p-4 h-100 d-flex flex-column justify-content-between bg-white shadow-sm position-relative">
                                 <div>
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <strong class="text-primary fs-5">Plano Pro Enterprise</strong>
-                                        <span class="badge bg-primary">R$ 197/mês</span>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle px-3 py-1">Semestral</span>
+                                        <span class="badge bg-success-subtle text-success small">Economize 12%</span>
                                     </div>
-                                    <p class="text-muted small mt-2 mb-3">Para consultorias com equipe técnica e usuários ilimitados.</p>
+                                    <h5 class="fw-bold text-dark mb-1">Plano Semestral</h5>
+                                    <p class="text-muted small">Maior comodidade e economia semestral.</p>
+                                    
+                                    <div class="my-3 pb-3 border-bottom">
+                                        <span class="display-6 fw-bold text-dark">R$ 34,90</span>
+                                        <span class="text-muted small">/mês</span>
+                                        <div class="small text-muted mt-1">Total de R$ 209,40 em até <strong>6x sem juros</strong></div>
+                                    </div>
+
+                                    <ul class="list-unstyled small text-muted mb-4 space-y-2">
+                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Tudo do Plano Flex</li>
+                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Cobrança única a cada 6 meses</li>
+                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Prioridade no atendimento</li>
+                                    </ul>
                                 </div>
-                                <button type="button" class="btn btn-primary fw-bold w-100 py-2 shadow-sm" onclick="abrirCheckoutModal('Pro Enterprise', 197.00)">
-                                    <i class="bi bi-lightning-charge-fill me-2"></i>Assinar / Fazer Upgrade Pro
+                                <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2" onclick="abrirCheckoutModal('SEMESTRAL', 209.40, 6, '6x de R$ 34,90')">
+                                    <i class="bi bi-credit-card me-1"></i> Assinar Semestral
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- PLANO ANUAL -->
+                        <div class="col-lg-4">
+                            <div class="border border-2 border-primary rounded-4 p-4 h-100 d-flex flex-column justify-content-between bg-white shadow position-relative">
+                                <span class="position-absolute top-0 end-50 translate-middle-y badge bg-primary px-3 py-2 rounded-pill shadow-sm" style="transform: translate(50%, -50%);">
+                                    <i class="bi bi-star-fill me-1"></i> Mais Vantajoso
+                                </span>
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge bg-primary px-3 py-1">Anual Founder</span>
+                                        <span class="badge bg-success-subtle text-success small">Economize 25%</span>
+                                    </div>
+                                    <h5 class="fw-bold text-primary mb-1">Plano Anual</h5>
+                                    <p class="text-muted small">Máxima economia com acesso anual garantido.</p>
+                                    
+                                    <div class="my-3 pb-3 border-bottom">
+                                        <span class="display-6 fw-bold text-primary">R$ 29,90</span>
+                                        <span class="text-muted small">/mês</span>
+                                        <div class="small text-muted mt-1">Total de R$ 358,80 em até <strong>12x sem juros</strong></div>
+                                    </div>
+
+                                    <ul class="list-unstyled small text-muted mb-4 space-y-2">
+                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Acesso anual completo e ininterrupto</li>
+                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>White-label com logotipo personalizado</li>
+                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Suporte VIP prioritário</li>
+                                    </ul>
+                                </div>
+                                <button type="button" class="btn btn-primary fw-bold w-100 py-2 shadow-sm" onclick="abrirCheckoutModal('ANUAL', 358.80, 12, '12x de R$ 29,90')">
+                                    <i class="bi bi-lightning-charge-fill me-1"></i> Assinar Anual
                                 </button>
                             </div>
                         </div>
@@ -258,32 +372,26 @@
             </div>
             <div class="modal-body p-4">
                 <ul class="nav nav-pills nav-fill mb-3" id="pills-tab" role="tablist">
-                    <li class="nav-item">
-                        <button class="nav-link active fw-bold" id="tab-pix" data-bs-toggle="pill" data-bs-target="#conteudo-pix" type="button" role="tab">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-bold" id="tab-cartao" data-bs-toggle="pill" data-bs-target="#conteudo-cartao" type="button" role="tab">
+                            <i class="bi bi-credit-card me-1"></i> Cartão (Parcelado)
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold" id="tab-pix" data-bs-toggle="pill" data-bs-target="#conteudo-pix" type="button" role="tab">
                             <i class="bi bi-qr-code me-1"></i> PIX Instantâneo
                         </button>
                     </li>
-                    <li class="nav-item">
-                        <button class="nav-link fw-bold" id="tab-cartao" data-bs-toggle="pill" data-bs-target="#conteudo-cartao" type="button" role="tab">
-                            <i class="bi bi-credit-card me-1"></i> Cartão de Crédito
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold" id="tab-boleto" data-bs-toggle="pill" data-bs-target="#conteudo-boleto" type="button" role="tab">
+                            <i class="bi bi-upc-scan me-1"></i> Boleto (À Vista)
                         </button>
                     </li>
                 </ul>
 
                 <div class="tab-content pt-2">
-                    <!-- ABA PIX -->
-                    <div class="tab-pane fade show active text-center" id="conteudo-pix" role="tabpanel">
-                        <p class="text-muted small mb-3">Liberação imediata assim que o Pix for pago.</p>
-                        <button type="button" class="btn btn-success fw-bold w-100 py-2" onclick="processarPagamento('PIX')">
-                            <i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX
-                        </button>
-                        <div id="resultadoPix" class="mt-3 d-none">
-                            <div class="alert alert-info small" id="msgPix">Carregando código...</div>
-                        </div>
-                    </div>
-
                     <!-- ABA CARTÃO DE CRÉDITO -->
-                    <div class="tab-pane fade" id="conteudo-cartao" role="tabpanel">
+                    <div class="tab-pane fade show active" id="conteudo-cartao" role="tabpanel">
                         <form id="formCartaoCheckout">
                             <div class="mb-2">
                                 <label class="small text-muted fw-bold">Número do Cartão</label>
@@ -307,10 +415,32 @@
                                     <input type="text" id="cc_cvv" class="form-control" placeholder="123" maxlength="4" required>
                                 </div>
                             </div>
-                            <button type="button" class="btn btn-primary fw-bold w-100 py-2" onclick="processarPagamento('CREDIT_CARD')">
+                            <button type="button" class="btn btn-primary fw-bold w-100 py-2 shadow-sm" onclick="processarPagamento('CREDIT_CARD')">
                                 Confirmar e Assinar
                             </button>
                         </form>
+                    </div>
+
+                    <!-- ABA PIX -->
+                    <div class="tab-pane fade text-center" id="conteudo-pix" role="tabpanel">
+                        <p class="text-muted small mb-3">Liberação imediata assim que o Pix for pago.</p>
+                        <button type="button" class="btn btn-success fw-bold w-100 py-2 shadow-sm" onclick="processarPagamento('PIX')">
+                            <i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX
+                        </button>
+                        <div id="resultadoPix" class="mt-3 d-none">
+                            <div class="alert alert-info small" id="msgPix">Carregando código...</div>
+                        </div>
+                    </div>
+
+                    <!-- ABA BOLETO BANCÁRIO -->
+                    <div class="tab-pane fade text-center" id="conteudo-boleto" role="tabpanel">
+                        <div class="alert alert-light border small text-muted text-start mb-3">
+                            <i class="bi bi-info-circle text-primary me-1"></i> O boleto será emitido no <strong>valor total à vista</strong> do ciclo contratado com vencimento para 3 dias úteis. A conta é liberada após a compensação bancária.
+                        </div>
+                        <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2 shadow-sm" onclick="processarPagamento('BOLETO')">
+                            <i class="bi bi-file-earmark-pdf me-1"></i> Gerar Boleto Bancário
+                        </button>
+                        <div id="resultadoBoleto" class="mt-3 d-none"></div>
                     </div>
                 </div>
             </div>
@@ -319,7 +449,10 @@
 </div>
 
 <script>
-let planoEscolhido = 'Founder';
+// Variáveis com valores padrão (atualizadas ao clicar em qualquer plano)
+let planoEscolhido = 'MENSAL';
+let valorTotalEscolhido = 39.90;
+let parcelasEscolhidas = 1;
 
 function alternarTipoPessoa() {
     const isPj = document.getElementById('tipo_pj').checked;
@@ -332,41 +465,85 @@ function alternarTipoPessoa() {
     } else {
         camposPJ.forEach(el => el.classList.add('d-none'));
         camposPF.forEach(el => el.classList.remove('d-none'));
-        const inputRazao = document.querySelector('input[name="razao_social"]');
-        const inputProf = document.getElementById('nome_profissional');
-        if (inputRazao && !inputProf.value) {
-            inputProf.value = inputRazao.value;
-        }
     }
 }
 
-// Abre o modal de assinatura com o plano e valor selecionados
-function abrirCheckoutModal(plano, valor) {
-    planoEscolhido = plano || 'Founder';
+// BUSCA AUTOMÁTICA DE CEP VIA VIACEP
+function buscarCEPEmpresa() {
+    const cepInput = document.getElementById('cep_empresa');
+    const statusText = document.getElementById('cep-empresa-status');
+    const iconeBusca = document.getElementById('icone-busca-cep-empresa');
+    const cep = cepInput.value.replace(/\D/g, '');
+
+    if (cep.length !== 8) {
+        statusText.innerText = 'Digite um CEP válido com 8 dígitos.';
+        statusText.className = 'text-danger d-block mt-1';
+        return;
+    }
+
+    if (iconeBusca) iconeBusca.className = 'spinner-border spinner-border-sm text-primary';
+    statusText.innerText = 'Consultando endereço...';
+    statusText.className = 'text-muted d-block mt-1';
+
+    fetch(`https://viacep.com.br/ws/${cep}/json/`)
+        .then(response => response.json())
+        .then(dados => {
+            if (iconeBusca) iconeBusca.className = 'bi bi-search';
+            if (dados.erro) {
+                statusText.innerText = 'CEP não encontrado.';
+                statusText.className = 'text-danger d-block mt-1';
+            } else {
+                document.getElementById('logradouro_empresa').value = dados.logradouro || '';
+                document.getElementById('bairro_empresa').value = dados.bairro || '';
+                document.getElementById('cidade_empresa').value = dados.localidade || '';
+                document.getElementById('estado_empresa').value = dados.uf || '';
+                statusText.innerText = 'Endereço localizado com sucesso!';
+                statusText.className = 'text-success d-block mt-1';
+                document.getElementById('numero_empresa').focus();
+            }
+        })
+        .catch(() => {
+            if (iconeBusca) iconeBusca.className = 'bi bi-search';
+            statusText.innerText = 'Erro ao consultar o serviço de CEP.';
+            statusText.className = 'text-danger d-block mt-1';
+        });
+}
+
+// Abre o modal de assinatura com o plano, valor e parcelas selecionados
+function abrirCheckoutModal(plano, valorTotal, parcelas, rotulo) {
+    planoEscolhido = plano;
+    valorTotalEscolhido = valorTotal;
+    parcelasEscolhidas = parcelas;
     
     const tituloEl = document.getElementById('tituloModalPlano');
     if (tituloEl) {
-        tituloEl.innerText = `Assinar ${planoEscolhido} (R$ ${parseFloat(valor).toFixed(2)}/mês)`;
+        tituloEl.innerText = `Finalizar Assinatura: ${plano} (${rotulo})`;
     }
     
-    // Limpa estado anterior do Pix
     const areaPix = document.getElementById('resultadoPix');
     if (areaPix) {
         areaPix.classList.add('d-none');
         areaPix.innerHTML = '<div class="alert alert-info small" id="msgPix">Carregando código...</div>';
     }
 
-    // Instancia e abre o modal via Bootstrap
+    const areaBoleto = document.getElementById('resultadoBoleto');
+    if (areaBoleto) {
+        areaBoleto.classList.add('d-none');
+        areaBoleto.innerHTML = '';
+    }
+
     const modalEl = document.getElementById('modalCheckoutTransparente');
     if (modalEl) {
-        const modalObj = bootstrap.Modal.getOrCreateInstance(modalEl);
-        modalObj.show();
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
     }
 }
 
+// Processa o pagamento enviando os dados dinâmicos do plano
 function processarPagamento(tipo) {
     const payload = {
         plano: planoEscolhido,
+        valor_total: valorTotalEscolhido,
+        parcelas: parcelasEscolhidas,
         forma_pagamento: tipo
     };
 
@@ -397,6 +574,12 @@ function processarPagamento(tipo) {
         btnPix.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gerando Pix...';
     }
 
+    const btnBoleto = document.querySelector('#conteudo-boleto button');
+    if (tipo === 'BOLETO' && btnBoleto) {
+        btnBoleto.disabled = true;
+        btnBoleto.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gerando Boleto...';
+    }
+
     fetch('/api/assinatura/checkout-transparente', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -408,6 +591,10 @@ function processarPagamento(tipo) {
             btnPix.disabled = false;
             btnPix.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX';
         }
+        if (tipo === 'BOLETO' && btnBoleto) {
+            btnBoleto.disabled = false;
+            btnBoleto.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i> Gerar Boleto Bancário';
+        }
 
         if (res.status === 'success') {
             if (tipo === 'PIX') {
@@ -416,22 +603,16 @@ function processarPagamento(tipo) {
 
                 const copiaCola = (res.pix && res.pix.payload) ? res.pix.payload : '';
                 const encodedImg = (res.pix && res.pix.encodedImage) ? res.pix.encodedImage : '';
-                const linkFatura = res.invoiceUrl || (res.dados && res.dados.invoiceUrl) || '';
 
                 if (copiaCola || encodedImg) {
-                    let imgTag = '';
-                    if (encodedImg) {
-                        imgTag = `<img src="data:image/png;base64,${encodedImg}" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">`;
-                    } else {
-                        imgTag = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(copiaCola)}" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">`;
-                    }
+                    let imgTag = encodedImg 
+                        ? `<img src="data:image/png;base64,${encodedImg}" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">`
+                        : `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(copiaCola)}" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">`;
 
                     areaPix.innerHTML = `
                         <div class="card p-3 border-success text-center shadow-sm mt-3">
                             <h6 class="fw-bold text-success mb-2"><i class="bi bi-qr-code me-1"></i> QR Code Pix Gerado</h6>
-                            <div class="my-2 text-center">
-                                ${imgTag}
-                            </div>
+                            <div class="my-2 text-center">${imgTag}</div>
                             <label class="small text-muted fw-bold d-block text-start mb-1">Código Pix Copia e Cola:</label>
                             <div class="input-group mb-3">
                                 <input type="text" id="pixCopiaColaInput" class="form-control form-control-sm font-monospace" value="${copiaCola}" readonly>
@@ -439,24 +620,27 @@ function processarPagamento(tipo) {
                                     <i class="bi bi-clipboard me-1"></i>Copiar
                                 </button>
                             </div>
-                            <small class="text-muted">Assim que realizar o pagamento pelo aplicativo do seu banco, sua conta será liberada automaticamente.</small>
+                            <small class="text-muted">A liberação da sua conta ocorrerá imediatamente após o pagamento.</small>
                         </div>
                     `;
-                } else if (linkFatura) {
-                    areaPix.innerHTML = `
-                        <div class="card p-3 border-primary text-center shadow-sm mt-3">
-                            <h6 class="fw-bold text-primary mb-2"><i class="bi bi-receipt me-1"></i> Cobrança Gerada</h6>
-                            <p class="small text-muted mb-3">Clique no botão abaixo para abrir a fatura no Asaas:</p>
-                            <a href="${linkFatura}" target="_blank" rel="noopener noreferrer" class="btn btn-success fw-bold py-2 px-3">
-                                <i class="bi bi-box-arrow-up-right me-1"></i> Abrir Fatura no Asaas
-                            </a>
-                        </div>
-                    `;
-                } else {
-                    alert('Cobrança registrada, mas a URL não foi retornada pelo Asaas.');
                 }
+            } else if (tipo === 'BOLETO') {
+                const areaBoleto = document.getElementById('resultadoBoleto');
+                areaBoleto.classList.remove('d-none');
+                
+                const linkBoleto = res.bankSlipUrl || res.invoiceUrl || (res.dados && (res.dados.bankSlipUrl || res.dados.invoiceUrl)) || '';
+
+                areaBoleto.innerHTML = `
+                    <div class="card p-3 border-primary text-center shadow-sm mt-3">
+                        <h6 class="fw-bold text-primary mb-2"><i class="bi bi-file-earmark-check me-1"></i> Boleto Gerado</h6>
+                        <p class="small text-muted mb-3">Clique no botão abaixo para visualizar ou imprimir o boleto:</p>
+                        <a href="${linkBoleto}" target="_blank" rel="noopener noreferrer" class="btn btn-primary fw-bold py-2">
+                            <i class="bi bi-printer me-1"></i> Imprimir / Visualizar Boleto
+                        </a>
+                    </div>
+                `;
             } else {
-                alert('Assinatura processada com sucesso!');
+                alert('Assinatura processada com sucesso via Cartão!');
                 window.location.reload();
             }
         } else {
@@ -468,8 +652,119 @@ function processarPagamento(tipo) {
             btnPix.disabled = false;
             btnPix.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX';
         }
+        if (tipo === 'BOLETO' && btnBoleto) {
+            btnBoleto.disabled = false;
+            btnBoleto.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i> Gerar Boleto Bancário';
+        }
         alert('Erro de comunicação com o servidor.');
     });
 }
+
+// Disparadores Automáticos do CEP
+document.addEventListener('DOMContentLoaded', () => {
+    alternarTipoPessoa();
+    
+    const campoCep = document.getElementById('cep_empresa');
+    if (campoCep) {
+        campoCep.addEventListener('blur', function() {
+            if (this.value.replace(/\D/g, '').length === 8) {
+                buscarCEPEmpresa();
+            }
+        });
+
+        campoCep.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                buscarCEPEmpresa();
+            }
+        });
+    }
+});
+// ==========================================
+// MÁSCARAS DE ENTRADA (VISUAIS)
+// ==========================================
+
+function mascaraCNPJ(v) {
+    v = v.replace(/\D/g, "").slice(0, 14);
+    v = v.replace(/^(\d{2})(\d)/, "$1.$2");
+    v = v.replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3");
+    v = v.replace(/\.(\d{3})(\d)/, ".$1/$2");
+    v = v.replace(/(\d{4})(\d)/, "$1-$2");
+    return v;
+}
+
+function mascaraCPF(v) {
+    v = v.replace(/\D/g, "").slice(0, 11);
+    v = v.replace(/(\d{3})(\d)/, "$1.$2");
+    v = v.replace(/(\d{3})(\d)/, "$1.$2");
+    v = v.replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+    return v;
+}
+
+function mascaraTelefone(v) {
+    v = v.replace(/\D/g, "").slice(0, 11);
+    if (v.length > 10) {
+        v = v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+    } else if (v.length > 5) {
+        v = v.replace(/^(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3");
+    } else if (v.length > 2) {
+        v = v.replace(/^(\d{2})(\d{0,5})/, "($1) $2");
+    } else {
+        v = v.replace(/^(\d*)/, "($1");
+    }
+    return v;
+}
+
+function mascaraCEP(v) {
+    v = v.replace(/\D/g, "").slice(0, 8);
+    return v.replace(/^(\d{5})(\d)/, "$1-$2");
+}
+
+function aplicarMascarasIniciais() {
+    const inputCNPJ = document.getElementById('cnpj_input');
+    if (inputCNPJ && inputCNPJ.value) inputCNPJ.value = mascaraCNPJ(inputCNPJ.value);
+
+    const inputCPF = document.getElementById('cpf_input');
+    if (inputCPF && inputCPF.value) inputCPF.value = mascaraCPF(inputCPF.value);
+
+    const inputTel = document.querySelector('input[name="telefone"]');
+    if (inputTel && inputTel.value) inputTel.value = mascaraTelefone(inputTel.value);
+
+    const inputCEP = document.getElementById('cep_empresa');
+    if (inputCEP && inputCEP.value) inputCEP.value = mascaraCEP(inputCEP.value);
+}
+
+// Vincula os eventos de digitação
+document.addEventListener('DOMContentLoaded', () => {
+    aplicarMascarasIniciais();
+
+    const inputCNPJ = document.getElementById('cnpj_input');
+    if (inputCNPJ) {
+        inputCNPJ.addEventListener('input', (e) => {
+            e.target.value = mascaraCNPJ(e.target.value);
+        });
+    }
+
+    const inputCPF = document.getElementById('cpf_input');
+    if (inputCPF) {
+        inputCPF.addEventListener('input', (e) => {
+            e.target.value = mascaraCPF(e.target.value);
+        });
+    }
+
+    const inputTel = document.querySelector('input[name="telefone"]');
+    if (inputTel) {
+        inputTel.addEventListener('input', (e) => {
+            e.target.value = mascaraTelefone(e.target.value);
+        });
+    }
+
+    const inputCEP = document.getElementById('cep_empresa');
+    if (inputCEP) {
+        inputCEP.addEventListener('input', (e) => {
+            e.target.value = mascaraCEP(e.target.value);
+        });
+    }
+});
 </script>
 {% endblock %}

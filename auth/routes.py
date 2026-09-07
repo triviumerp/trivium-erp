@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, session
 from flask_login import login_user, logout_user, login_required, current_user
 from datetime import date
 from datetime import datetime
@@ -43,12 +43,13 @@ def login():
 
         usuario = Usuario.query.filter_by(email=email).first()
         if usuario and usuario.check_senha(senha):
-            # Ativa automaticamente contas antigas que ficaram pendentes nos testes
             if not usuario.ativo:
                 usuario.ativo = True
                 db.session.commit()
 
-            login_user(usuario, remember=True)
+            # Sessão temporária (desconecta ao fechar navegador)
+            session.permanent = False
+            login_user(usuario, remember=False)
             flash(f'Bem-vindo de volta, {usuario.nome}!', 'success')
             next_page = request.args.get('next')
             return redirect(next_page or url_for('index'))

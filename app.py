@@ -6,7 +6,6 @@ import html
 from functools import wraps
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
-from services.asaas_service import criar_assinatura_transparente
 
 # Carrega variáveis de ambiente (.env)
 from dotenv import load_dotenv
@@ -38,11 +37,11 @@ from models import (
 )
 from auth.routes import auth_bp
 
-# Serviços Externos
+# Serviços Externos (Asaas)
 from services.asaas_service import (
+    criar_assinatura_transparente, 
     gerar_link_pagamento_plano, 
-    criar_ou_obter_cliente_asaas, 
-    consultar_cobranca
+    PLANOS_CONFIG
 )
 
 # -----------------------------------------------------------------------------
@@ -55,22 +54,28 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'trivium_erp_chave_secreta_producao_2026')
 
-# Conexão com o PostgreSQL Local e Nuvem
-URL_LOCAL_POSTGRES = "postgresql://postgres:admin@127.0.0.1:5432/trivium_db?client_encoding=utf8"
-uri_banco = os.getenv('DATABASE_URL') or URL_LOCAL_POSTGRES
+# Sessão e Segurança: Expira em 30 min de inatividade
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
+app.config['SESSION_PERMANENT'] = False
+
+# Conexão com o Banco de Dados
+uri_banco = os.getenv('DATABASE_URL', 'postgresql://postgres:admin@127.0.0.1:5432/trivium_db')
 if uri_banco.startswith("postgres://"):
     uri_banco = uri_banco.replace("postgres://", "postgresql://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = uri_banco
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# CORREÇÃO DO POOL DE CONEXÃO SSL
+# Configuração de Engine do SQLAlchemy
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     "pool_pre_ping": True,
-    "pool_recycle": 300
+    "pool_recycle": 300,
+    "connect_args": {
+        "options": "-cclient_encoding=utf8"
+    }
 }
 
-# Inicialização
+# Inicialização de Extensões
 db.init_app(app)
 login_manager.init_app(app)
 login_manager.login_view = 'auth.login'
@@ -79,7 +84,6 @@ login_manager.login_message_category = 'warning'
 
 app.register_blueprint(auth_bp)
 
-# Cria automaticamente todas as tabelas no PostgreSQL na inicialização
 with app.app_context():
     try:
         db.create_all()
@@ -87,7 +91,7 @@ with app.app_context():
         print(f"[ERRO AO CRIAR TABELAS]: {e}")
 
 def _limpar_texto(texto):
-    """Garante que caracteres especiais como & e tags não quebrem o parser XML do ReportLab."""
+    """Garante que caracteres especiais não quebrem o parser XML do ReportLab."""
     if not texto:
         return ""
     return html.escape(str(texto))
@@ -204,7 +208,7 @@ def admin_atender_chamado(id):
         if novo_status:
             chamado.status = novo_status
             if novo_status == 'Resolvido':
-                chamado.data_fechamento = datetime.utcnow()
+                chamado.data_fechamento = datetime.now()
 
         db.session.commit()
         flash(f'Chamado {chamado.numero_protocolo} atualizado!', 'success')
@@ -337,6 +341,7 @@ def interceptar_bloqueio_assinatura():
 
         rotas_permitidas = [
             'regularizar_assinatura',
+            'api_checkout_transparente',
             'auth.logout',
             'static',
             'download_file',
@@ -355,7 +360,7 @@ def interceptar_bloqueio_assinatura():
                         return redirect(url_for('regularizar_assinatura'))
 
 # -----------------------------------------------------------------------------
-# 4. ROTAS DO PAINEL DASHBOARD & CARTEIRA DE CLIENTES
+# 4. ROTAS DO DASHBOARD & CLIENTES
 # -----------------------------------------------------------------------------
 
 @app.route('/')
@@ -537,7 +542,7 @@ def upload_documento(id):
 
     if file:
         nome_limpo = secure_filename(file.filename)
-        nome_salvo = f"doc_{cliente.id}_{int(datetime.utcnow().timestamp())}_{nome_limpo}"
+        nome_salvo = f"doc_{cliente.id}_{int(datetime.now().timestamp())}_{nome_limpo}"
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_salvo))
 
         doc = Documento(cliente_id=cliente.id, nome_arquivo=nome_salvo, tipo_documento=tipo)
@@ -1259,7 +1264,7 @@ def atualizar_cobranca_fatura(id):
     if 'arquivo_nf' in request.files:
         f = request.files['arquivo_nf']
         if f.filename:
-            nome_arq = secure_filename(f"nf_fat_{fatura.id}_{int(datetime.utcnow().timestamp())}_{f.filename}")
+            nome_arq = secure_filename(f"nf_fat_{fatura.id}_{int(datetime.now().timestamp())}_{f.filename}")
             f.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_arq))
             fatura.arquivo_nf = nome_arq
 
@@ -1267,7 +1272,7 @@ def atualizar_cobranca_fatura(id):
     if 'arquivo_boleto' in request.files:
         f_bol = request.files['arquivo_boleto']
         if f_bol.filename:
-            boleto_salvo = secure_filename(f"boleto_fat_{fatura.id}_{int(datetime.utcnow().timestamp())}_{f_bol.filename}")
+            boleto_salvo = secure_filename(f"boleto_fat_{fatura.id}_{int(datetime.now().timestamp())}_{f_bol.filename}")
             f_bol.save(os.path.join(app.config['UPLOAD_FOLDER'], boleto_salvo))
 
     nova_obs = request.form.get('nova_ocorrencia')
@@ -1311,7 +1316,7 @@ def atualizar_cobranca_parcela(id):
     if 'arquivo_comprovante_boleto' in request.files:
         f = request.files['arquivo_comprovante_boleto']
         if f.filename:
-            nome_arq = secure_filename(f"parc_{parcela.id}_{int(datetime.utcnow().timestamp())}_{f.filename}")
+            nome_arq = secure_filename(f"parc_{parcela.id}_{int(datetime.now().timestamp())}_{f.filename}")
             f.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_arq))
             parcela.arquivo_comprovante_boleto = nome_arq
 
@@ -1420,29 +1425,54 @@ def perfil_empresa():
         form_type = request.form.get('form_type')
 
         if form_type == 'dados_empresa':
-            tipo_pessoa = request.form.get('tipo_pessoa')
+            tipo_pessoa = request.form.get('tipo_pessoa', 'PJ')
+            doc_antigo = empresa.cnpj
             
+            # Limpa pontuações para gravar somente números no PostgreSQL
+            def _so_numeros(valor):
+                return re.sub(r'\D', '', valor) if valor else ""
+
             if tipo_pessoa == 'PF':
                 empresa.razao_social = request.form.get('nome_profissional')
                 empresa.nome_fantasia = "Profissional Autônomo"
-                empresa.cnpj = request.form.get('cpf')
+                empresa.cnpj = _so_numeros(request.form.get('cpf'))
             else:
                 empresa.razao_social = request.form.get('razao_social')
                 empresa.nome_fantasia = request.form.get('nome_fantasia')
-                empresa.cnpj = request.form.get('cnpj')
+                empresa.cnpj = _so_numeros(request.form.get('cnpj'))
 
-            empresa.telefone = request.form.get('telefone')
-            empresa.email = request.form.get('email')
-            empresa.site = request.form.get('site')
-            empresa.endereco_completo = request.form.get('endereco_completo')
+            empresa.telefone = _so_numeros(request.form.get('telefone'))
+            empresa.email = request.form.get('email', '').strip()
+            empresa.site = request.form.get('site', '').strip()
+            
+            empresa.cep = _so_numeros(request.form.get('cep'))
+            empresa.logradouro = request.form.get('logradouro')
+            empresa.numero = request.form.get('numero')
+            empresa.complemento = request.form.get('complemento')
+            empresa.bairro = request.form.get('bairro')
+            empresa.cidade = request.form.get('cidade')
+            empresa.estado = request.form.get('estado')
+            empresa.endereco_completo = f"{empresa.logradouro or ''}, {empresa.numero or 'S/N'} {empresa.complemento or ''} - {empresa.bairro or ''}, {empresa.cidade or ''}/{empresa.estado or ''}".strip(" ,-/")
+            
             empresa.cor_primaria = request.form.get('cor_primaria', '#1e3a8a')
 
+            # Se trocou de documento, força sincronização no Asaas
+            if doc_antigo != empresa.cnpj:
+                empresa.asaas_customer_id = None
+
+            db.session.commit()
+            flash('Dados cadastrais atualizados com sucesso!', 'success')
+            return redirect(url_for('perfil_empresa'))
+
+            # Upload seguro do logotipo
             logo_file = request.files.get('logo')
             if logo_file and logo_file.filename != '':
                 ext = logo_file.filename.rsplit('.', 1)[-1].lower()
                 if ext in ['png', 'jpg', 'jpeg', 'webp']:
-                    filename = f"logo_emp_{empresa.id}_{int(datetime.utcnow().timestamp())}.{ext}"
-                    logo_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    filename = f"logo_emp_{empresa.id}_{int(datetime.now().timestamp())}.{ext}"
+                    caminho_upload = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+                    logo_file.save(caminho_upload)
                     empresa.logo_filename = filename
 
             db.session.commit()
@@ -1480,9 +1510,9 @@ def perfil_empresa():
 
         return redirect(url_for('perfil_empresa'))
 
-    # Gera links de renovação/upgrade direto no perfil
-    link_founder = gerar_link_pagamento_plano(empresa, "Founder", 97.00)
-    link_pro = gerar_link_pagamento_plano(empresa, "Pro Enterprise", 197.00)
+    # Gera links de pagamento dinâmicos caso necessário
+    link_founder = gerar_link_pagamento_plano(empresa, "Founder", 39.90)
+    link_pro = gerar_link_pagamento_plano(empresa, "Pro Enterprise", 209.40)
 
     return render_template(
         'perfil_empresa.html', 
@@ -1588,8 +1618,8 @@ def regularizar_assinatura():
     if current_user.empresa.status_assinatura in ['ativo', 'trial'] or current_user.nivel_acesso == 'master':
         return redirect(url_for('index'))
 
-    link_founder = gerar_link_pagamento_plano(current_user.empresa, "Founder", 97.00)
-    link_pro = gerar_link_pagamento_plano(current_user.empresa, "Pro Enterprise", 197.00)
+    link_founder = gerar_link_pagamento_plano(current_user.empresa, "Founder", 39.90)
+    link_pro = gerar_link_pagamento_plano(current_user.empresa, "Pro Enterprise", 209.40)
 
     return render_template(
         'bloqueio_pagamento.html',
@@ -1629,100 +1659,58 @@ def webhook_asaas():
 
     return {"status": "success"}, 200
 
-
-
-
 @app.route('/api/assinatura/checkout-transparente', methods=['POST'])
 @login_required
-def processar_checkout_transparente():
-    try:
-        dados = request.get_json(silent=True) or {}
-        plano_nome = dados.get('plano', 'Founder')
-        forma_pagamento = dados.get('forma_pagamento', 'PIX')
-        valor = 97.00 if plano_nome == 'Founder' else 197.00
-
-        # Validação da empresa vinculada ao usuário
-        empresa = getattr(current_user, 'empresa', None)
-        if not empresa:
-            return jsonify({"status": "error", "mensagem": "Empresa não vinculada ao usuário logado."}), 400
-
-        cartao_dados = dados.get('cartao') if forma_pagamento == 'CREDIT_CARD' else None
-        
-        ip_cliente = request.headers.get('X-Forwarded-For', request.remote_addr)
-        if ip_cliente and ',' in ip_cliente:
-            ip_cliente = ip_cliente.split(',')[0].strip()
-
-        resultado = criar_assinatura_transparente(
-            empresa=empresa,
-            nome_plano=plano_nome,
-            valor=valor,
-            forma_pagamento=forma_pagamento,
-            cartao_dados=cartao_dados,
-            remote_ip=ip_cliente
-        )
-
-        if resultado and resultado.get('sucesso'):
-            db.session.commit()
-            sub_info = resultado.get('subscription') or {}
-            invoice_url = resultado.get('invoiceUrl') or sub_info.get('invoiceUrl') or sub_info.get('bankSlipUrl') or ''
-            
-            return jsonify({
-                "status": "success", 
-                "mensagem": "Cobrança gerada com sucesso!", 
-                "dados": sub_info,
-                "pix": resultado.get('pix'),
-                "invoiceUrl": invoice_url
-            })
-        else:
-            msg = resultado.get('mensagem', 'Erro ao processar assinatura junto ao Asaas.') if isinstance(resultado, dict) else 'Resposta inválida do gateway.'
-            return jsonify({"status": "error", "mensagem": msg}), 400
-
-    except Exception as e:
-        print(f"[ERRO CHECKOUT INTERNO]: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"status": "error", "mensagem": f"Erro interno no servidor: {str(e)}"}), 500
-    
-@login_required
-def processar_checkout_transparente():
+def api_checkout_transparente():
     dados = request.get_json(silent=True) or {}
-    plano_nome = dados.get('plano', 'Founder')
+    plano_nome = dados.get('plano', 'MENSAL')
+    valor_total = dados.get('valor_total', 39.90)
+    parcelas = dados.get('parcelas', 1)
     forma_pagamento = dados.get('forma_pagamento', 'PIX')
-    valor = 97.00 if plano_nome == 'Founder' else 197.00
-
-    cartao_dados = dados.get('cartao') if forma_pagamento == 'CREDIT_CARD' else None
+    cartao_dados = dados.get('cartao')
+    
     ip_cliente = request.headers.get('X-Forwarded-For', request.remote_addr)
     if ip_cliente and ',' in ip_cliente:
         ip_cliente = ip_cliente.split(',')[0].strip()
 
+    empresa = getattr(current_user, 'empresa', None)
+    if not empresa:
+        return jsonify({"status": "error", "mensagem": "Empresa não vinculada ao usuário logado."}), 400
+
     resultado = criar_assinatura_transparente(
-        empresa=current_user.empresa,
+        empresa=empresa,
         nome_plano=plano_nome,
-        valor=valor,
+        valor=valor_total,
         forma_pagamento=forma_pagamento,
         cartao_dados=cartao_dados,
-        remote_ip=ip_cliente
+        remote_ip=ip_cliente,
+        parcelas=parcelas
     )
 
     if resultado.get('sucesso'):
+        cfg = resultado.get('plano_info', {})
+        
+        # Se aprovado no Cartão de Crédito, ativa imediatamente
+        if forma_pagamento == 'CREDIT_CARD':
+            empresa.status_assinatura = 'ativo'
+            empresa.data_ultimo_pagamento = datetime.now().date()
+            dias = cfg.get('dias_validade', 30)
+            empresa.data_vencimento = datetime.now().date() + timedelta(days=dias)
+
         db.session.commit()
-        
-        # Garante a extração da URL da fatura direto da resposta do Asaas
-        sub_info = resultado.get('subscription') or {}
-        invoice_url = resultado.get('invoiceUrl') or sub_info.get('invoiceUrl') or sub_info.get('bankSlipUrl') or ''
-        
         return jsonify({
-            "status": "success", 
-            "mensagem": "Cobrança gerada com sucesso!", 
-            "dados": sub_info,
+            "status": "success",
+            "mensagem": "Cobrança gerada com sucesso!",
+            "dados": resultado.get('dados'),
             "pix": resultado.get('pix'),
-            "invoiceUrl": invoice_url
+            "invoiceUrl": resultado.get('invoiceUrl')
         })
     else:
         return jsonify({
-            "status": "error", 
-            "mensagem": resultado.get('mensagem')
+            "status": "error",
+            "mensagem": resultado.get('mensagem', 'Erro ao processar cobrança.')
         }), 400
+
 # -----------------------------------------------------------------------------
 # 9. INICIALIZAÇÃO DO SERVIDOR
 # -----------------------------------------------------------------------------
