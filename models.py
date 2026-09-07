@@ -81,10 +81,15 @@ class Usuario(UserMixin, db.Model):
     
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
 
+    senha_hash = db.Column(db.String(255), nullable=False)
+
     def set_senha(self, senha):
-        self.senha_hash = generate_password_hash(senha)
+        # Gera hash com salt dinâmico e suporte completo a caracteres especiais
+        self.senha_hash = generate_password_hash(senha, method='scrypt')
 
     def check_senha(self, senha):
+        if not self.senha_hash:
+            return False
         return check_password_hash(self.senha_hash, senha)
 
 

@@ -29,7 +29,7 @@ from reportlab.lib import colors
 from reportlab.lib.units import inch
 
 # Extensões, Modelos e Blueprints
-from extensions import db, login_manager
+from extensions import db, login_manager, limiter
 from models import (
     Empresa, Usuario, Cliente, Documento, TipoServico, 
     ServicoCliente, Proposta, ItemProposta, ContratoRecorrente, 
@@ -49,14 +49,16 @@ from services.asaas_service import (
 # -----------------------------------------------------------------------------
 app = Flask(__name__)
 
+# Configurações de Upload
 UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'trivium_erp_chave_secreta_producao_2026')
 
-# Sessão e Segurança: Expira em 30 min de inatividade
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
-app.config['SESSION_PERMANENT'] = False
+# Chave Secreta e Segurança de Sessão
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'trivium_erp_chave_secreta_producao_2026')
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Conexão com o Banco de Dados
 uri_banco = os.getenv('DATABASE_URL', 'postgresql://postgres:admin@127.0.0.1:5432/trivium_db')
@@ -75,26 +77,38 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     }
 }
 
-# Inicialização de Extensões
+# Inicialização de Extensões e Blueprints
 db.init_app(app)
 login_manager.init_app(app)
+limiter.init_app(app)
 login_manager.login_view = 'auth.login'
 login_manager.login_message = 'Por favor, faça login para acessar o sistema.'
 login_manager.login_message_category = 'warning'
 
 app.register_blueprint(auth_bp)
 
+# Criação de tabelas na inicialização
 with app.app_context():
     try:
         db.create_all()
     except Exception as e:
         print(f"[ERRO AO CRIAR TABELAS]: {e}")
 
+# Headers HTTP de Segurança
+@app.after_request
+def aplicar_headers_seguranca(response):
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    return response
+
+# Funções Auxiliares
 def _limpar_texto(texto):
     """Garante que caracteres especiais não quebrem o parser XML do ReportLab."""
     if not texto:
         return ""
-    return html.escape(str(texto))
+    return html.escape(str(texto).strip(), quote=True)
 
 def is_cpf_valido(cpf):
     if not cpf:
@@ -335,29 +349,23 @@ def utility_processor():
 
 @app.before_request
 def interceptar_bloqueio_assinatura():
+    # Isenta rotas de autenticação, estáticas e webhooks para evitar loops no logout
+    if request.endpoint and any(request.endpoint.startswith(r) for r in ['auth.', 'static', 'download_file', 'webhook_asaas']):
+        return None
+
     if current_user.is_authenticated:
         if current_user.nivel_acesso == 'master':
             return None
 
-        rotas_permitidas = [
-            'regularizar_assinatura',
-            'api_checkout_transparente',
-            'auth.logout',
-            'static',
-            'download_file',
-            'webhook_asaas'
-        ]
+        if current_user.empresa:
+            if current_user.empresa.status_assinatura in ['bloqueado', 'cancelado']:
+                return redirect(url_for('regularizar_assinatura'))
 
-        if request.endpoint and not any(request.endpoint.startswith(r) for r in rotas_permitidas):
-            if current_user.empresa:
-                if current_user.empresa.status_assinatura in ['bloqueado', 'cancelado']:
+            if current_user.empresa.status_assinatura == 'trial' and current_user.empresa.data_vencimento:
+                if current_user.empresa.data_vencimento < date.today():
+                    current_user.empresa.status_assinatura = 'bloqueado'
+                    db.session.commit()
                     return redirect(url_for('regularizar_assinatura'))
-
-                if current_user.empresa.status_assinatura == 'trial' and current_user.empresa.data_vencimento:
-                    if current_user.empresa.data_vencimento < date.today():
-                        current_user.empresa.status_assinatura = 'bloqueado'
-                        db.session.commit()
-                        return redirect(url_for('regularizar_assinatura'))
 
 # -----------------------------------------------------------------------------
 # 4. ROTAS DO DASHBOARD & CLIENTES
@@ -1460,10 +1468,6 @@ def perfil_empresa():
             if doc_antigo != empresa.cnpj:
                 empresa.asaas_customer_id = None
 
-            db.session.commit()
-            flash('Dados cadastrais atualizados com sucesso!', 'success')
-            return redirect(url_for('perfil_empresa'))
-
             # Upload seguro do logotipo
             logo_file = request.files.get('logo')
             if logo_file and logo_file.filename != '':
@@ -1477,6 +1481,7 @@ def perfil_empresa():
 
             db.session.commit()
             flash('Dados cadastrais e identidade visual atualizados com sucesso!', 'success')
+            return redirect(url_for('perfil_empresa'))
 
         elif form_type == 'dados_usuario':
             novo_nome = request.form.get('nome_usuario')

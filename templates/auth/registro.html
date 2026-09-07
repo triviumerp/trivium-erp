@@ -81,7 +81,13 @@
                 </div>
                 <div class="col-12">
                     <label class="form-label small fw-bold">Senha de Acesso *</label>
-                    <input type="password" name="senha" id="campo_senha" class="form-control" minlength="4" placeholder="••••••••" required>
+                    <input type="password" name="senha" id="campo_senha" class="form-control" placeholder="Crie uma senha forte" required minlength="8">
+                    
+                    <!-- Observação de requisitos de segurança -->
+                    <small id="senha-ajuda" class="text-muted d-block mt-1" style="font-size: 0.75rem;">
+                        <i class="bi bi-shield-lock text-primary me-1"></i>
+                        Mínimo de 8 caracteres contendo maiúsculas, minúsculas, números e caracteres especiais (ex: <code>@</code>, <code>#</code>, <code>$</code>, <code>!</code>).
+                    </small>
                 </div>
             </div>
 
@@ -214,6 +220,40 @@
         }
     }
 
+    // Validação da Senha em Tempo Real
+    const inputSenha = document.getElementById('campo_senha');
+    const ajudaSenha = document.getElementById('senha-ajuda');
+
+    function validarSenhaRequisitos(senha) {
+        const temTamanho = senha.length >= 8;
+        const temMaiuscula = /[A-Z]/.test(senha);
+        const temMinuscula = /[a-z]/.test(senha);
+        const temNumero = /[0-9]/.test(senha);
+        const temEspecial = /[!@#$%^&*(),.?":{}|<>_\-\\\/\[\]~+=\`]/.test(senha);
+        return temTamanho && temMaiuscula && temMinuscula && temNumero && temEspecial;
+    }
+
+    inputSenha.addEventListener('input', function(e) {
+        const val = e.target.value;
+        if (!val) {
+            inputSenha.classList.remove('is-valid', 'is-invalid');
+            ajudaSenha.className = 'text-muted d-block mt-1';
+            return;
+        }
+
+        if (validarSenhaRequisitos(val)) {
+            inputSenha.classList.remove('is-invalid');
+            inputSenha.classList.add('is-valid');
+            ajudaSenha.className = 'text-success d-block mt-1';
+            ajudaSenha.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Senha forte e válida!';
+        } else {
+            inputSenha.classList.remove('is-valid');
+            inputSenha.classList.add('is-invalid');
+            ajudaSenha.className = 'text-danger d-block mt-1';
+            ajudaSenha.innerHTML = '<i class="bi bi-x-circle me-1"></i> A senha deve ter 8+ dígitos com maiúsculas, minúsculas, números e símbolos especiais.';
+        }
+    });
+
     // Verifica campos obrigatórios antes de abrir o modal
     function verificarFormularioEAbrirModal() {
         const form = document.getElementById('formRegistro');
@@ -225,6 +265,13 @@
                 cpfInput.focus();
                 return;
             }
+        }
+
+        if (!validarSenhaRequisitos(inputSenha.value)) {
+            inputSenha.focus();
+            inputSenha.classList.add('is-invalid');
+            ajudaSenha.className = 'text-danger d-block mt-1';
+            return;
         }
 
         // Validação HTML5 nativa dos campos obrigatórios

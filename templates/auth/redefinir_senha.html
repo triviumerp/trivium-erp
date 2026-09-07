@@ -31,8 +31,12 @@
 
         <form method="POST">
             <div class="mb-3">
-                <label class="form-label small fw-bold">Nova Senha</label>
-                <input type="password" name="nova_senha" class="form-control" minlength="4" placeholder="••••••••" required>
+                <label class="form-label small fw-bold">Nova Senha *</label>
+                <input type="password" name="nova_senha" class="form-control" placeholder="Digite a nova senha" required minlength="8">
+                <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
+                    <i class="bi bi-shield-lock me-1 text-primary"></i>
+                    Use ao menos 8 dígitos com letras, números e símbolos especiais (<code>!@#$%&*</code>).
+                </small>
             </div>
             <div class="mb-4">
                 <label class="form-label small fw-bold">Confirmar Nova Senha</label>
