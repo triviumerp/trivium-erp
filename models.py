@@ -74,6 +74,12 @@ class Usuario(UserMixin, db.Model):
     cargo = db.Column(db.String(50), default="Administrador")
     nivel_acesso = db.Column(db.String(20), default="admin")
     ativo = db.Column(db.Boolean, default=True)
+
+    perm_clientes = db.Column(db.Boolean, default=False)
+    perm_propostas = db.Column(db.Boolean, default=False)
+    perm_servicos = db.Column(db.Boolean, default=True)
+    perm_financeiro = db.Column(db.Boolean, default=False)
+    perm_configuracoes = db.Column(db.Boolean, default=False)
     
     # NOVOS CAMPOS DE AUDITORIA LEGAL:
     aceitou_termos_beta = db.Column(db.Boolean, default=False)
@@ -168,6 +174,10 @@ class ServicoCliente(db.Model):
     data_solicitacao = db.Column(db.Date, default=date.today)
     data_previsao = db.Column(db.Date, nullable=True)
     observacoes = db.Column(db.Text, nullable=True)
+
+    detalhamento_execucao = db.Column(db.Text, nullable=True)     # Relato da sessão/visita/vistoria
+    orientacoes_cliente = db.Column(db.Text, nullable=True)       # Recomendações e próximos passos
+    arquivo_evidencia = db.Column(db.String(255), nullable=True)   # Foto, laudo, plano ou PDF  
 
     data_vencimento_boleto = db.Column(db.Date, nullable=True)
     status_pagamento = db.Column(db.String(30), default='A Faturar')

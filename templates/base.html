@@ -210,27 +210,52 @@
             <hr class="my-2 border-secondary opacity-25">
             {% endif %}
 
+            <!-- Painel de Controle / Dashboard -->
             <a href="{{ url_for('index') }}" id="tour-dashboard" class="nav-link-custom {% if request.endpoint == 'index' %}active{% endif %}">
                 <i class="bi bi-grid-1x2-fill"></i><span>Painel de Controle</span>
             </a>
+
+            <!-- Clientes -->
+            {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_clientes %}
             <a href="{{ url_for('listar_clientes') }}" id="tour-clientes" class="nav-link-custom {% if request.endpoint in ['listar_clientes', 'novo_cliente', 'detalhe_cliente', 'editar_cliente'] %}active{% endif %}">
                 <i class="bi bi-people-fill"></i><span>Clientes</span>
             </a>
+            {% endif %}
+
+            <!-- Catálogo -->
+            {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_propostas %}
             <a href="{{ url_for('listar_catalogo') }}" id="tour-catalogo" class="nav-link-custom {% if request.endpoint == 'listar_catalogo' %}active{% endif %}">
                 <i class="bi bi-journal-bookmark-fill"></i><span>Catálogo</span>
             </a>
+            {% endif %}
+
+            <!-- Propostas -->
+            {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_propostas %}
             <a href="{{ url_for('listar_propostas') }}" id="tour-propostas" class="nav-link-custom {% if request.endpoint in ['listar_propostas', 'nova_proposta'] %}active{% endif %}">
                 <i class="bi bi-file-earmark-text-fill"></i><span>Propostas</span>
             </a>
+            {% endif %}
+
+            <!-- Serviços / OS -->
+            {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_servicos %}
             <a href="{{ url_for('consultar_servicos') }}" id="tour-servicos" class="nav-link-custom {% if request.endpoint == 'consultar_servicos' %}active{% endif %}">
                 <i class="bi bi-briefcase-fill"></i><span>Serviços / OS</span>
             </a>
+            {% endif %}
+
+            <!-- Financeiro -->
+            {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
             <a href="{{ url_for('financeiro') }}" id="tour-financeiro" class="nav-link-custom {% if request.endpoint == 'financeiro' %}active{% endif %}">
                 <i class="bi bi-cash-stack"></i><span>Financeiro</span>
             </a>
+            {% endif %}
+
+            <!-- Configurações / Perfil -->
+            {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_configuracoes %}
             <a href="{{ url_for('perfil_empresa') }}" id="tour-config" class="nav-link-custom {% if request.endpoint == 'perfil_empresa' %}active{% endif %}">
                 <i class="bi bi-gear-wide-connected"></i><span>Configurações</span>
             </a>
+            {% endif %}
         </nav>
 
         <div class="mt-auto pt-2 border-top flex-shrink-0">
@@ -260,24 +285,43 @@
                 <a href="{{ url_for('index') }}" class="nav-link-custom {% if request.endpoint == 'index' %}active{% endif %}">
                     <i class="bi bi-grid-1x2-fill"></i><span>Painel de Controle</span>
                 </a>
+
+                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_clientes %}
                 <a href="{{ url_for('listar_clientes') }}" class="nav-link-custom {% if request.endpoint in ['listar_clientes', 'novo_cliente', 'detalhe_cliente', 'editar_cliente'] %}active{% endif %}">
                     <i class="bi bi-people-fill"></i><span>Clientes</span>
                 </a>
+                {% endif %}
+
+                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_propostas %}
                 <a href="{{ url_for('listar_catalogo') }}" class="nav-link-custom {% if request.endpoint == 'listar_catalogo' %}active{% endif %}">
                     <i class="bi bi-journal-bookmark-fill"></i><span>Catálogo</span>
                 </a>
+                {% endif %}
+
+                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_propostas %}
                 <a href="{{ url_for('listar_propostas') }}" class="nav-link-custom {% if request.endpoint in ['listar_propostas', 'nova_proposta'] %}active{% endif %}">
                     <i class="bi bi-file-earmark-text-fill"></i><span>Propostas</span>
                 </a>
+                {% endif %}
+
+                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_servicos %}
                 <a href="{{ url_for('consultar_servicos') }}" class="nav-link-custom {% if request.endpoint == 'consultar_servicos' %}active{% endif %}">
                     <i class="bi bi-briefcase-fill"></i><span>Serviços / OS</span>
                 </a>
+                {% endif %}
+
+                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
                 <a href="{{ url_for('financeiro') }}" class="nav-link-custom {% if request.endpoint == 'financeiro' %}active{% endif %}">
                     <i class="bi bi-cash-stack"></i><span>Financeiro</span>
                 </a>
+                {% endif %}
+
+                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_configuracoes %}
                 <a href="{{ url_for('perfil_empresa') }}" class="nav-link-custom {% if request.endpoint == 'perfil_empresa' %}active{% endif %}">
                     <i class="bi bi-gear-wide-connected"></i><span>Configurações</span>
                 </a>
+                {% endif %}
+
                 <a href="{{ url_for('faq') }}" class="nav-link-custom {% if request.endpoint == 'faq' %}active{% endif %}">
                     <i class="bi bi-question-circle-fill"></i><span>Ajuda & FAQ</span>
                 </a>

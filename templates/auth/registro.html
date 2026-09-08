@@ -79,15 +79,26 @@
                     <label class="form-label small fw-bold">E-mail de Acesso *</label>
                     <input type="email" name="email" id="campo_email" class="form-control" placeholder="seu@email.com" required>
                 </div>
-                <div class="col-12">
+
+                <!-- Senha -->
+                <div class="col-md-6">
                     <label class="form-label small fw-bold">Senha de Acesso *</label>
                     <input type="password" name="senha" id="campo_senha" class="form-control" placeholder="Crie uma senha forte" required minlength="8">
-                    
-                    <!-- Observação de requisitos de segurança -->
+                </div>
+
+                <!-- Confirmação de Senha -->
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Confirme sua Senha *</label>
+                    <input type="password" name="confirma_senha" id="campo_confirma_senha" class="form-control" placeholder="Repita a senha" required minlength="8">
+                </div>
+
+                <div class="col-12">
+                    <!-- Feedback visual de senha e correspondência -->
                     <small id="senha-ajuda" class="text-muted d-block mt-1" style="font-size: 0.75rem;">
                         <i class="bi bi-shield-lock text-primary me-1"></i>
                         Mínimo de 8 caracteres contendo maiúsculas, minúsculas, números e caracteres especiais (ex: <code>@</code>, <code>#</code>, <code>$</code>, <code>!</code>).
                     </small>
+                    <small id="confirma-senha-status" class="d-block mt-1" style="font-size: 0.75rem;"></small>
                 </div>
             </div>
 
@@ -102,7 +113,7 @@
         </div>
     </div>
 
-    <!-- MODAL DE TERMOS E ISENÇÃO DE RESPONSABILIDADE BETA -->
+    <!-- MODAL DE TERMOS E ISENÇÃO BETA -->
     <div class="modal fade" id="modalTermosBeta" tabindex="-1" aria-labelledby="modalTermosBetaLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow">
@@ -118,15 +129,15 @@
             <ul class="list-unstyled mb-3">
               <li class="mb-2 d-flex align-items-start gap-2">
                 <i class="bi bi-arrow-right-circle-fill text-primary mt-1"></i>
-                <span><strong>Ambiente Temporário:</strong> O sistema está em fase contínua de melhorias e validações. Recursos e cadastros podem sofrer instabilidades, manutenções ou exclusões sem aviso prévio.</span>
+                <span><strong>Ambiente Temporário:</strong> O sistema está em fase contínua de melhorias e validações. Recursos e cadastros podem sofrer instabilidades ou exclusões sem aviso prévio.</span>
               </li>
               <li class="mb-2 d-flex align-items-start gap-2">
                 <i class="bi bi-arrow-right-circle-fill text-primary mt-1"></i>
-                <span><strong>Responsabilidade sobre Dados de Clientes:</strong> Você é o único e exclusivo responsável pelos dados cadastrais, comerciais e de clientes que inserir no sistema. O Trivium ERP não realiza validação, auditoria nem responde pela integridade ou origem desses dados.</span>
+                <span><strong>Responsabilidade sobre Dados:</strong> Você é o único responsável pelos dados comerciais e de clientes que inserir no sistema.</span>
               </li>
               <li class="mb-2 d-flex align-items-start gap-2">
                 <i class="bi bi-arrow-right-circle-fill text-primary mt-1"></i>
-                <span><strong>Isenção de Responsabilidade:</strong> Não nos responsabilizamos por eventuais perdas de registros, indisponibilidade temporária ou falhas operacionais decorrentes desta fase experimental.</span>
+                <span><strong>Isenção de Responsabilidade:</strong> Não nos responsabilizamos por perdas de registros ou indisponibilidade temporária durante a fase experimental.</span>
               </li>
             </ul>
 
@@ -220,9 +231,11 @@
         }
     }
 
-    // Validação da Senha em Tempo Real
+    // Validação da Senha e Confirmação em Tempo Real
     const inputSenha = document.getElementById('campo_senha');
+    const inputConfirmaSenha = document.getElementById('campo_confirma_senha');
     const ajudaSenha = document.getElementById('senha-ajuda');
+    const statusConfirma = document.getElementById('confirma-senha-status');
 
     function validarSenhaRequisitos(senha) {
         const temTamanho = senha.length >= 8;
@@ -231,6 +244,27 @@
         const temNumero = /[0-9]/.test(senha);
         const temEspecial = /[!@#$%^&*(),.?":{}|<>_\-\\\/\[\]~+=\`]/.test(senha);
         return temTamanho && temMaiuscula && temMinuscula && temNumero && temEspecial;
+    }
+
+    function checarCorrespondenciaSenhas() {
+        if (!inputConfirmaSenha.value) {
+            inputConfirmaSenha.classList.remove('is-valid', 'is-invalid');
+            statusConfirma.innerText = '';
+            return false;
+        }
+        if (inputSenha.value === inputConfirmaSenha.value) {
+            inputConfirmaSenha.classList.remove('is-invalid');
+            inputConfirmaSenha.classList.add('is-valid');
+            statusConfirma.className = 'text-success d-block mt-1';
+            statusConfirma.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> As senhas conferem.';
+            return true;
+        } else {
+            inputConfirmaSenha.classList.remove('is-valid');
+            inputConfirmaSenha.classList.add('is-invalid');
+            statusConfirma.className = 'text-danger d-block mt-1';
+            statusConfirma.innerHTML = '<i class="bi bi-x-circle me-1"></i> As senhas não conferem.';
+            return false;
+        }
     }
 
     inputSenha.addEventListener('input', function(e) {
@@ -252,9 +286,15 @@
             ajudaSenha.className = 'text-danger d-block mt-1';
             ajudaSenha.innerHTML = '<i class="bi bi-x-circle me-1"></i> A senha deve ter 8+ dígitos com maiúsculas, minúsculas, números e símbolos especiais.';
         }
+
+        if (inputConfirmaSenha.value) {
+            checarCorrespondenciaSenhas();
+        }
     });
 
-    // Verifica campos obrigatórios antes de abrir o modal
+    inputConfirmaSenha.addEventListener('input', checarCorrespondenciaSenhas);
+
+    // Validação completa antes de abrir o modal de termos
     function verificarFormularioEAbrirModal() {
         const form = document.getElementById('formRegistro');
         const isPf = document.getElementById('tipo_pf').checked;
@@ -274,18 +314,20 @@
             return;
         }
 
-        // Validação HTML5 nativa dos campos obrigatórios
+        if (!checarCorrespondenciaSenhas()) {
+            inputConfirmaSenha.focus();
+            return;
+        }
+
         if (!form.checkValidity()) {
             form.reportValidity();
             return;
         }
 
-        // Se tudo estiver preenchido corretamente, abre o Modal de Termos
         const modal = new bootstrap.Modal(document.getElementById('modalTermosBeta'));
         modal.show();
     }
 
-    // Controle do botão de aceite dentro do modal
     document.getElementById('checkConcordoTermos').addEventListener('change', function() {
         document.getElementById('btnConfirmarCadastroBeta').disabled = !this.checked;
     });

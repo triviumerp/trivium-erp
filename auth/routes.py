@@ -47,6 +47,9 @@ def validar_senha_forte(senha):
 # -----------------------------------------------------------------------------
 # ROTAS DE AUTENTICAÇÃO
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# ROTAS DE AUTENTICAÇÃO
+# -----------------------------------------------------------------------------
 @auth_bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit("10 per minute")
 def login():
@@ -54,10 +57,21 @@ def login():
         return redirect(url_for('index'))
 
     if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
+        identificador = request.form.get('email', '').strip()
         senha = request.form.get('senha', '')
 
-        usuario = Usuario.query.filter_by(email=email).first()
+        usuario = None
+        if '@' in identificador:
+            # Busca estritamente por e-mail (minúsculo)
+            usuario = Usuario.query.filter_by(email=identificador.lower()).first()
+        else:
+            # Remove qualquer formatação (pontos, traços, barras) do CPF/CNPJ digitado
+            doc_limpo = re.sub(r'\D', '', identificador)
+            if doc_limpo:
+                # Procura a empresa pelo CNPJ limpo
+                empresa_alvo = Empresa.query.filter_by(cnpj=doc_limpo).first()
+                if empresa_alvo:
+                    usuario = Usuario.query.filter_by(empresa_id=empresa_alvo.id).first()
 
         if usuario and usuario.check_senha(senha):
             if not usuario.ativo:
@@ -71,7 +85,7 @@ def login():
             proxima_pagina = request.args.get('next')
             return redirect(proxima_pagina or url_for('index'))
         else:
-            flash('E-mail ou senha incorretos. Verifique suas credenciais.', 'danger')
+            flash('Credenciais incorretas. Verifique seu e-mail ou CPF/CNPJ e senha.', 'danger')
 
     return render_template('auth/login.html')
 
@@ -90,6 +104,7 @@ def registro():
         nome_usuario = (request.form.get('nome_usuario') or '').strip()
         email = (request.form.get('email') or '').strip().lower()
         senha = request.form.get('senha', '')
+        confirma_senha = request.form.get('confirma_senha', '')
 
         # 1. Validação de CPF para Pessoa Física
         if tipo_pessoa == 'PF' and not is_cpf_valido(doc_identificacao):
@@ -102,18 +117,22 @@ def registro():
             flash(msg_erro, 'warning')
             return render_template('auth/registro.html')
 
-        # 3. Validação prévia de duplicidade de E-mail
+        # 3. Validação de Confirmação de Senha
+        if senha != confirma_senha:
+            flash('A senha e a confirmação de senha não conferem.', 'warning')
+            return render_template('auth/registro.html')
+
+        # 4. Validação prévia de duplicidade de E-mail
         if Usuario.query.filter_by(email=email).first():
             flash('Este e-mail já está cadastrado no sistema. Faça login.', 'warning')
             return render_template('auth/registro.html')
 
-        # 4. Validação prévia de duplicidade de CNPJ/CPF (se informado)
+        # 5. Validação prévia de duplicidade de CNPJ/CPF (se informado)
         if doc_identificacao and Empresa.query.filter_by(cnpj=doc_identificacao).first():
             flash('Este CNPJ/CPF já possui uma conta cadastrada.', 'warning')
             return render_template('auth/registro.html')
 
         try:
-            # 5. Criação da Empresa Inquilina
             nova_empresa = Empresa(
                 razao_social=razao_social if razao_social else (nome_usuario if tipo_pessoa == 'PF' else 'Minha Empresa'),
                 nome_fantasia="Profissional Autônomo" if tipo_pessoa == 'PF' else None,
@@ -127,7 +146,6 @@ def registro():
             db.session.add(nova_empresa)
             db.session.flush()
 
-            # 6. Criação do Usuário Administrador
             novo_usuario = Usuario(
                 empresa_id=nova_empresa.id,
                 nome=nome_usuario,
@@ -139,7 +157,6 @@ def registro():
                 data_aceite_termos=datetime.utcnow()
             )
             
-            # Suporte tanto a método set_senha quanto gravação direta de hash
             if hasattr(novo_usuario, 'set_senha'):
                 novo_usuario.set_senha(senha)
             else:
@@ -158,7 +175,6 @@ def registro():
             return render_template('auth/registro.html')
 
     return render_template('auth/registro.html')
-
 @auth_bp.route('/esqueci-senha', methods=['GET', 'POST'])
 def esqueci_senha():
     if current_user.is_authenticated:

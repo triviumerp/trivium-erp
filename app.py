@@ -349,23 +349,36 @@ def utility_processor():
 
 @app.before_request
 def interceptar_bloqueio_assinatura():
-    # Isenta rotas de autenticação, estáticas e webhooks para evitar loops no logout
-    if request.endpoint and any(request.endpoint.startswith(r) for r in ['auth.', 'static', 'download_file', 'webhook_asaas']):
+    # 1. Rotas públicas/estáticas/auth que nunca devem ser interceptadas
+    rotas_livres = [
+        'auth.',
+        'static',
+        'download_file',
+        'webhook_asaas',
+        'regularizar_assinatura',
+        'api_checkout_transparente'
+    ]
+    if request.endpoint and any(request.endpoint.startswith(r) for r in rotas_livres):
         return None
 
+    # 2. Se estiver autenticado e não for Master, verifica a assinatura
     if current_user.is_authenticated:
         if current_user.nivel_acesso == 'master':
             return None
 
         if current_user.empresa:
+            # Se a empresa estiver bloqueada ou cancelada
             if current_user.empresa.status_assinatura in ['bloqueado', 'cancelado']:
-                return redirect(url_for('regularizar_assinatura'))
+                if request.endpoint != 'regularizar_assinatura':
+                    return redirect(url_for('regularizar_assinatura'))
 
+            # Se o período de teste expirou
             if current_user.empresa.status_assinatura == 'trial' and current_user.empresa.data_vencimento:
                 if current_user.empresa.data_vencimento < date.today():
                     current_user.empresa.status_assinatura = 'bloqueado'
                     db.session.commit()
-                    return redirect(url_for('regularizar_assinatura'))
+                    if request.endpoint != 'regularizar_assinatura':
+                        return redirect(url_for('regularizar_assinatura'))
 
 # -----------------------------------------------------------------------------
 # 4. ROTAS DO DASHBOARD & CLIENTES
@@ -1183,14 +1196,20 @@ def atualizar_operacao_servico(id):
     data_prev_str = request.form.get('data_previsao')
     servico.data_previsao = datetime.strptime(data_prev_str, '%Y-%m-%d').date() if data_prev_str else None
     servico.observacoes = request.form.get('observacoes')
+    
+    # Novos campos genéricos de registro
+    servico.detalhamento_execucao = request.form.get('detalhamento_execucao')
+    servico.orientacoes_cliente = request.form.get('orientacoes_cliente')
+
+    if 'arquivo_evidencia' in request.files:
+        arq = request.files['arquivo_evidencia']
+        if arq and arq.filename:
+            nome_salvo = secure_filename(f"os_{servico.id}_{int(time.time())}_{arq.filename}")
+            arq.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_salvo))
+            servico.arquivo_evidencia = nome_salvo
 
     db.session.commit()
-
-    if servico.status == 'Concluido':
-        flash(f'Atividade "{servico.tipo_servico.nome}" ({servico.cliente.nome}) concluída e liberada para o Financeiro!', 'success')
-    else:
-        flash('Acompanhamento técnico atualizado.', 'info')
-
+    flash('Acompanhamento e registro da atividade atualizados com sucesso!', 'success')
     return redirect(url_for('consultar_servicos', status=request.form.get('filtro_retorno', 'agenda')))
 
 # -----------------------------------------------------------------------------
@@ -1519,12 +1538,133 @@ def perfil_empresa():
     link_founder = gerar_link_pagamento_plano(empresa, "Founder", 39.90)
     link_pro = gerar_link_pagamento_plano(empresa, "Pro Enterprise", 209.40)
 
+    usuarios_equipe = Usuario.query.filter_by(empresa_id=current_user.empresa_id).all()
+
     return render_template(
         'perfil_empresa.html', 
         perfil=empresa,
         link_founder=link_founder or '#',
-        link_pro=link_pro or '#'
+        link_pro=link_pro or '#',
+        usuarios_equipe=usuarios_equipe
     )
+
+from werkzeug.security import generate_password_hash
+
+# ROTA: Criar Novo Usuário Operacional
+@app.route('/configuracoes/usuarios/novo', methods=['POST'])
+@login_required
+def criar_usuario_equipe():
+    if current_user.nivel_acesso not in ['admin', 'master']:
+        flash('Acesso restrito ao administrador.', 'danger')
+        return redirect(url_for('perfil_empresa'))
+
+    nome = request.form.get('nome', '').strip()
+    email = request.form.get('email', '').strip().lower()
+    senha_padrao = request.form.get('senha_padrao')
+    cargo = request.form.get('cargo', 'Colaborador').strip()
+    perfil_selecionado = request.form.get('perfil_predefinido', 'personalizado')
+
+    if not email or not senha_padrao:
+        flash('E-mail e senha inicial são obrigatórios.', 'warning')
+        return redirect(url_for('perfil_empresa'))
+
+    if Usuario.query.filter_by(email=email).first():
+        flash('Este e-mail já está cadastrado no sistema.', 'danger')
+        return redirect(url_for('perfil_empresa'))
+
+    # Se for definido como Administrador Geral, recebe nível admin e todas as permissões
+    is_admin = perfil_selecionado == 'admin' or bool(request.form.get('perm_configuracoes'))
+
+    novo_user = Usuario(
+        empresa_id=current_user.empresa_id,
+        nome=nome or email.split('@')[0],
+        email=email,
+        cargo=cargo,
+        nivel_acesso='admin' if is_admin else 'operador',
+        ativo=True,
+        perm_clientes=bool(request.form.get('perm_clientes')),
+        perm_propostas=bool(request.form.get('perm_propostas')),
+        perm_servicos=bool(request.form.get('perm_servicos')),
+        perm_financeiro=bool(request.form.get('perm_financeiro')),
+        perm_configuracoes=bool(request.form.get('perm_configuracoes'))
+    )
+    novo_user.set_senha(senha_padrao)
+
+    db.session.add(novo_user)
+    db.session.commit()
+    flash(f'Usuário "{email}" ({cargo}) cadastrado com sucesso!', 'success')
+    return redirect(url_for('perfil_empresa'))
+
+
+@app.route('/configuracoes/usuarios/resetar-senha/<int:id>', methods=['POST'])
+@login_required
+def resetar_senha_equipe(id):
+    if current_user.nivel_acesso not in ['admin', 'master']:
+        flash('Acesso restrito ao administrador.', 'danger')
+        return redirect(url_for('perfil_empresa'))
+
+    usuario = Usuario.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    nova_senha = request.form.get('nova_senha')
+
+    if not nova_senha or len(nova_senha) < 4:
+        flash('A senha deve ter no mínimo 4 caracteres.', 'warning')
+        return redirect(url_for('perfil_empresa'))
+
+    usuario.set_senha(nova_senha)
+    db.session.commit()
+    flash(f'Senha de "{usuario.email}" redefinida com sucesso!', 'success')
+    return redirect(url_for('perfil_empresa'))
+
+# ROTA: Editar Permissões e Cargo do Usuário
+@app.route('/configuracoes/usuarios/editar/<int:id>', methods=['POST'])
+@login_required
+def editar_usuario_equipe(id):
+    if current_user.nivel_acesso not in ['admin', 'master']:
+        flash('Acesso restrito ao administrador.', 'danger')
+        return redirect(url_for('perfil_empresa'))
+
+    usuario = Usuario.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+
+    nome = request.form.get('nome', '').strip()
+    cargo = request.form.get('cargo', '').strip()
+    
+    if nome:
+        usuario.nome = nome
+    if cargo:
+        usuario.cargo = cargo
+
+    # Se for a conta do próprio admin logado, preserva suas permissões totais
+    if usuario.id != current_user.id:
+        perm_conf = bool(request.form.get('perm_configuracoes'))
+        usuario.perm_clientes = bool(request.form.get('perm_clientes'))
+        usuario.perm_propostas = bool(request.form.get('perm_propostas'))
+        usuario.perm_servicos = bool(request.form.get('perm_servicos'))
+        usuario.perm_financeiro = bool(request.form.get('perm_financeiro'))
+        usuario.perm_configuracoes = perm_conf
+        usuario.nivel_acesso = 'admin' if perm_conf else 'operador'
+
+    db.session.commit()
+    flash(f'Permissões do usuário "{usuario.nome}" atualizadas com sucesso!', 'success')
+    return redirect(url_for('perfil_empresa'))
+
+@app.route('/configuracoes/usuarios/excluir/<int:id>', methods=['POST'])
+@login_required
+def excluir_usuario_equipe(id):
+    if current_user.nivel_acesso not in ['admin', 'master']:
+        flash('Acesso restrito ao administrador.', 'danger')
+        return redirect(url_for('perfil_empresa'))
+
+    usuario = Usuario.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    if usuario.id == current_user.id:
+        flash('Você não pode remover seu próprio usuário.', 'warning')
+        return redirect(url_for('perfil_empresa'))
+
+    db.session.delete(usuario)
+    db.session.commit()
+    flash('Acesso removido com sucesso.', 'info')
+    return redirect(url_for('perfil_empresa'))
+
+
 
 @app.route('/faq')
 @login_required
@@ -1619,18 +1759,12 @@ def detalhe_chamado(id):
 
 @app.route('/assinatura/regularizar')
 @login_required
+@limiter.exempt
 def regularizar_assinatura():
     if current_user.empresa.status_assinatura in ['ativo', 'trial'] or current_user.nivel_acesso == 'master':
         return redirect(url_for('index'))
 
-    link_founder = gerar_link_pagamento_plano(current_user.empresa, "Founder", 39.90)
-    link_pro = gerar_link_pagamento_plano(current_user.empresa, "Pro Enterprise", 209.40)
-
-    return render_template(
-        'bloqueio_pagamento.html',
-        link_founder=link_founder or '#',
-        link_pro=link_pro or '#'
-    )
+    return render_template('bloqueio_pagamento.html')
 
 @app.route('/webhook/asaas', methods=['POST'])
 def webhook_asaas():

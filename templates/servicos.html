@@ -213,9 +213,30 @@
 <!-- ==================================================================== -->
 {% for item in servicos_operacionais %}
 <div class="modal fade" id="modalAcompanhamento{{ item.id }}" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="mb-3">
+    <label class="form-label small fw-bold">Relato da Atividade / Registro de Execução</label>
+    <textarea name="detalhamento_execucao" class="form-control form-control-sm" rows="3" placeholder="Resumo do que foi realizado no encontro/serviço...">{{ item.detalhamento_execucao or '' }}</textarea>
+</div>
+
+<div class="mb-3">
+    <label class="form-label small fw-bold">Orientações ao Cliente / Próximos Passos</label>
+    <textarea name="orientacoes_cliente" class="form-control form-control-sm" rows="2" placeholder="Recomendações passadas ao cliente para a próxima etapa...">{{ item.orientacoes_cliente or '' }}</textarea>
+</div>
+
+<div class="mb-3">
+    <label class="form-label small fw-bold">Anexar Arquivo / Evidência da Atividade (PDF ou Imagem)</label>
+        <input type="file" name="arquivo_evidencia" class="form-control form-control-sm">
+            {% if item.arquivo_evidencia %}
+                <div class="mt-1">
+                    <a href="{{ url_for('download_file', filename=item.arquivo_evidencia) }}" target="_blank" class="small text-primary fw-bold text-decoration-none">
+                        <i class="bi bi-paperclip me-1"></i>Ver arquivo anexado atual
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+        <div class="modal-dialog modal-lg">
         <div class="modal-content border-0 shadow">
-            <form action="{{ url_for('atualizar_operacao_servico', id=item.id) }}" method="POST">
+            <form action="{{ url_for('atualizar_operacao_servico', id=item.id) }}" method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="filtro_retorno" value="{{ filtro_atual }}">
                 <div class="modal-header bg-light">
                     <div>
@@ -225,39 +246,65 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Data Agendada / Prazo de Execução</label>
-                        <input type="date" name="data_previsao" class="form-control" value="{{ item.data_previsao.strftime('%Y-%m-%d') if item.data_previsao else '' }}">
-                        <small class="text-muted">Reagende a atividade ajustando a data acima.</small>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Data Agendada / Prazo de Execução</label>
+                            <input type="date" name="data_previsao" class="form-control form-control-sm" value="{{ item.data_previsao.strftime('%Y-%m-%d') if item.data_previsao else '' }}">
+                            <small class="text-muted" style="font-size: 0.72rem;">Reagende a atividade ajustando a data acima.</small>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Status Operacional *</label>
+                            {% if item.status == 'Bloqueado' %}
+                                <div class="alert alert-danger py-2 small mb-0">
+                                    <i class="bi bi-shield-lock-fill me-1"></i>
+                                    <strong>Atividade Bloqueada:</strong> O status não pode ser alterado manualmente. Confirme o recebimento do sinal no módulo Financeiro para liberar a execução.
+                                </div>
+                                <input type="hidden" name="status" value="Bloqueado">
+                            {% else %}
+                                <select name="status" class="form-select form-select-sm border-primary fw-bold">
+                                    <option value="Em Andamento" {% if item.status == 'Em Andamento' %}selected{% endif %}>Em Andamento (Em execução)</option>
+                                    <option value="Pendente" {% if item.status == 'Pendente' %}selected{% endif %}>Pendente (Agendado)</option>
+                                    <option value="Concluido" {% if item.status == 'Concluido' %}selected{% endif %} class="text-success">✔ Concluído (Liberar p/ Cobrança)</option>
+                                    <option value="Cancelado" {% if item.status == 'Cancelado' %}selected{% endif %} class="text-muted">✖ Cancelado</option>
+                                </select>
+                            {% endif %}
+                        </div>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label small fw-bold">Status Operacional *</label>
-                        {% if item.status == 'Bloqueado' %}
-                            <div class="alert alert-danger py-2 small mb-0">
-                                <i class="bi bi-shield-lock-fill me-1"></i>
-                                <strong>Atividade Bloqueada:</strong> O status não pode ser alterado manualmente. Confirme o recebimento do sinal no módulo Financeiro para liberar a execução.
-                            </div>
-                            <input type="hidden" name="status" value="Bloqueado">
-                        {% else %}
-                            <select name="status" class="form-select border-primary fw-bold">
-                                <option value="Em Andamento" {% if item.status == 'Em Andamento' %}selected{% endif %}>Em Andamento (Em execução)</option>
-                                <option value="Pendente" {% if item.status == 'Pendente' %}selected{% endif %}>Pendente (Agendado)</option>
-                                <option value="Concluido" {% if item.status == 'Concluido' %}selected{% endif %} class="text-success">✔ Concluído (Liberar p/ Cobrança)</option>
-                                <option value="Cancelado" {% if item.status == 'Cancelado' %}selected{% endif %} class="text-muted">✖ Cancelado</option>
-                            </select>
-                        {% endif %}
+                        <label class="form-label small fw-bold">Relato da Atividade / Registro de Execução</label>
+                        <textarea name="detalhamento_execucao" class="form-control form-control-sm" rows="3" placeholder="Descreva os procedimentos realizados, observações técnicas ou resumo do atendimento...">{{ item.detalhamento_execucao or '' }}</textarea>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label small fw-bold">Relato de Campo / Observações Técnicas</label>
-                        <textarea name="observacoes" class="form-control" rows="3" placeholder="Ex: Vistoria concluída sem apontamentos, relatório fotográfico em anexo...">{{ item.observacoes or '' }}</textarea>
+                        <label class="form-label small fw-bold">Orientações ao Cliente / Recomendações</label>
+                        <textarea name="orientacoes_cliente" class="form-control form-control-sm" rows="2" placeholder="Orientações passadas ao cliente, tarefas ou recomendações pós-atendimento...">{{ item.orientacoes_cliente or '' }}</textarea>
+                    </div>
+
+                    <div class="row g-2 mb-3 align-items-center">
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold">Anexar Documento / Evidência Técnica (PDF ou Imagem)</label>
+                            <input type="file" name="arquivo_evidencia" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-4 text-md-end pt-md-3">
+                            {% if item.arquivo_evidencia %}
+                                <a href="{{ url_for('download_file', filename=item.arquivo_evidencia) }}" target="_blank" class="btn btn-sm btn-outline-primary fw-bold text-truncate w-100">
+                                    <i class="bi bi-paperclip me-1"></i>Ver Anexo Atual
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mb-1">
+                        <label class="form-label small fw-bold text-muted">Observações Internas (Uso Administrativo)</label>
+                        <input type="text" name="observacoes" class="form-control form-control-sm" value="{{ item.observacoes or '' }}" placeholder="Anotações internas da equipe...">
                     </div>
                 </div>
                 <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
                     {% if item.status != 'Bloqueado' %}
-                        <button type="submit" class="btn btn-primary fw-bold px-4">Salvar Alterações</button>
+                        <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">Salvar Alterações</button>
                     {% endif %}
                 </div>
             </form>

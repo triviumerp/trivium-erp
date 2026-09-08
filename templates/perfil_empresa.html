@@ -6,7 +6,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h3 class="fw-bold mb-1 text-dark">Configurações & Perfil</h3>
-        <p class="text-muted mb-0 small">Gerencie os dados cadastrais da sua conta, identidade visual e faturamento</p>
+        <p class="text-muted mb-0 small">Gerencie os dados cadastrais da sua conta, identidade visual, faturamento e equipe</p>
     </div>
 </div>
 
@@ -23,6 +23,9 @@
                 </button>
                 <button class="nav-link text-start fw-semibold py-2 px-3 rounded-3" id="tab-pagamento-btn" data-bs-toggle="pill" data-bs-target="#tab-pagamento" type="button" role="tab">
                     <i class="bi bi-credit-card-2-front me-2"></i> Assinatura & Planos
+                </button>
+                <button class="nav-link text-start fw-semibold py-2 px-3 rounded-3" id="tab-equipe-btn" data-bs-toggle="pill" data-bs-target="#tab-equipe" type="button" role="tab">
+                    <i class="bi bi-people me-2"></i> Usuários & Equipe
                 </button>
             </div>
         </div>
@@ -266,7 +269,7 @@
                         </div>
                     </div>
 
-                    <!-- OPÇÕES DE PLANOS: MENSAL, SEMESTRAL E ANUAL -->
+                    <!-- OPÇÕES DE PLANOS -->
                     <h6 class="fw-bold text-dark mb-3">Escolha o Ciclo de Assinatura</h6>
                     <div class="row g-3">
                         <!-- PLANO MENSAL -->
@@ -361,9 +364,281 @@
                 </div>
             </div>
 
+            <!-- ABA 4: GESTÃO DE USUÁRIOS & EQUIPE -->
+            <div class="tab-pane fade" id="tab-equipe" role="tabpanel">
+                <div class="card-custom p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="fw-bold text-dark mb-0"><i class="bi bi-people text-primary me-2"></i>Usuários da Conta</h5>
+                            <small class="text-muted">Cadastre operadores e gerencie permissões de acesso aos módulos.</small>
+                        </div>
+                        {% if current_user.nivel_acesso in ['admin', 'master'] %}
+                            <button class="btn btn-sm btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalNovoUsuario">
+                                <i class="bi bi-person-plus-fill me-1"></i>Novo Usuário
+                            </button>
+                        {% endif %}
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light small">
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>E-mail</th>
+                                    <th>Perfil / Função</th>
+                                    <th>Permissões</th>
+                                    <th class="text-end pe-2">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody class="small">
+                                {% for u in usuarios_equipe %}
+                                <tr>
+                                    <td class="fw-bold text-dark">{{ u.nome }}</td>
+                                    <td>{{ u.email }}</td>
+                                    <td>
+                                        {% if u.nivel_acesso in ['admin', 'master'] %}
+                                            <span class="badge bg-primary">Administrador</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ u.cargo or 'Operacional' }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if u.perm_servicos %}<span class="badge bg-success">OS / Serviços</span>{% endif %}
+                                        {% if u.perm_clientes %}<span class="badge bg-info text-dark">Clientes</span>{% endif %}
+                                        {% if u.perm_propostas %}<span class="badge bg-info text-dark">Orçamentos</span>{% endif %}
+                                        {% if u.perm_financeiro %}<span class="badge bg-warning text-dark">Financeiro</span>{% endif %}
+                                        {% if u.nivel_acesso in ['admin', 'master'] or u.perm_configuracoes %}
+                                            <span class="badge bg-danger">Acesso Total</span>
+                                        {% else %}
+                                            <span class="badge bg-light text-muted border"><i class="bi bi-lock-fill me-1"></i>Config Bloqueadas</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end pe-2">
+                                        {% if u.id != current_user.id and current_user.nivel_acesso in ['admin', 'master'] %}
+                                            <!-- Botão Editar Permissões -->
+                                            <button class="btn btn-sm btn-outline-primary me-1" title="Editar Permissões" data-bs-toggle="modal" data-bs-target="#modalEditarUsuario{{ u.id }}">
+                                                <i class="bi bi-sliders"></i> Editar
+                                            </button>
+                                            <!-- Botão Resetar Senha -->
+                                            <button class="btn btn-sm btn-outline-warning text-dark me-1" title="Redefinir Senha" data-bs-toggle="modal" data-bs-target="#modalResetSenha{{ u.id }}">
+                                                <i class="bi bi-key-fill"></i> Resetar
+                                            </button>
+                                            <!-- Botão Excluir -->
+                                            <form action="{{ url_for('excluir_usuario_equipe', id=u.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Deseja realmente remover o acesso deste usuário?');">
+                                                <button class="btn btn-sm btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
+                                            </form>
+                                        {% else %}
+                                            <small class="text-muted fst-italic">Sua Conta (Atual)</small>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center py-4 text-muted">
+                                        <i class="bi bi-person-x fs-3 d-block mb-1"></i>
+                                        Nenhum usuário cadastrado nesta conta.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 </div>
+
+<!-- ==================================================================== -->
+<!-- MODAIS DO MÓDULO DE USUÁRIOS & EQUIPE -->
+<!-- ==================================================================== -->
+
+<!-- 1. MODAL NOVO USUÁRIO -->
+<div class="modal fade" id="modalNovoUsuario" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form action="{{ url_for('criar_usuario_equipe') }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-person-plus text-primary me-2"></i>Novo Usuário da Equipe</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold">Nome do Colaborador *</label>
+                            <input type="text" name="nome" class="form-control form-control-sm" placeholder="Ex: Lucas Operacional" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Cargo / Função</label>
+                            <input type="text" name="cargo" id="input_cargo" class="form-control form-control-sm" placeholder="Ex: Consultor Técnico">
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">E-mail de Login *</label>
+                            <input type="email" name="email" class="form-control form-control-sm" placeholder="colaborador@empresa.com" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Senha Padrão Inicial *</label>
+                            <input type="password" name="senha_padrao" class="form-control form-control-sm" placeholder="Mínimo 4 dígitos" required minlength="4">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-primary">Modelo de Perfil Sugerido</label>
+                        <select id="select_perfil_rapido" name="perfil_predefinido" class="form-select form-select-sm fw-bold border-primary" onchange="aplicarPerfilPredefinido(this.value)">
+                            <option value="tecnico" selected>🛠️ Técnico / Operacional (Apenas OS e Campo)</option>
+                            <option value="comercial">💼 Comercial / Vendas (Clientes + Orçamentos)</option>
+                            <option value="financeiro">💰 Financeiro / Cobrança (Faturas + Clientes)</option>
+                            <option value="admin">⭐ Administrador / Sócio (Controle Total)</option>
+                            <option value="custom">⚙️ Personalizado (Definir manualmente)</option>
+                        </select>
+                    </div>
+
+                    <div class="p-3 bg-light rounded border">
+                        <label class="form-label small fw-bold d-block mb-2">Permissões Específicas:</label>
+                        
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_servicos" id="chkServicos" checked>
+                            <label class="form-check-label small" for="chkServicos"><b>Serviços / OS:</b> Acompanhar e Concluir Atividades</label>
+                        </div>
+
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_clientes" id="chkClientes">
+                            <label class="form-check-label small" for="chkClientes"><b>Clientes:</b> Acessar Carteira e Documentos</label>
+                        </div>
+
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_propostas" id="chkPropostas">
+                            <label class="form-check-label small" for="chkPropostas"><b>Orçamentos:</b> Criar e Ver Propostas Comerciais</label>
+                        </div>
+
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_financeiro" id="chkFinanceiro">
+                            <label class="form-check-label small" for="chkFinanceiro"><b>Financeiro:</b> Faturamento, Baixa de Boletos e Faturas</label>
+                        </div>
+
+                        <div class="form-check form-switch mb-1">
+                            <input class="form-check-input" type="checkbox" name="perm_configuracoes" id="chkConfig">
+                            <label class="form-check-label small text-danger fw-bold" for="chkConfig"><b>Configurações & Planos:</b> Acesso Administrativo Total</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Criar Usuário</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 2. MODAIS DE EDIÇÃO DE PERMISSÕES (1 POR USUÁRIO) -->
+{% for u in usuarios_equipe %}
+{% if u.id != current_user.id %}
+<div class="modal fade" id="modalEditarUsuario{{ u.id }}" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form action="{{ url_for('editar_usuario_equipe', id=u.id) }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-sliders text-primary me-2"></i>Editar Usuário: {{ u.nome }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold">Nome do Colaborador *</label>
+                            <input type="text" name="nome" class="form-control form-control-sm" value="{{ u.nome }}" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Cargo / Função</label>
+                            <input type="text" name="cargo" id="input_cargo_edit{{ u.id }}" class="form-control form-control-sm" value="{{ u.cargo or '' }}">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">E-mail de Acesso</label>
+                        <input type="email" class="form-control form-control-sm bg-light" value="{{ u.email }}" disabled>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-primary">Predefinir Perfil</label>
+                        <select class="form-select form-select-sm fw-bold border-primary" data-user-id="{{ u.id }}" onchange="aplicarPerfilEdicao(this)">
+                            <option value="">-- Selecionar Modelo Rápido --</option>
+                            <option value="tecnico">🛠️ Técnico / Operacional (Apenas OS)</option>
+                            <option value="comercial">💼 Comercial / Vendas (Clientes + Orçamentos)</option>
+                            <option value="financeiro">💰 Financeiro / Cobrança (Faturas + Clientes)</option>
+                            <option value="admin">⭐ Administrador / Sócio (Controle Total)</option>
+                        </select>
+                    </div>
+
+                    <div class="p-3 bg-light rounded border">
+                        <label class="form-label small fw-bold d-block mb-2">Permissões de Acesso:</label>
+                        
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_servicos" id="chkServicos{{ u.id }}" {% if u.perm_servicos %}checked{% endif %}>
+                            <label class="form-check-label small" for="chkServicos{{ u.id }}"><b>Serviços / OS:</b> Acompanhar e Concluir Atividades</label>
+                        </div>
+
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_clientes" id="chkClientes{{ u.id }}" {% if u.perm_clientes %}checked{% endif %}>
+                            <label class="form-check-label small" for="chkClientes{{ u.id }}"><b>Clientes:</b> Acessar Carteira e Documentos</label>
+                        </div>
+
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_propostas" id="chkPropostas{{ u.id }}" {% if u.perm_propostas %}checked{% endif %}>
+                            <label class="form-check-label small" for="chkPropostas{{ u.id }}"><b>Orçamentos:</b> Criar e Ver Propostas Comerciais</label>
+                        </div>
+
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_financeiro" id="chkFinanceiro{{ u.id }}" {% if u.perm_financeiro %}checked{% endif %}>
+                            <label class="form-check-label small" for="chkFinanceiro{{ u.id }}"><b>Financeiro:</b> Faturamento, Baixa de Boletos e Faturas</label>
+                        </div>
+
+                        <div class="form-check form-switch mb-1">
+                            <input class="form-check-input" type="checkbox" name="perm_configuracoes" id="chkConfig{{ u.id }}" {% if u.perm_configuracoes or u.nivel_acesso in ['admin', 'master'] %}checked{% endif %}>
+                            <label class="form-check-label small text-danger fw-bold" for="chkConfig{{ u.id }}"><b>Configurações & Planos:</b> Acesso Administrativo Total</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Salvar Permissões</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+
+<!-- 3. MODAIS DE RESETAR SENHA (1 POR USUÁRIO) -->
+{% for u in usuarios_equipe %}
+{% if u.id != current_user.id %}
+<div class="modal fade" id="modalResetSenha{{ u.id }}" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form action="{{ url_for('resetar_senha_equipe', id=u.id) }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h6 class="modal-title fw-bold">Nova Senha: {{ u.nome }}</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-3">
+                    <label class="form-label small fw-bold">Nova Senha</label>
+                    <input type="password" name="nova_senha" class="form-control form-control-sm" placeholder="Mínimo 4 caracteres" required minlength="4">
+                </div>
+                <div class="modal-footer bg-light p-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-sm btn-warning fw-bold">Salvar Senha</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
 
 <!-- MODAL DE CHECKOUT TRANSPARENTE -->
 <div class="modal fade" id="modalCheckoutTransparente" tabindex="-1" aria-hidden="true">
@@ -452,7 +727,6 @@
 </div>
 
 <script>
-// Variáveis com valores padrão (atualizadas ao clicar em qualquer plano)
 let planoEscolhido = 'MENSAL';
 let valorTotalEscolhido = 39.90;
 let parcelasEscolhidas = 1;
@@ -471,7 +745,6 @@ function alternarTipoPessoa() {
     }
 }
 
-// BUSCA AUTOMÁTICA DE CEP VIA VIACEP
 function buscarCEPEmpresa() {
     const cepInput = document.getElementById('cep_empresa');
     const statusText = document.getElementById('cep-empresa-status');
@@ -488,7 +761,7 @@ function buscarCEPEmpresa() {
     statusText.innerText = 'Consultando endereço...';
     statusText.className = 'text-muted d-block mt-1';
 
-    fetch(`https://viacep.com.br/ws/${cep}/json/`)
+    fetch('https://viacep.com.br/ws/' + cep + '/json/')
         .then(response => response.json())
         .then(dados => {
             if (iconeBusca) iconeBusca.className = 'bi bi-search';
@@ -512,7 +785,88 @@ function buscarCEPEmpresa() {
         });
 }
 
-// Abre o modal de assinatura com o plano, valor e parcelas selecionados
+function aplicarPerfilPredefinido(perfil) {
+    const chkServ = document.getElementById('chkServicos');
+    const chkCli = document.getElementById('chkClientes');
+    const chkProp = document.getElementById('chkPropostas');
+    const chkFin = document.getElementById('chkFinanceiro');
+    const chkConf = document.getElementById('chkConfig');
+    const inputCargo = document.getElementById('input_cargo');
+
+    if (perfil === 'tecnico') {
+        chkServ.checked = true;
+        chkCli.checked = false;
+        chkProp.checked = false;
+        chkFin.checked = false;
+        chkConf.checked = false;
+        if (inputCargo) inputCargo.value = 'Operador Técnico';
+    } else if (perfil === 'comercial') {
+        chkServ.checked = false;
+        chkCli.checked = true;
+        chkProp.checked = true;
+        chkFin.checked = false;
+        chkConf.checked = false;
+        if (inputCargo) inputCargo.value = 'Consultor Comercial';
+    } else if (perfil === 'financeiro') {
+        chkServ.checked = false;
+        chkCli.checked = true;
+        chkProp.checked = false;
+        chkFin.checked = true;
+        chkConf.checked = false;
+        if (inputCargo) inputCargo.value = 'Analista Financeiro';
+    } else if (perfil === 'admin') {
+        chkServ.checked = true;
+        chkCli.checked = true;
+        chkProp.checked = true;
+        chkFin.checked = true;
+        chkConf.checked = true;
+        if (inputCargo) inputCargo.value = 'Administrador / Sócio';
+    }
+}
+
+function aplicarPerfilEdicao(selectElement) {
+    const userId = selectElement.dataset.userId;
+    const perfil = selectElement.value;
+    if (!perfil) return;
+
+    const chkServ = document.getElementById('chkServicos' + userId);
+    const chkCli = document.getElementById('chkClientes' + userId);
+    const chkProp = document.getElementById('chkPropostas' + userId);
+    const chkFin = document.getElementById('chkFinanceiro' + userId);
+    const chkConf = document.getElementById('chkConfig' + userId);
+    const inputCargo = document.getElementById('input_cargo_edit' + userId);
+
+    if (perfil === 'tecnico') {
+        if (chkServ) chkServ.checked = true;
+        if (chkCli) chkCli.checked = false;
+        if (chkProp) chkProp.checked = false;
+        if (chkFin) chkFin.checked = false;
+        if (chkConf) chkConf.checked = false;
+        if (inputCargo) inputCargo.value = 'Operador Técnico';
+    } else if (perfil === 'comercial') {
+        if (chkServ) chkServ.checked = false;
+        if (chkCli) chkCli.checked = true;
+        if (chkProp) chkProp.checked = true;
+        if (chkFin) chkFin.checked = false;
+        if (chkConf) chkConf.checked = false;
+        if (inputCargo) inputCargo.value = 'Consultor Comercial';
+    } else if (perfil === 'financeiro') {
+        if (chkServ) chkServ.checked = false;
+        if (chkCli) chkCli.checked = true;
+        if (chkProp) chkProp.checked = false;
+        if (chkFin) chkFin.checked = true;
+        if (chkConf) chkConf.checked = false;
+        if (inputCargo) inputCargo.value = 'Analista Financeiro';
+    } else if (perfil === 'admin') {
+        if (chkServ) chkServ.checked = true;
+        if (chkCli) chkCli.checked = true;
+        if (chkProp) chkProp.checked = true;
+        if (chkFin) chkFin.checked = true;
+        if (chkConf) chkConf.checked = true;
+        if (inputCargo) inputCargo.value = 'Administrador / Sócio';
+    }
+}
+
 function abrirCheckoutModal(plano, valorTotal, parcelas, rotulo) {
     planoEscolhido = plano;
     valorTotalEscolhido = valorTotal;
@@ -520,7 +874,7 @@ function abrirCheckoutModal(plano, valorTotal, parcelas, rotulo) {
     
     const tituloEl = document.getElementById('tituloModalPlano');
     if (tituloEl) {
-        tituloEl.innerText = `Finalizar Assinatura: ${plano} (${rotulo})`;
+        tituloEl.innerText = 'Finalizar Assinatura: ' + plano + ' (' + rotulo + ')';
     }
     
     const areaPix = document.getElementById('resultadoPix');
@@ -541,7 +895,14 @@ function abrirCheckoutModal(plano, valorTotal, parcelas, rotulo) {
     }
 }
 
-// Processa o pagamento enviando os dados dinâmicos do plano
+function copiarCodigoPix() {
+    const campo = document.getElementById('pixCopiaColaInput');
+    if (campo) {
+        navigator.clipboard.writeText(campo.value);
+        alert('Código Pix copiado com sucesso!');
+    }
+}
+
 function processarPagamento(tipo) {
     const payload = {
         plano: planoEscolhido,
@@ -608,24 +969,27 @@ function processarPagamento(tipo) {
                 const encodedImg = (res.pix && res.pix.encodedImage) ? res.pix.encodedImage : '';
 
                 if (copiaCola || encodedImg) {
-                    let imgTag = encodedImg 
-                        ? `<img src="data:image/png;base64,${encodedImg}" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">`
-                        : `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(copiaCola)}" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">`;
+                    let imgHtml = '';
+                    if (encodedImg) {
+                        imgHtml = '<img src="data:image/png;base64,' + encodedImg + '" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">';
+                    } else {
+                        const urlQr = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(copiaCola);
+                        imgHtml = '<img src="' + urlQr + '" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">';
+                    }
 
-                    areaPix.innerHTML = `
-                        <div class="card p-3 border-success text-center shadow-sm mt-3">
-                            <h6 class="fw-bold text-success mb-2"><i class="bi bi-qr-code me-1"></i> QR Code Pix Gerado</h6>
-                            <div class="my-2 text-center">${imgTag}</div>
-                            <label class="small text-muted fw-bold d-block text-start mb-1">Código Pix Copia e Cola:</label>
-                            <div class="input-group mb-3">
-                                <input type="text" id="pixCopiaColaInput" class="form-control form-control-sm font-monospace" value="${copiaCola}" readonly>
-                                <button class="btn btn-outline-primary btn-sm fw-bold" type="button" onclick="navigator.clipboard.writeText(document.getElementById('pixCopiaColaInput').value); alert('Código Pix copiado!');">
-                                    <i class="bi bi-clipboard me-1"></i>Copiar
-                                </button>
-                            </div>
-                            <small class="text-muted">A liberação da sua conta ocorrerá imediatamente após o pagamento.</small>
-                        </div>
-                    `;
+                    areaPix.innerHTML = 
+                        '<div class="card p-3 border-success text-center shadow-sm mt-3">' +
+                            '<h6 class="fw-bold text-success mb-2"><i class="bi bi-qr-code me-1"></i> QR Code Pix Gerado</h6>' +
+                            '<div class="my-2 text-center">' + imgHtml + '</div>' +
+                            '<label class="small text-muted fw-bold d-block text-start mb-1">Código Pix Copia e Cola:</label>' +
+                            '<div class="input-group mb-3">' +
+                                '<input type="text" id="pixCopiaColaInput" class="form-control form-control-sm font-monospace" value="' + copiaCola + '" readonly>' +
+                                '<button class="btn btn-outline-primary btn-sm fw-bold" type="button" onclick="copiarCodigoPix()">' +
+                                    '<i class="bi bi-clipboard me-1"></i>Copiar' +
+                                '</button>' +
+                            '</div>' +
+                            '<small class="text-muted">A liberação da sua conta ocorrerá imediatamente após o pagamento.</small>' +
+                        '</div>';
                 }
             } else if (tipo === 'BOLETO') {
                 const areaBoleto = document.getElementById('resultadoBoleto');
@@ -633,15 +997,14 @@ function processarPagamento(tipo) {
                 
                 const linkBoleto = res.bankSlipUrl || res.invoiceUrl || (res.dados && (res.dados.bankSlipUrl || res.dados.invoiceUrl)) || '';
 
-                areaBoleto.innerHTML = `
-                    <div class="card p-3 border-primary text-center shadow-sm mt-3">
-                        <h6 class="fw-bold text-primary mb-2"><i class="bi bi-file-earmark-check me-1"></i> Boleto Gerado</h6>
-                        <p class="small text-muted mb-3">Clique no botão abaixo para visualizar ou imprimir o boleto:</p>
-                        <a href="${linkBoleto}" target="_blank" rel="noopener noreferrer" class="btn btn-primary fw-bold py-2">
-                            <i class="bi bi-printer me-1"></i> Imprimir / Visualizar Boleto
-                        </a>
-                    </div>
-                `;
+                areaBoleto.innerHTML = 
+                    '<div class="card p-3 border-primary text-center shadow-sm mt-3">' +
+                        '<h6 class="fw-bold text-primary mb-2"><i class="bi bi-file-earmark-check me-1"></i> Boleto Gerado</h6>' +
+                        '<p class="small text-muted mb-3">Clique no botão abaixo para visualizar ou imprimir o boleto:</p>' +
+                        '<a href="' + linkBoleto + '" target="_blank" rel="noopener noreferrer" class="btn btn-primary fw-bold py-2">' +
+                            '<i class="bi bi-printer me-1"></i> Imprimir / Visualizar Boleto' +
+                        '</a>' +
+                    '</div>';
             } else {
                 alert('Assinatura processada com sucesso via Cartão!');
                 window.location.reload();
@@ -662,30 +1025,6 @@ function processarPagamento(tipo) {
         alert('Erro de comunicação com o servidor.');
     });
 }
-
-// Disparadores Automáticos do CEP
-document.addEventListener('DOMContentLoaded', () => {
-    alternarTipoPessoa();
-    
-    const campoCep = document.getElementById('cep_empresa');
-    if (campoCep) {
-        campoCep.addEventListener('blur', function() {
-            if (this.value.replace(/\D/g, '').length === 8) {
-                buscarCEPEmpresa();
-            }
-        });
-
-        campoCep.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                buscarCEPEmpresa();
-            }
-        });
-    }
-});
-// ==========================================
-// MÁSCARAS DE ENTRADA (VISUAIS)
-// ==========================================
 
 function mascaraCNPJ(v) {
     v = v.replace(/\D/g, "").slice(0, 14);
@@ -737,35 +1076,36 @@ function aplicarMascarasIniciais() {
     if (inputCEP && inputCEP.value) inputCEP.value = mascaraCEP(inputCEP.value);
 }
 
-// Vincula os eventos de digitação
 document.addEventListener('DOMContentLoaded', () => {
+    alternarTipoPessoa();
     aplicarMascarasIniciais();
 
     const inputCNPJ = document.getElementById('cnpj_input');
     if (inputCNPJ) {
-        inputCNPJ.addEventListener('input', (e) => {
-            e.target.value = mascaraCNPJ(e.target.value);
-        });
+        inputCNPJ.addEventListener('input', (e) => { e.target.value = mascaraCNPJ(e.target.value); });
     }
 
     const inputCPF = document.getElementById('cpf_input');
     if (inputCPF) {
-        inputCPF.addEventListener('input', (e) => {
-            e.target.value = mascaraCPF(e.target.value);
-        });
+        inputCPF.addEventListener('input', (e) => { e.target.value = mascaraCPF(e.target.value); });
     }
 
     const inputTel = document.querySelector('input[name="telefone"]');
     if (inputTel) {
-        inputTel.addEventListener('input', (e) => {
-            e.target.value = mascaraTelefone(e.target.value);
-        });
+        inputTel.addEventListener('input', (e) => { e.target.value = mascaraTelefone(e.target.value); });
     }
 
-    const inputCEP = document.getElementById('cep_empresa');
-    if (inputCEP) {
-        inputCEP.addEventListener('input', (e) => {
-            e.target.value = mascaraCEP(e.target.value);
+    const campoCep = document.getElementById('cep_empresa');
+    if (campoCep) {
+        campoCep.addEventListener('input', (e) => { e.target.value = mascaraCEP(e.target.value); });
+        campoCep.addEventListener('blur', function() {
+            if (this.value.replace(/\D/g, '').length === 8) buscarCEPEmpresa();
+        });
+        campoCep.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                buscarCEPEmpresa();
+            }
         });
     }
 });
