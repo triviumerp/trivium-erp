@@ -648,7 +648,18 @@
                 <h5 class="modal-title fw-bold" id="tituloModalPlano">Finalizar Assinatura</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-4">
+            <div class="modal-body p-4">                
+                <!-- CAMPO DE APLICAÇÃO DE CUPOM NO CHECKOUT -->
+                <div class="p-3 bg-light rounded-3 border mb-3">
+                    <label class="small text-muted fw-bold mb-1 d-block"><i class="bi bi-tag-fill text-primary me-1"></i>Possui cupom de desconto?</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" id="input_cupom_checkout" class="form-control font-monospace text-uppercase" placeholder="EX: PARCEIRO30">
+                        <button class="btn btn-outline-primary fw-bold" type="button" onclick="aplicarCupomCheckout()">
+                            <i class="bi bi-check2"></i> Aplicar
+                        </button>
+                    </div>
+                    <small id="status_cupom_checkout" class="d-none mt-1 fw-semibold" style="font-size: 0.78rem;"></small>
+                </div>
                 <ul class="nav nav-pills nav-fill mb-3" id="pills-tab" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active fw-bold" id="tab-cartao" data-bs-toggle="pill" data-bs-target="#conteudo-cartao" type="button" role="tab">
@@ -908,7 +919,8 @@ function processarPagamento(tipo) {
         plano: planoEscolhido,
         valor_total: valorTotalEscolhido,
         parcelas: parcelasEscolhidas,
-        forma_pagamento: tipo
+        forma_pagamento: tipo,
+        cupom: cupomAplicado
     };
 
     if (tipo === 'CREDIT_CARD') {
@@ -1109,5 +1121,79 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+let cupomAplicado = null;
+
+function abrirCheckoutModal(plano, valorTotal, parcelas, rotulo) {
+    planoEscolhido = plano;
+    valorTotalEscolhido = valorTotal;
+    parcelasEscolhidas = parcelas;
+    cupomAplicado = null;
+    
+    // Reseta campo e status de cupom
+    const inputCupom = document.getElementById('input_cupom_checkout');
+    if (inputCupom) inputCupom.value = '';
+    const statusCupom = document.getElementById('status_cupom_checkout');
+    if (statusCupom) {
+        statusCupom.className = 'd-none mt-1 fw-semibold';
+        statusCupom.innerText = '';
+    }
+
+    const tituloEl = document.getElementById('tituloModalPlano');
+    if (tituloEl) {
+        tituloEl.innerText = 'Finalizar Assinatura: ' + plano + ' (' + rotulo + ')';
+    }
+    
+    const areaPix = document.getElementById('resultadoPix');
+    if (areaPix) areaPix.classList.add('d-none');
+
+    const areaBoleto = document.getElementById('resultadoBoleto');
+    if (areaBoleto) areaBoleto.classList.add('d-none');
+
+    const modalEl = document.getElementById('modalCheckoutTransparente');
+    if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+function aplicarCupomCheckout() {
+    const input = document.getElementById('input_cupom_checkout');
+    const status = document.getElementById('status_cupom_checkout');
+    const codigo = (input ? input.value : '').trim().toUpperCase();
+
+    if (!codigo) {
+        status.className = 'd-block text-danger mt-1 fw-semibold';
+        status.innerText = 'Digite um código de cupom.';
+        return;
+    }
+
+    status.className = 'd-block text-muted mt-1';
+    status.innerText = 'Validando cupom...';
+
+    fetch('/api/cupom/validar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigo: codigo, plano: planoEscolhido })
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.valido) {
+            cupomAplicado = res.codigo;
+            valorTotalEscolhido = res.valor_final;
+            status.className = 'd-block text-success mt-1 fw-bold';
+            status.innerText = `✓ ${res.mensagem} (Novo total: R$ ${res.valor_final.toFixed(2)})`;
+            
+            const tituloEl = document.getElementById('tituloModalPlano');
+            if (tituloEl) {
+                tituloEl.innerText = `Finalizar Assinatura: ${planoEscolhido} (R$ ${res.valor_final.toFixed(2)})`;
+            }
+        } else {
+            cupomAplicado = null;
+            status.className = 'd-block text-danger mt-1 fw-semibold';
+            status.innerText = res.mensagem || 'Cupom inválido.';
+        }
+    })
+    .catch(() => {
+        status.className = 'd-block text-danger mt-1 fw-semibold';
+        status.innerText = 'Erro ao validar cupom.';
+    });
+}
 </script>
 {% endblock %}

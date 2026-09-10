@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+{% block title %}Gestão de Cupons & Afiliados - Trivium ERP{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold text-dark mb-0"><i class="bi bi-tag-fill text-danger me-2"></i>Cupons & Afiliados</h2>
+        <p class="text-muted mb-0">Criação de cotas promocionais e acompanhamento de parceiros</p>
+    </div>
+    <button class="btn btn-danger fw-bold" data-bs-toggle="modal" data-bs-target="#modalNovoCupom">
+        <i class="bi bi-plus-circle me-1"></i> Criar Novo Cupom
+    </button>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 small">
+                <thead class="table-light">
+                    <tr>
+                        <th>CÓDIGO</th>
+                        <th>AFILIADO / CONTATO</th>
+                        <th>CHAVE PIX</th>
+                        <th>DESCONTO</th>
+                        <th>COMISSÃO</th>
+                        <th>USOS / LIMITE</th>
+                        <th>VALIDADE</th>
+                        <th>STATUS</th>
+                        <th class="text-end pe-3">AÇÕES</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in cupons %}
+                    <tr>
+                        <td class="fw-bold fs-6 text-primary">{{ c.codigo }}</td>
+                        <td>
+                            <strong class="text-dark d-block">{{ c.afiliado_nome }}</strong>
+                            <span class="text-muted">{{ c.afiliado_email }}</span>
+                        </td>
+                        <td><code>{{ c.afiliado_chave_pix or '--' }}</code></td>
+                        <td><span class="badge bg-success fs-6">{{ c.percentual_desconto }}% OFF</span></td>
+                        <td><span class="badge bg-info text-dark">{{ c.percentual_comissao }}% Recorrente</span></td>
+                        <td>
+                            <strong>{{ c.usos_atuais }}</strong> / {{ c.limite_usos }}
+                            <div class="progress mt-1" style="height: 4px;">
+                                {% set porcentagem = ((c.usos_atuais / c.limite_usos) * 100)|round|int if c.limite_usos and c.limite_usos > 0 else 0 %}
+                                 <div class="progress-bar bg-primary bar-progresso" data-largura="{{ porcentagem }}"></div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if c.data_validade %}
+                                <span class="{% if c.data_validade < hoje %}text-danger fw-bold{% endif %}">{{ c.data_validade.strftime('%d/%m/%Y') }}</span>
+                            {% else %}
+                                <span class="text-muted">Vitalício</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if c.is_valido %}
+                                <span class="badge bg-success">Ativo</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inativo / Esgotado</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-3">
+                            <form action="{{ url_for('admin_toggle_cupom', id=c.id) }}" method="POST" class="d-inline">
+                                <button class="btn btn-sm {% if c.ativo %}btn-outline-danger{% else %}btn-outline-success{% endif %} fw-bold">
+                                    {{ 'Desativar' if c.ativo else 'Ativar' }}
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="text-center py-4 text-muted">Nenhum cupom cadastrado até o momento.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL NOVO CUPOM -->
+<div class="modal fade" id="modalNovoCupom" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-tag text-danger me-2"></i>Cadastrar Cupom / Afiliado</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Código do Cupom *</label>
+                            <input type="text" name="codigo" class="form-control text-uppercase font-monospace" placeholder="EX: PARCEIRO30" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Desconto (%) *</label>
+                            <input type="number" step="1" min="1" max="100" name="percentual_desconto" class="form-control" placeholder="Ex: 30" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nome do Afiliado / Influencer *</label>
+                        <input type="text" name="afiliado_nome" class="form-control" placeholder="Nome Completo" required>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">E-mail do Afiliado *</label>
+                            <input type="email" name="afiliado_email" class="form-control" placeholder="afiliado@email.com" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Chave PIX para Repasse</label>
+                            <input type="text" name="afiliado_chave_pix" class="form-control" placeholder="CPF, E-mail ou Telefone">
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Comissão (%)</label>
+                            <input type="number" step="1" name="percentual_comissao" class="form-control" value="20">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Limite de Usos</label>
+                            <input type="number" name="limite_usos" class="form-control" value="100">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Validade</label>
+                            <input type="date" name="data_validade" class="form-control">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger btn-sm fw-bold px-3">Criar Cupom</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.bar-progresso').forEach(bar => {
+        const largura = bar.getAttribute('data-largura') || 0;
+        bar.style.width = largura + '%';
+    });
+});
+</script>
+{% endblock %}

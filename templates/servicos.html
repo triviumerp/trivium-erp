@@ -52,7 +52,6 @@
 <!-- SELETOR DE VISUALIZAÇÃO E FILTRO TEMPORAL INTEGRADO -->
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body py-2 d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
-        <!-- Filtro por Categoria de Serviço -->
         <div class="btn-group">
             <a href="{{ url_for('consultar_servicos', status='agenda', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'agenda' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}">
                 <i class="bi bi-calendar-event me-1"></i>Agenda / Cronograma
@@ -71,17 +70,16 @@
             </a>
         </div>
 
-        <!-- Filtro por Período Temporal (Próximos 7 dias / 30 dias / Ano) -->
         <div class="d-flex align-items-center gap-2">
             <small class="text-muted fw-bold"><i class="bi bi-funnel me-1"></i>Horizonte:</small>
             <div class="btn-group">
-                <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='semana') }}" class="btn btn-sm {% if periodo_atual == 'semana' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}" title="Vencendo nos próximos 7 dias + pendências">
+                <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='semana') }}" class="btn btn-sm {% if periodo_atual == 'semana' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
                     Próximos 7 Dias
                 </a>
-                <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='mes') }}" class="btn btn-sm {% if periodo_atual == 'mes' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}" title="Vencendo nos próximos 30 dias">
+                <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='mes') }}" class="btn btn-sm {% if periodo_atual == 'mes' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
                     Próximos 30 Dias
                 </a>
-                <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='ano') }}" class="btn btn-sm {% if periodo_atual == 'ano' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}" title="Vencendo no próximo ano">
+                <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='ano') }}" class="btn btn-sm {% if periodo_atual == 'ano' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
                     Próximos 12 Meses
                 </a>
                 <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='todos') }}" class="btn btn-sm {% if periodo_atual == 'todos' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
@@ -104,15 +102,46 @@
                         <th>CLIENTE / LOCAL</th>
                         <th>SERVIÇO & TIPO</th>
                         <th>VALOR</th>
-                        <th>STATUS</th>
+                        <th style="width: 200px;">ANDAMENTO</th>
                         <th class="text-end pe-3">AÇÕES</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in servicos_operacionais %}
                     {% set atrasado = item.data_previsao and item.data_previsao < hoje and item.status not in ['Concluido', 'Cancelado', 'Bloqueado'] %}
+                    
+                    {% if item.etapas_rastreio %}
+                        {% set total_etapas = item.etapas_rastreio|length %}
+                        {% set concluidas = item.etapas_rastreio|selectattr('status_fase', 'equalto', 'concluido')|list|length %}
+                        {% set em_andamento = item.etapas_rastreio|selectattr('status_fase', 'equalto', 'em_andamento')|list|length %}
+                        {% if total_etapas > 0 %}
+                            {% set percentual = (((concluidas * 1.0) + (em_andamento * 0.5)) / total_etapas * 100)|round|int %}
+                        {% else %}
+                            {% set percentual = 0 %}
+                        {% endif %}
+                    {% else %}
+                        {% if item.status == 'Concluido' %}
+                            {% set percentual = 100 %}
+                        {% elif item.status == 'Em Andamento' %}
+                            {% set percentual = 50 %}
+                        {% else %}
+                            {% set percentual = 0 %}
+                        {% endif %}
+                    {% endif %}
+
+                    {% if percentual == 100 or item.status == 'Concluido' %}
+                        {% set cor_barra = 'bg-success' %}
+                        {% set cor_btn = 'btn-outline-success' %}
+                    {% elif percentual > 0 or item.status == 'Em Andamento' %}
+                        {% set cor_barra = 'bg-warning' %}
+                        {% set cor_btn = 'btn-outline-warning text-dark' %}
+                    {% else %}
+                        {% set cor_barra = 'bg-danger' %}
+                        {% set cor_btn = 'btn-outline-danger' %}
+                    {% endif %}
+
                     <tr class="{% if atrasado %}table-danger{% elif item.status == 'Bloqueado' %}table-warning bg-opacity-25{% endif %}">
-                        <!-- DATA PREVISTA COM BADGE DINÂMICO -->
+                        <!-- DATA PREVISTA -->
                         <td>
                             {% if item.data_previsao %}
                                 <div class="d-flex align-items-center gap-2">
@@ -142,7 +171,7 @@
                             <small class="text-muted"><i class="bi bi-telephone me-1"></i>{{ item.cliente.telefone }}</small>
                         </td>
 
-                        <!-- SERVIÇO, ESCOPO E IDENTIFICAÇÃO -->
+                        <!-- SERVIÇO -->
                         <td>
                             <div class="d-flex align-items-center gap-2 mb-1">
                                 <span class="badge bg-secondary">{{ item.tipo_servico.nome }}</span>
@@ -162,29 +191,29 @@
                         <!-- VALOR -->
                         <td class="fw-bold text-dark">R$ {{ "%.2f"|format(item.valor_cobrado) }}</td>
 
-                        <!-- STATUS COM TRAVA DE BLOQUEIO / ENTRADA PENDENTE -->
+                        <!-- ANDAMENTO -->
                         <td>
                             {% if item.status == 'Bloqueado' %}
-                                <span class="badge bg-danger p-2 shadow-sm" title="Aguardando confirmação do sinal no Financeiro">
+                                <span class="badge bg-danger p-2 shadow-sm">
                                     <i class="bi bi-lock-fill me-1"></i>Aguardando Sinal
                                 </span>
-                            {% elif item.status == 'Concluido' %}
-                                <span class="badge bg-success p-2"><i class="bi bi-check-circle me-1"></i>Concluído</span>
-                            {% elif atrasado %}
-                                <span class="badge bg-danger p-2"><i class="bi bi-exclamation-triangle-fill me-1"></i>Em Atraso</span>
-                            {% elif item.status == 'Em Andamento' %}
-                                <span class="badge bg-primary p-2"><i class="bi bi-play-circle me-1"></i>Em Andamento</span>
-                            {% elif item.status == 'Cancelado' %}
-                                <span class="badge bg-secondary p-2">Cancelado</span>
                             {% else %}
-                                <span class="badge bg-warning text-dark p-2"><i class="bi bi-hourglass-split me-1"></i>Pendente</span>
+                                <div>
+                                    <button type="button" class="btn btn-sm {{ cor_btn }} fw-bold w-100 mb-1 d-flex justify-content-between align-items-center py-1 px-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalRastreio{{ item.id }}" title="Clique para ver o andamento detalhado">
+                                        <span class="text-truncate small"><i class="bi bi-truck-flatbed me-1"></i>{{ item.status }}</span>
+                                        <span class="badge bg-dark text-white rounded-pill" style="font-size: 0.7rem;">{{ percentual }}%</span>
+                                    </button>
+                                    <div class="progress" style="height: 6px;" role="progressbar" aria-valuenow="{{ percentual }}" aria-valuemin="0" aria-valuemax="100">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated {{ cor_barra }}" data-progress-val="{{ percentual }}"></div>
+                                    </div>
+                                </div>
                             {% endif %}
                         </td>
 
-                        <!-- AÇÕES (COM TRAVA QUANDO BLOQUEADO) -->
+                        <!-- AÇÕES -->
                         <td class="text-end pe-3">
                             {% if item.status == 'Bloqueado' %}
-                                <a href="{{ url_for('financeiro') }}" class="btn btn-sm btn-outline-danger fw-bold" title="Acesse o Financeiro para dar baixa na entrada e destravar este serviço">
+                                <a href="{{ url_for('financeiro') }}" class="btn btn-sm btn-outline-danger fw-bold" title="Liberar no Financeiro">
                                     <i class="bi bi-lock-fill me-1"></i>Liberar no Financeiro
                                 </a>
                             {% else %}
@@ -209,35 +238,81 @@
 </div>
 
 <!-- ==================================================================== -->
-<!-- MODAIS DE ATUALIZAÇÃO / CONCLUSÃO OPERACIONAL (1 POR SERVIÇO) -->
+<!-- MODAL 1: LINHA DO TEMPO DE RASTREIO -->
+<!-- ==================================================================== -->
+{% for item in servicos_operacionais %}
+<div class="modal fade" id="modalRastreio{{ item.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow rounded-4">
+            <div class="modal-header bg-light border-0">
+                <div>
+                    <h5 class="fw-bold text-dark mb-0"><i class="bi bi-clock-history text-primary me-2"></i>Rastreamento de Execução (Fases & Etapas)</h5>
+                    <small class="text-muted">{{ item.tipo_servico.nome }} • Cliente: <b>{{ item.cliente.nome }}</b></small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            
+            <div class="modal-body p-4">
+                <div class="timeline-container px-3 py-2">
+                    {% if item.etapas_rastreio %}
+                        <div class="position-relative border-start border-3 border-primary ms-3 ps-4 py-2">
+                            {% for etapa in item.etapas_rastreio|sort(attribute='ordem') %}
+                            <div class="mb-4 position-relative">
+                                <div class="position-absolute top-0 start-0 translate-middle-x bg-white border border-3 {% if etapa.status_fase == 'concluido' %}border-success text-success{% elif etapa.status_fase == 'em_andamento' %}border-warning text-warning bg-warning-subtle{% else %}border-danger text-danger{% endif %} rounded-circle d-flex align-items-center justify-content-center shadow-sm" style="width: 32px; height: 32px; left: -25px !important;">
+                                    {% if etapa.status_fase == 'concluido' %}
+                                        <i class="bi bi-check-lg fw-bold"></i>
+                                    {% elif etapa.status_fase == 'em_andamento' %}
+                                        <i class="bi bi-play-fill"></i>
+                                    {% else %}
+                                        <i class="bi bi-clock"></i>
+                                    {% endif %}
+                                </div>
+
+                                <div class="card border-0 shadow-sm p-3 bg-light rounded-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <h6 class="fw-bold text-dark mb-0">{{ etapa.titulo_fase }}</h6>
+                                        <span class="badge {% if etapa.status_fase == 'concluido' %}bg-success{% elif etapa.status_fase == 'em_andamento' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                                            {{ etapa.status_fase|replace('_', ' ')|capitalize }}
+                                        </span>
+                                    </div>
+                                    {% if etapa.descricao_detalhes %}
+                                        <p class="small text-muted mb-2"><i class="bi bi-box-seam me-1"></i><b>Materiais / Insumos:</b> {{ etapa.descricao_detalhes }}</p>
+                                    {% endif %}
+                                    <div class="d-flex justify-content-between align-items-center small text-muted mt-2 pt-2 border-top">
+                                        <span><i class="bi bi-calendar-event me-1"></i>Início: {{ etapa.data_inicio.strftime('%d/%m/%Y') if etapa.data_inicio else '--' }}</span>
+                                        <span><i class="bi bi-calendar-check me-1"></i>Término: {{ etapa.data_fim.strftime('%d/%m/%Y') if etapa.data_fim else '--' }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-info-circle fs-3 d-block mb-2 text-secondary"></i>
+                            Este serviço utiliza atendimento padrão (sem divisão modular por fases de cronograma).
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- ==================================================================== -->
+<!-- MODAL 2: ATUALIZAÇÃO / CONCLUSÃO OPERACIONAL -->
 <!-- ==================================================================== -->
 {% for item in servicos_operacionais %}
 <div class="modal fade" id="modalAcompanhamento{{ item.id }}" tabindex="-1">
-    <div class="mb-3">
-    <label class="form-label small fw-bold">Relato da Atividade / Registro de Execução</label>
-    <textarea name="detalhamento_execucao" class="form-control form-control-sm" rows="3" placeholder="Resumo do que foi realizado no encontro/serviço...">{{ item.detalhamento_execucao or '' }}</textarea>
-</div>
-
-<div class="mb-3">
-    <label class="form-label small fw-bold">Orientações ao Cliente / Próximos Passos</label>
-    <textarea name="orientacoes_cliente" class="form-control form-control-sm" rows="2" placeholder="Recomendações passadas ao cliente para a próxima etapa...">{{ item.orientacoes_cliente or '' }}</textarea>
-</div>
-
-<div class="mb-3">
-    <label class="form-label small fw-bold">Anexar Arquivo / Evidência da Atividade (PDF ou Imagem)</label>
-        <input type="file" name="arquivo_evidencia" class="form-control form-control-sm">
-            {% if item.arquivo_evidencia %}
-                <div class="mt-1">
-                    <a href="{{ url_for('download_file', filename=item.arquivo_evidencia) }}" target="_blank" class="small text-primary fw-bold text-decoration-none">
-                        <i class="bi bi-paperclip me-1"></i>Ver arquivo anexado atual
-                    </a>
-                </div>
-            {% endif %}
-        </div>
-        <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content border-0 shadow">
             <form action="{{ url_for('atualizar_operacao_servico', id=item.id) }}" method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="filtro_retorno" value="{{ filtro_atual }}">
+                
                 <div class="modal-header bg-light">
                     <div>
                         <h5 class="modal-title fw-bold text-dark mb-0">{{ item.tipo_servico.nome }}</h5>
@@ -245,46 +320,102 @@
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
+
                 <div class="modal-body p-4">
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
                             <label class="form-label small fw-bold">Data Agendada / Prazo de Execução</label>
                             <input type="date" name="data_previsao" class="form-control form-control-sm" value="{{ item.data_previsao.strftime('%Y-%m-%d') if item.data_previsao else '' }}">
-                            <small class="text-muted" style="font-size: 0.72rem;">Reagende a atividade ajustando a data acima.</small>
                         </div>
 
                         <div class="col-md-6">
                             <label class="form-label small fw-bold">Status Operacional *</label>
                             {% if item.status == 'Bloqueado' %}
                                 <div class="alert alert-danger py-2 small mb-0">
-                                    <i class="bi bi-shield-lock-fill me-1"></i>
-                                    <strong>Atividade Bloqueada:</strong> O status não pode ser alterado manualmente. Confirme o recebimento do sinal no módulo Financeiro para liberar a execução.
+                                    <i class="bi bi-shield-lock-fill me-1"></i> Atividade Bloqueada por falta de sinal.
                                 </div>
                                 <input type="hidden" name="status" value="Bloqueado">
                             {% else %}
                                 <select name="status" class="form-select form-select-sm border-primary fw-bold">
                                     <option value="Em Andamento" {% if item.status == 'Em Andamento' %}selected{% endif %}>Em Andamento (Em execução)</option>
                                     <option value="Pendente" {% if item.status == 'Pendente' %}selected{% endif %}>Pendente (Agendado)</option>
-                                    <option value="Concluido" {% if item.status == 'Concluido' %}selected{% endif %} class="text-success">✔ Concluído (Liberar p/ Cobrança)</option>
+                                    <option value="Concluido" {% if item.status == 'Concluido' %}selected{% endif %} class="text-success">✔ Concluído</option>
                                     <option value="Cancelado" {% if item.status == 'Cancelado' %}selected{% endif %} class="text-muted">✖ Cancelado</option>
                                 </select>
                             {% endif %}
                         </div>
                     </div>
 
+                    <!-- BLOCO DE CRONOGRAMA POR ETAPAS / RASTREIO -->
+                    <div class="border rounded-3 p-3 bg-light mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="chkCronograma{{ item.id }}" onchange="alternarCronograma('{{ item.id }}')" {% if item.etapas_rastreio %}checked{% endif %}>
+                                <label class="form-check-label small fw-bold text-dark" for="chkCronograma{{ item.id }}">
+                                    <i class="bi bi-diagram-3-fill text-primary me-1"></i> Ativar Cronograma de Fases / Rastreio (Obras e Projetos)
+                                </label>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold {% if not item.etapas_rastreio %}d-none{% endif %}" id="btnNovaEtapa{{ item.id }}" onclick="adicionarLinhaEtapa('{{ item.id }}')">
+                                <i class="bi bi-plus-lg me-1"></i> Nova Fase
+                            </button>
+                        </div>
+
+                        <div id="containerEtapas{{ item.id }}" class="d-flex flex-column gap-2 mt-3 {% if not item.etapas_rastreio %}d-none{% endif %}">
+                            {% for etapa in item.etapas_rastreio|sort(attribute='ordem') %}
+                            <div class="card p-3 border bg-white shadow-sm linha-etapa">
+                                <div class="row g-2 align-items-center mb-2">
+                                    <div class="col-md-7">
+                                        <label class="form-label small fw-bold text-muted mb-1">Nome da Fase *</label>
+                                        <input type="text" name="fase_titulo[]" class="form-control form-control-sm fw-bold" placeholder="Ex: Fundação, Alvenaria" value="{{ etapa.titulo_fase }}" required>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold text-muted mb-1">Status da Fase</label>
+                                        <select name="fase_status[]" class="form-select form-select-sm fw-semibold">
+                                            <option value="pendente" {% if etapa.status_fase == 'pendente' %}selected{% endif %}>⏳ Pendente</option>
+                                            <option value="em_andamento" {% if etapa.status_fase == 'em_andamento' %}selected{% endif %}>▶️ Em Andamento</option>
+                                            <option value="concluido" {% if etapa.status_fase == 'concluido' %}selected{% endif %}>✔️ Concluído</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-1 text-end pt-3">
+                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.linha-etapa').remove();" title="Remover Etapa">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="row g-2 mb-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-muted mb-1"><i class="bi bi-calendar-event me-1"></i>Data Início</label>
+                                        <input type="date" name="fase_data_inicio[]" class="form-control form-control-sm" value="{{ etapa.data_inicio.strftime('%Y-%m-%d') if etapa.data_inicio else '' }}">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-muted mb-1"><i class="bi bi-calendar-check me-1"></i>Data Término</label>
+                                        <input type="date" name="fase_data_fim[]" class="form-control form-control-sm" value="{{ etapa.data_fim.strftime('%Y-%m-%d') if etapa.data_fim else '' }}">
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="form-label small fw-bold text-muted mb-1"><i class="bi bi-box-seam me-1"></i>Materiais / Insumos / Observações</label>
+                                    <input type="text" name="fase_descricao[]" class="form-control form-control-sm" placeholder="Ex: Cimento, blocos de concreto, ferragens..." value="{{ etapa.descricao_detalhes or '' }}">
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Relato da Atividade / Registro de Execução</label>
-                        <textarea name="detalhamento_execucao" class="form-control form-control-sm" rows="3" placeholder="Descreva os procedimentos realizados, observações técnicas ou resumo do atendimento...">{{ item.detalhamento_execucao or '' }}</textarea>
+                        <textarea name="detalhamento_execucao" class="form-control form-control-sm" rows="3" placeholder="Descreva os procedimentos realizados...">{{ item.detalhamento_execucao or '' }}</textarea>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Orientações ao Cliente / Recomendações</label>
-                        <textarea name="orientacoes_cliente" class="form-control form-control-sm" rows="2" placeholder="Orientações passadas ao cliente, tarefas ou recomendações pós-atendimento...">{{ item.orientacoes_cliente or '' }}</textarea>
+                        <textarea name="orientacoes_cliente" class="form-control form-control-sm" rows="2" placeholder="Orientações passadas ao cliente...">{{ item.orientacoes_cliente or '' }}</textarea>
                     </div>
 
                     <div class="row g-2 mb-3 align-items-center">
                         <div class="col-md-8">
-                            <label class="form-label small fw-bold">Anexar Documento / Evidência Técnica (PDF ou Imagem)</label>
+                            <label class="form-label small fw-bold">Anexar Documento / Evidência Técnica</label>
                             <input type="file" name="arquivo_evidencia" class="form-control form-control-sm">
                         </div>
                         <div class="col-md-4 text-md-end pt-md-3">
@@ -297,10 +428,11 @@
                     </div>
 
                     <div class="mb-1">
-                        <label class="form-label small fw-bold text-muted">Observações Internas (Uso Administrativo)</label>
-                        <input type="text" name="observacoes" class="form-control form-control-sm" value="{{ item.observacoes or '' }}" placeholder="Anotações internas da equipe...">
+                        <label class="form-label small fw-bold text-muted">Observações Internas</label>
+                        <input type="text" name="observacoes" class="form-control form-control-sm" value="{{ item.observacoes or '' }}" placeholder="Anotações internas...">
                     </div>
                 </div>
+
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
                     {% if item.status != 'Bloqueado' %}
@@ -312,4 +444,76 @@
     </div>
 </div>
 {% endfor %}
+
+<script>
+function alternarCronograma(id) {
+    const chk = document.getElementById('chkCronograma' + id);
+    const container = document.getElementById('containerEtapas' + id);
+    const btn = document.getElementById('btnNovaEtapa' + id);
+
+    if (chk && chk.checked) {
+        container.classList.remove('d-none');
+        btn.classList.remove('d-none');
+        if (container.children.length === 0) {
+            adicionarLinhaEtapa(id);
+        }
+    } else if (container && btn) {
+        container.classList.add('d-none');
+        btn.classList.add('d-none');
+        container.innerHTML = '';
+    }
+}
+
+function adicionarLinhaEtapa(id) {
+    const container = document.getElementById('containerEtapas' + id);
+    if (!container) return;
+    
+    const div = document.createElement('div');
+    div.className = 'card p-3 border bg-white shadow-sm linha-etapa';
+    div.innerHTML = `
+        <div class="row g-2 align-items-center mb-2">
+            <div class="col-md-7">
+                <label class="form-label small fw-bold text-muted mb-1">Nome da Fase *</label>
+                <input type="text" name="fase_titulo[]" class="form-control form-control-sm fw-bold" placeholder="Ex: Fundação, Alvenaria" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-bold text-muted mb-1">Status da Fase</label>
+                <select name="fase_status[]" class="form-select form-select-sm fw-semibold">
+                    <option value="pendente" selected>⏳ Pendente</option>
+                    <option value="em_andamento">▶️ Em Andamento</option>
+                    <option value="concluido">✔️ Concluído</option>
+                </select>
+            </div>
+            <div class="col-md-1 text-end pt-3">
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.linha-etapa').remove();" title="Remover Etapa">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="row g-2 mb-2">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold text-muted mb-1"><i class="bi bi-calendar-event me-1"></i>Data Início</label>
+                <input type="date" name="fase_data_inicio[]" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold text-muted mb-1"><i class="bi bi-calendar-check me-1"></i>Data Término</label>
+                <input type="date" name="fase_data_fim[]" class="form-control form-control-sm">
+            </div>
+        </div>
+
+        <div>
+            <label class="form-label small fw-bold text-muted mb-1"><i class="bi bi-box-seam me-1"></i>Materiais / Insumos / Observações</label>
+            <input type="text" name="fase_descricao[]" class="form-control form-control-sm" placeholder="Ex: Cimento, blocos de concreto, ferragens...">
+        </div>
+    `;
+    container.appendChild(div);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('[data-progress-val]').forEach(function(el) {
+        el.style.width = el.getAttribute('data-progress-val') + '%';
+    });
+});
+</script>
 {% endblock %}

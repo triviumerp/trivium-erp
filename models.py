@@ -51,7 +51,11 @@ class Empresa(db.Model):
     faturas = db.relationship('Fatura', backref='empresa', lazy=True, cascade="all, delete-orphan")
     parcelas = db.relationship('ParcelaFatura', backref='empresa', lazy=True, cascade="all, delete-orphan")
 
-    # PROPRIEDADES DINÂMICAS DE CÁLCULO DE DIAS:
+    cupom_utilizado = db.Column(db.String(30), nullable=True)
+    afiliado_id = db.Column(db.Integer, db.ForeignKey('cupons_desconto.id'), nullable=True)
+    data_expiracao_cupom = db.Column(db.Date, nullable=True)
+    cupom_aplicavel_recorrente = db.Column(db.Boolean, default=False)
+
     @property
     def dias_cadastrado(self):
         if not self.data_criacao:
@@ -64,10 +68,11 @@ class Empresa(db.Model):
             return 0
         return (self.data_vencimento - date.today()).days
 
+
 class Usuario(UserMixin, db.Model):
     __tablename__ = 'usuarios'
     id = db.Column(db.Integer, primary_key=True)
-    empresa_id = db.Column(db.Integer, db.ForeignKey('empresas.id'), nullable=False)
+    empresa_id = db.Column(db.Integer, db.ForeignKey('empresas.id'), nullable=True)  # <-- Alterado para True
     nome = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     senha_hash = db.Column(db.String(255), nullable=False)
@@ -81,16 +86,11 @@ class Usuario(UserMixin, db.Model):
     perm_financeiro = db.Column(db.Boolean, default=False)
     perm_configuracoes = db.Column(db.Boolean, default=False)
     
-    # NOVOS CAMPOS DE AUDITORIA LEGAL:
     aceitou_termos_beta = db.Column(db.Boolean, default=False)
     data_aceite_termos = db.Column(db.DateTime, nullable=True)
-    
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
 
-    senha_hash = db.Column(db.String(255), nullable=False)
-
     def set_senha(self, senha):
-        # Gera hash com salt dinâmico e suporte completo a caracteres especiais
         self.senha_hash = generate_password_hash(senha, method='scrypt')
 
     def check_senha(self, senha):
@@ -128,8 +128,8 @@ class Cliente(db.Model):
     contratos = db.relationship('ContratoRecorrente', backref='cliente', lazy=True, cascade="all, delete-orphan")
     propostas = db.relationship('Proposta', backref='cliente', lazy=True, cascade="all, delete-orphan")
     faturas = db.relationship('Fatura', backref='cliente', lazy=True, cascade="all, delete-orphan")
+    contratos_gerados = db.relationship('ContratoGerado', backref='cliente', lazy=True, cascade="all, delete-orphan")
 
-    # Cálculos dinâmicos para a tela de Detalhes
     @property
     def total_concluido(self):
         return sum(s.valor_cobrado for s in self.servicos if s.status == 'Concluido')
@@ -156,8 +156,30 @@ class TipoServico(db.Model):
     descricao_padrao = db.Column(db.Text, nullable=True)
     valor_sugerido = db.Column(db.Float, default=0.0)
     modelo_cobranca = db.Column(db.String(20), default='pontual')
+    unidade_medida = db.Column(db.String(30), default='un')
+    margem_lucro_alvo = db.Column(db.Float, default=30.0)
 
     execucoes = db.relationship('ServicoCliente', backref='tipo_servico', lazy=True)
+    custos_padrao = db.relationship('ServicoCustoPadrao', backref='tipo_servico', lazy=True, cascade="all, delete-orphan")
+
+    @property
+    def custo_total_estimado(self):
+        return sum(c.custo_total for c in self.custos_padrao)
+
+
+class ServicoCustoPadrao(db.Model):
+    __tablename__ = 'servicos_custos_padrao'
+    id = db.Column(db.Integer, primary_key=True)
+    tipo_servico_id = db.Column(db.Integer, db.ForeignKey('tipos_servico.id'), nullable=False)
+    tipo_custo = db.Column(db.String(30), nullable=False)
+    descricao = db.Column(db.String(150), nullable=False)
+    unidade = db.Column(db.String(30), default='un')
+    quantidade = db.Column(db.Float, default=1.0)
+    custo_unitario = db.Column(db.Float, default=0.0)
+
+    @property
+    def custo_total(self):
+        return round((self.quantidade or 0.0) * (self.custo_unitario or 0.0), 2)
 
 
 class ServicoCliente(db.Model):
@@ -170,14 +192,14 @@ class ServicoCliente(db.Model):
     fatura_id = db.Column(db.Integer, db.ForeignKey('faturas.id'), nullable=True)
     
     valor_cobrado = db.Column(db.Float, default=0.0)
-    status = db.Column(db.String(30), default='Em Andamento') # 'Em Andamento', 'Pendente', 'Bloqueado', 'Concluido', 'Cancelado'
+    status = db.Column(db.String(30), default='Em Andamento')
     data_solicitacao = db.Column(db.Date, default=date.today)
     data_previsao = db.Column(db.Date, nullable=True)
     observacoes = db.Column(db.Text, nullable=True)
 
-    detalhamento_execucao = db.Column(db.Text, nullable=True)     # Relato da sessão/visita/vistoria
-    orientacoes_cliente = db.Column(db.Text, nullable=True)       # Recomendações e próximos passos
-    arquivo_evidencia = db.Column(db.String(255), nullable=True)   # Foto, laudo, plano ou PDF  
+    detalhamento_execucao = db.Column(db.Text, nullable=True)
+    orientacoes_cliente = db.Column(db.Text, nullable=True)
+    arquivo_evidencia = db.Column(db.String(255), nullable=True)
 
     data_vencimento_boleto = db.Column(db.Date, nullable=True)
     status_pagamento = db.Column(db.String(30), default='A Faturar')
@@ -201,7 +223,12 @@ class Proposta(db.Model):
     periodicidade = db.Column(db.String(20), default='mensal')
     dia_vencimento = db.Column(db.Integer, default=10)
 
-    # Regras Comerciais de Parcelamento & Entrada
+    # Gestão de Termos Aditivos
+    proposta_origem_id = db.Column(db.Integer, db.ForeignKey('propostas.id'), nullable=True)
+    tipo_documento = db.Column(db.String(20), default='proposta')
+    numero_aditivo = db.Column(db.Integer, default=0)
+
+    # Condições de Parcelamento e Entrada
     exige_entrada = db.Column(db.Boolean, default=False)
     valor_entrada = db.Column(db.Float, default=0.0)
     forma_pagamento_entrada = db.Column(db.String(50), default='PIX')
@@ -209,12 +236,33 @@ class Proposta(db.Model):
     forma_pagamento_parcelas = db.Column(db.String(50), default='Boleto Bancário')
     intervalo_dias = db.Column(db.Integer, default=30)
 
-    itens = db.relationship('ItemProposta', backref='proposta', lazy=True, cascade="all, delete-orphan")
-    faturas = db.relationship('Fatura', backref='proposta', lazy=True)
+    # Relacionamentos
+    itens = db.relationship('ItemProposta', backref='proposta', lazy='select', cascade="all, delete-orphan")
+    faturas = db.relationship('Fatura', backref='proposta', lazy='select')
+    contratos_gerados = db.relationship('ContratoGerado', backref='proposta', lazy='select')
 
     @property
     def valor_total(self):
-        return sum(item.valor_unitario for item in self.itens)
+        if not self.itens:
+            return 0.0
+        return sum((item.valor_total or 0.0) for item in self.itens)
+
+    @property
+    def custo_total_previsto(self):
+        if not self.itens:
+            return 0.0
+        return sum((item.custo_total or 0.0) for item in self.itens)
+
+    @property
+    def lucro_bruto_previsto(self):
+        return round(self.valor_total - self.custo_total_previsto, 2)
+
+    @property
+    def margem_lucro_real(self):
+        vt = self.valor_total
+        if vt <= 0:
+            return 0.0
+        return round((self.lucro_bruto_previsto / vt) * 100.0, 1)
 
 
 class ItemProposta(db.Model):
@@ -222,10 +270,62 @@ class ItemProposta(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     proposta_id = db.Column(db.Integer, db.ForeignKey('propostas.id'), nullable=False)
     tipo_servico_id = db.Column(db.Integer, db.ForeignKey('tipos_servico.id'), nullable=False)
+    
+    unidade = db.Column(db.String(30), default='un')
+    quantidade = db.Column(db.Float, default=1.0)
     valor_unitario = db.Column(db.Float, nullable=False, default=0.0)
     descricao_personalizada = db.Column(db.Text, nullable=True)
+    exibir_detalhamento_proposta = db.Column(db.Boolean, default=False)
 
-    tipo_servico = db.relationship('TipoServico')
+    tipo_servico = db.relationship('TipoServico', lazy='joined')
+    custos = db.relationship('ItemPropostaCusto', backref='item_proposta', lazy='select', cascade="all, delete-orphan")
+
+    @property
+    def valor_total(self):
+        qtd = float(self.quantidade) if self.quantidade is not None else 1.0
+        val = float(self.valor_unitario) if self.valor_unitario is not None else 0.0
+        return round(qtd * val, 2)
+
+    @property
+    def custo_total(self):
+        if not self.custos:
+            return 0.0
+        return sum((c.custo_total or 0.0) for c in self.custos)
+
+
+class ItemPropostaCusto(db.Model):
+    __tablename__ = 'itens_proposta_custos'
+    id = db.Column(db.Integer, primary_key=True)
+    item_proposta_id = db.Column(db.Integer, db.ForeignKey('itens_proposta.id'), nullable=False)
+    tipo_custo = db.Column(db.String(30), nullable=False)
+    descricao = db.Column(db.String(150), nullable=False)
+    unidade = db.Column(db.String(30), default='un')
+    quantidade = db.Column(db.Float, default=1.0)
+    custo_unitario = db.Column(db.Float, default=0.0)
+    visivel_proposta = db.Column(db.Boolean, default=False)
+
+    @property
+    def custo_total(self):
+        qtd = float(self.quantidade) if self.quantidade is not None else 1.0
+        unit = float(self.custo_unitario) if self.custo_unitario is not None else 0.0
+        return round(qtd * unit, 2)
+
+
+class ContratoGerado(db.Model):
+    __tablename__ = 'contratos_gerados'
+    id = db.Column(db.Integer, primary_key=True)
+    empresa_id = db.Column(db.Integer, db.ForeignKey('empresas.id'), nullable=False)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=False)
+    proposta_id = db.Column(db.Integer, db.ForeignKey('propostas.id'), nullable=True)
+    
+    numero_documento = db.Column(db.String(50), nullable=False)
+    titulo = db.Column(db.String(150), nullable=False)
+    conteudo_html = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(30), default='minuta')
+    
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    data_assinatura = db.Column(db.DateTime, nullable=True)
 
 
 class ContratoRecorrente(db.Model):
@@ -303,9 +403,10 @@ class ParcelaFatura(db.Model):
     valor = db.Column(db.Float, default=0.0)
     data_vencimento = db.Column(db.Date, nullable=False)
     
-    status = db.Column(db.String(30), default='A Faturar') # 'A Faturar', 'Boleto Emitido', 'Pago', 'Em Atraso'
+    status = db.Column(db.String(30), default='A Faturar')
     arquivo_comprovante_boleto = db.Column(db.String(255), nullable=True)
     historico_cobranca = db.Column(db.Text, nullable=True)
+
 
 class ChamadoSuporte(db.Model):
     __tablename__ = 'chamados_suporte'
@@ -339,3 +440,50 @@ class MensagemChamado(db.Model):
 
     usuario = db.relationship('Usuario')
 
+class ServicoEtapaRastreio(db.Model):
+    __tablename__ = 'servicos_etapas_rastreio'
+    id = db.Column(db.Integer, primary_key=True)
+    servico_cliente_id = db.Column(db.Integer, db.ForeignKey('servicos_cliente.id'), nullable=False)
+    
+    titulo_fase = db.Column(db.String(150), nullable=False)
+    descricao_detalhes = db.Column(db.Text, nullable=True) # Insumos / Materiais
+    data_inicio = db.Column(db.Date, nullable=True)
+    data_fim = db.Column(db.Date, nullable=True)
+    status_fase = db.Column(db.String(30), default='pendente') # 'pendente', 'em_andamento', 'concluido'
+    ordem = db.Column(db.Integer, default=0)
+
+    servico = db.relationship('ServicoCliente', backref=db.backref('etapas_rastreio', lazy=True, cascade="all, delete-orphan"))
+
+
+class CupomDesconto(db.Model):
+    __tablename__ = 'cupons_desconto'
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    codigo = db.Column(db.String(30), unique=True, nullable=False)
+    afiliado_nome = db.Column(db.String(120), nullable=False)
+    afiliado_email = db.Column(db.String(120), nullable=False)
+    afiliado_chave_pix = db.Column(db.String(100), nullable=True)
+    afiliado_whatsapp = db.Column(db.String(30), nullable=True)
+    
+    percentual_desconto = db.Column(db.Float, default=20.0)
+    percentual_comissao = db.Column(db.Float, default=20.0)
+    limite_usos = db.Column(db.Integer, default=100)
+    usos_atuais = db.Column(db.Integer, default=0)
+    data_validade = db.Column(db.Date, nullable=True)
+    ativo = db.Column(db.Boolean, default=True)
+    aceitou_termos_afiliado = db.Column(db.Boolean, default=False)
+    data_aceite_termos = db.Column(db.DateTime, nullable=True)
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+
+    usuario = db.relationship('Usuario', backref=db.backref('cupom_afiliado', uselist=False))
+    empresas_indicadas = db.relationship('Empresa', backref='afiliado_responsavel', lazy=True)
+
+    @property
+    def is_valido(self):
+        if not self.ativo:
+            return False
+        if self.limite_usos and self.usos_atuais >= self.limite_usos:
+            return False
+        if self.data_validade and self.data_validade < date.today():
+            return False
+        return True

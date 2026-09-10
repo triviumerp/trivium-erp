@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+
+{% block title %}Relatório de Lucratividade & Margens - Trivium ERP{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold text-dark mb-0"><i class="bi bi-graph-up-arrow text-success me-2"></i>Lucratividade & Margens Reais</h2>
+        <p class="text-muted mb-0">Apuração consolidada de receita, custos operacionais e margem de contribuição</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('financeiro') }}" class="btn btn-outline-secondary btn-sm fw-bold">
+            <i class="bi bi-arrow-left me-1"></i> Contas a Receber
+        </a>
+    </div>
+</div>
+
+<!-- 4 INDICADORES CONSOLIDADOS -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-primary text-white">
+            <span class="small text-white-50 fw-bold">RECEITA TOTAL APROVADA</span>
+            <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(receita_total) }}</h3>
+            <small>Valor bruto faturado</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-danger text-white">
+            <span class="small text-white-50 fw-bold">CUSTOS DIRETOS TOTAIS</span>
+            <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(custo_total) }}</h3>
+            <small>Mão de obra, materiais e despesas</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-success text-white">
+            <span class="small text-white-50 fw-bold">LUCRO BRUTO OPERACIONAL</span>
+            <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(lucro_total) }}</h3>
+            <small>Resultado líquido dos projetos</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-white border">
+            <span class="small text-muted fw-bold">MARGEM DE CONTRIBUIÇÃO</span>
+            <h3 class="fw-bold my-1 text-dark">{{ margem_media }}%</h3>
+            <small class="text-success fw-semibold">Média geral das operações</small>
+        </div>
+    </div>
+</div>
+
+<!-- DETALHAMENTO DE CUSTOS POR CATEGORIA -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm p-4 rounded-4 bg-white h-100">
+            <h6 class="fw-bold text-dark mb-3"><i class="bi bi-pie-chart-fill text-primary me-2"></i>Composição Geral dos Custos</h6>
+            <ul class="list-group list-group-flush small">
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-people-fill text-primary me-2"></i>Mão de Obra / Equipe:</span>
+                    <strong class="text-dark">R$ {{ "%.2f"|format(custos_por_categoria.mao_de_obra) }}</strong>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-boxes text-warning me-2"></i>Insumos & Materiais:</span>
+                    <strong class="text-dark">R$ {{ "%.2f"|format(custos_por_categoria.material) }}</strong>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-truck text-info me-2"></i>Logística & Deslocamento:</span>
+                    <strong class="text-dark">R$ {{ "%.2f"|format(custos_por_categoria.logistica) }}</strong>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-receipt text-secondary me-2"></i>Taxas & Terceirizados:</span>
+                    <strong class="text-dark">R$ {{ "%.2f"|format(custos_por_categoria.taxa) }}</strong>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- TABELA ANALÍTICA POR PROPOSTA / PROJETO -->
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
+            <div class="card-header bg-white py-3 border-0">
+                <h6 class="fw-bold text-dark mb-0"><i class="bi bi-table text-primary me-2"></i>Rentabilidade por Contrato & Aditivo</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>DOCUMENTO / CLIENTE</th>
+                                <th>RECEITA</th>
+                                <th>CUSTO</th>
+                                <th>LUCRO</th>
+                                <th>MARGEM</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in propostas %}
+                            <tr>
+                                <td>
+                                    <strong class="text-dark d-block">{{ p.numero_proposta }}</strong>
+                                    <span class="text-muted">{{ p.cliente.nome }}</span>
+                                </td>
+                                <td class="fw-bold text-dark">R$ {{ "%.2f"|format(p.valor_total) }}</td>
+                                <td class="text-danger">R$ {{ "%.2f"|format(p.custo_total_previsto) }}</td>
+                                <td class="fw-bold text-success">R$ {{ "%.2f"|format(p.lucro_bruto_previsto) }}</td>
+                                <td>
+                                    <span class="badge {{ 'bg-success' if p.margem_lucro_real >= 30 else 'bg-warning text-dark' }}">
+                                        {{ p.margem_lucro_real }}%
+                                    </span>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">Nenhum contrato aprovado para apuração.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

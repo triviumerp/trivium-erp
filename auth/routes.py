@@ -8,7 +8,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from extensions import db, limiter
-from models import Empresa, Usuario
+from models import Empresa, Usuario, CupomDesconto
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -54,6 +54,11 @@ def validar_senha_forte(senha):
 @limiter.limit("10 per minute")
 def login():
     if current_user.is_authenticated:
+        # Se já estiver logado, manda para a tela correta conforme o nível
+        if current_user.nivel_acesso == 'afiliado':
+            return redirect(url_for('painel_afiliado'))
+        elif current_user.nivel_acesso == 'master':
+            return redirect(url_for('admin_master_dashboard'))
         return redirect(url_for('index'))
 
     if request.method == 'POST':
@@ -62,13 +67,10 @@ def login():
 
         usuario = None
         if '@' in identificador:
-            # Busca estritamente por e-mail (minúsculo)
             usuario = Usuario.query.filter_by(email=identificador.lower()).first()
         else:
-            # Remove qualquer formatação (pontos, traços, barras) do CPF/CNPJ digitado
             doc_limpo = re.sub(r'\D', '', identificador)
             if doc_limpo:
-                # Procura a empresa pelo CNPJ limpo
                 empresa_alvo = Empresa.query.filter_by(cnpj=doc_limpo).first()
                 if empresa_alvo:
                     usuario = Usuario.query.filter_by(empresa_id=empresa_alvo.id).first()
@@ -83,7 +85,16 @@ def login():
             flash(f'Bem-vindo de volta, {usuario.nome}!', 'success')
             
             proxima_pagina = request.args.get('next')
-            return redirect(proxima_pagina or url_for('index'))
+            if proxima_pagina:
+                return redirect(proxima_pagina)
+
+            # Redirecionamento inteligente por papel/perfil:
+            if usuario.nivel_acesso == 'afiliado':
+                return redirect(url_for('painel_afiliado'))
+            elif usuario.nivel_acesso == 'master':
+                return redirect(url_for('admin_master_dashboard'))
+            
+            return redirect(url_for('index'))
         else:
             flash('Credenciais incorretas. Verifique seu e-mail ou CPF/CNPJ e senha.', 'danger')
 
@@ -105,29 +116,32 @@ def registro():
         email = (request.form.get('email') or '').strip().lower()
         senha = request.form.get('senha', '')
         confirma_senha = request.form.get('confirma_senha', '')
+        
+        # 1. Captura o código de cupom/indicação (digitado ou vindo por URL)
+        cupom_indicacao = (request.form.get('cupom_indicacao') or '').strip().upper()
 
-        # 1. Validação de CPF para Pessoa Física
+        # 2. Validação de CPF para Pessoa Física
         if tipo_pessoa == 'PF' and not is_cpf_valido(doc_identificacao):
             flash('O CPF informado é inválido. Por favor, revise os dígitos.', 'danger')
             return render_template('auth/registro.html')
 
-        # 2. Validação de Senha Forte
+        # 3. Validação de Senha Forte
         senha_valida, msg_erro = validar_senha_forte(senha)
         if not senha_valida:
             flash(msg_erro, 'warning')
             return render_template('auth/registro.html')
 
-        # 3. Validação de Confirmação de Senha
+        # 4. Validação de Confirmação de Senha
         if senha != confirma_senha:
             flash('A senha e a confirmação de senha não conferem.', 'warning')
             return render_template('auth/registro.html')
 
-        # 4. Validação prévia de duplicidade de E-mail
+        # 5. Validação prévia de duplicidade de E-mail
         if Usuario.query.filter_by(email=email).first():
             flash('Este e-mail já está cadastrado no sistema. Faça login.', 'warning')
             return render_template('auth/registro.html')
 
-        # 5. Validação prévia de duplicidade de CNPJ/CPF (se informado)
+        # 6. Validação prévia de duplicidade de CNPJ/CPF (se informado)
         if doc_identificacao and Empresa.query.filter_by(cnpj=doc_identificacao).first():
             flash('Este CNPJ/CPF já possui uma conta cadastrada.', 'warning')
             return render_template('auth/registro.html')
@@ -141,7 +155,8 @@ def registro():
                 email=email,
                 plano="Founder",
                 status_assinatura="trial",
-                data_vencimento=date.today() + relativedelta(days=14)
+                data_vencimento=date.today() + relativedelta(days=14),
+                cupom_utilizado=cupom_indicacao if cupom_indicacao else None  # <--- Vincula aqui
             )
             db.session.add(nova_empresa)
             db.session.flush()
@@ -215,6 +230,64 @@ def redefinir_senha(token):
         return redirect(url_for('auth.login'))
 
     return render_template('auth/redefinir_senha.html', token=token)
+
+@auth_bp.route('/seja-parceiro', methods=['GET', 'POST'])
+def registro_afiliado():
+    if current_user.is_authenticated:
+        return redirect(url_for('painel_afiliado'))
+
+    if request.method == 'POST':
+        nome = (request.form.get('nome') or '').strip()
+        email = (request.form.get('email') or '').strip().lower()
+        senha = request.form.get('senha', '')
+        confirma_senha = request.form.get('confirma_senha', '')
+
+        senha_valida, msg_erro = validar_senha_forte(senha)
+        if not senha_valida:
+            flash(msg_erro, 'warning')
+            return render_template('auth/registro_afiliado.html')
+
+        if senha != confirma_senha:
+            flash('As senhas não conferem.', 'warning')
+            return render_template('auth/registro_afiliado.html')
+
+        if Usuario.query.filter_by(email=email).first():
+            flash('Este e-mail já está cadastrado. Faça login na sua conta.', 'warning')
+            return render_template('auth/registro_afiliado.html')
+
+        # 1. Cria o usuário com nível 'afiliado'
+        novo_user = Usuario(
+            empresa_id=None,
+            nome=nome,
+            email=email,
+            cargo="Afiliado Parceiro",
+            nivel_acesso="afiliado",
+            ativo=True
+        )
+        novo_user.set_senha(senha)
+        db.session.add(novo_user)
+        db.session.flush()
+
+        # 2. Gera um código base sugerido (ex: PRIMEIRO NOME + NÚMERO)
+        codigo_sugerido = re.sub(r'[^A-Z0-9]', '', nome.split()[0].upper()) + "10"
+        
+        novo_cupom = CupomDesconto(
+            usuario_id=novo_user.id,
+            codigo=codigo_sugerido,
+            afiliado_nome=nome,
+            afiliado_email=email,
+            percentual_desconto=10.0,
+            percentual_comissao=20.0,
+            ativo=False # Fica pendente até aceitar os termos e preencher a chave PIX
+        )
+        db.session.add(novo_cupom)
+        db.session.commit()
+
+        login_user(novo_user)
+        flash('Conta criada! Complete seus dados e revise as regras para ativar seus links.', 'success')
+        return redirect(url_for('painel_afiliado'))
+
+    return render_template('auth/registro_afiliado.html')
 
 @auth_bp.route('/logout')
 def logout():

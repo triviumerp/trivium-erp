@@ -33,7 +33,7 @@ from extensions import db, login_manager, limiter
 from models import (
     Empresa, Usuario, Cliente, Documento, TipoServico, 
     ServicoCliente, Proposta, ItemProposta, ContratoRecorrente, 
-    Fatura, ParcelaFatura, ChamadoSuporte, MensagemChamado
+    Fatura, ParcelaFatura, ChamadoSuporte, MensagemChamado, CupomDesconto, ServicoCustoPadrao, ItemPropostaCusto, ContratoGerado, ServicoEtapaRastreio
 )
 from auth.routes import auth_bp
 
@@ -360,7 +360,9 @@ def interceptar_bloqueio_assinatura():
     ]
     if request.endpoint and any(request.endpoint.startswith(r) for r in rotas_livres):
         return None
-
+    
+    if current_user.is_authenticated and current_user.nivel_acesso == 'afiliado':
+        return None
     # 2. Se estiver autenticado e não for Master, verifica a assinatura
     if current_user.is_authenticated:
         if current_user.nivel_acesso == 'master':
@@ -379,6 +381,65 @@ def interceptar_bloqueio_assinatura():
                     db.session.commit()
                     if request.endpoint != 'regularizar_assinatura':
                         return redirect(url_for('regularizar_assinatura'))
+
+# 1. Redirecionamento automático no Login (Atualize a rota /auth/login ou index):
+# Se o usuário logado for afiliado, envie direto para o painel dele
+@app.route('/painel-afiliado', methods=['GET', 'POST'])
+@login_required
+def painel_afiliado():
+    if current_user.nivel_acesso != 'afiliado' and current_user.nivel_acesso != 'master':
+        return redirect(url_for('index'))
+
+    cupom = CupomDesconto.query.filter_by(usuario_id=current_user.id).first()
+    if not cupom:
+        flash('Nenhum registro de afiliado vinculado a esta conta.', 'danger')
+        return redirect(url_for('auth.logout'))
+
+    if request.method == 'POST':
+        novo_codigo = re.sub(r'[^A-Z0-9]', '', request.form.get('codigo', '').upper().strip())
+        chave_pix = request.form.get('chave_pix', '').strip()
+        whatsapp = request.form.get('whatsapp', '').strip()
+        aceitou = request.form.get('aceitou_termos') == 'on'
+
+        if not aceitou and not cupom.aceitou_termos_afiliado:
+            flash('Você precisa aceitar os termos do programa de afiliados.', 'warning')
+            return redirect(url_for('painel_afiliado'))
+
+        # Checa se o novo código já existe em outro cupom
+        outro = CupomDesconto.query.filter(CupomDesconto.codigo == novo_codigo, CupomDesconto.id != cupom.id).first()
+        if outro:
+            flash(f'O código "{novo_codigo}" já está em uso por outro parceiro.', 'danger')
+            return redirect(url_for('painel_afiliado'))
+
+        cupom.codigo = novo_codigo
+        cupom.afiliado_chave_pix = chave_pix
+        cupom.afiliado_whatsapp = whatsapp
+        cupom.aceitou_termos_afiliado = True
+        cupom.data_aceite_termos = datetime.utcnow()
+        cupom.ativo = True  # Ativa o cupom para uso imediato
+
+        db.session.commit()
+        flash('Seu cadastro foi salvo e seu link de indicação já está ativo!', 'success')
+        return redirect(url_for('painel_afiliado'))
+
+    # Cálculo financeiro de comissões
+    empresas_ativas = [e for e in cupom.empresas_indicadas if e.status_assinatura == 'ativo']
+    total_assinantes_ativos = len(empresas_ativas)
+    
+    # Comissão estimada mensal (20% sobre o valor da mensalidade paga pelos indicados)
+    faturamento_mensal_indicados = sum(e.valor_mensalidade or 39.90 for e in empresas_ativas)
+    comissao_recorrente_estimada = faturamento_mensal_indicados * (cupom.percentual_comissao / 100.0)
+
+    url_base = request.host_url.rstrip('/')
+    link_indicacao = f"{url_base}/auth/registro?ref={cupom.codigo}"
+
+    return render_template(
+        'afiliados/painel.html',
+        cupom=cupom,
+        link_indicacao=link_indicacao,
+        total_assinantes_ativos=total_assinantes_ativos,
+        comissao_recorrente_estimada=comissao_recorrente_estimada
+    )
 
 # -----------------------------------------------------------------------------
 # 4. ROTAS DO DASHBOARD & CLIENTES
@@ -536,14 +597,21 @@ def deletar_cliente(id):
     db.session.delete(cliente)
     db.session.commit()
     flash('Cliente e todo o histórico vinculado foram removidos.', 'warning')
-    return redirect(url_for('index'))
+    return redirect(url_for('listar_clientes'))
 
 @app.route('/cliente/<int:id>')
 @login_required
 def detalhe_cliente(id):
     cliente = Cliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     documentos = Documento.query.filter_by(cliente_id=id).order_by(Documento.data_upload.desc()).all()
-    return render_template('detalhe_cliente.html', cliente=cliente, documentos=documentos)
+    contratos_gerados = ContratoGerado.query.filter_by(cliente_id=id, empresa_id=current_user.empresa_id).order_by(ContratoGerado.data_criacao.desc()).all()
+    
+    return render_template(
+        'detalhe_cliente.html', 
+        cliente=cliente, 
+        documentos=documentos, 
+        contratos_gerados=contratos_gerados
+    )
 
 @app.route('/cliente/<int:id>/upload', methods=['POST'])
 @login_required
@@ -634,62 +702,126 @@ def listar_propostas():
 @app.route('/propostas/nova', methods=['POST'])
 @login_required
 def criar_proposta():
-    cliente_id = int(request.form.get('cliente_id'))
-    validade_dias = int(request.form.get('validade_dias') or 15)
-    condicoes = request.form.get('condicoes_pagamento') or 'Conforme alinhamento comercial'
-    observacoes = request.form.get('observacoes')
-    
-    tipo_cobranca = request.form.get('tipo_cobranca', 'pontual')
-    periodicidade = request.form.get('periodicidade', 'mensal')
-    dia_vencimento = int(request.form.get('dia_vencimento') or 10)
+    try:
+        cliente_id = int(request.form.get('cliente_id'))
+        validade_dias = int(request.form.get('validade_dias') or 15)
+        condicoes = request.form.get('condicoes_pagamento') or 'Conforme alinhamento comercial'
+        observacoes = request.form.get('observacoes')
+        
+        tipo_cobranca = request.form.get('tipo_cobranca', 'pontual')
+        periodicidade = request.form.get('periodicidade', 'mensal')
+        dia_vencimento = int(request.form.get('dia_vencimento') or 10)
 
-    exige_entrada = request.form.get('exige_entrada') == 'on' or request.form.get('exige_entrada') == 'true'
-    valor_entrada = float(request.form.get('valor_entrada') or 0.0)
-    forma_pagamento_entrada = request.form.get('forma_pagamento_entrada', 'PIX')
-    qtd_parcelas = int(request.form.get('qtd_parcelas') or 1)
-    forma_pagamento_parcelas = request.form.get('forma_pagamento_parcelas', 'Boleto Bancário')
-    intervalo_dias = int(request.form.get('intervalo_dias') or 30)
-    
-    total_existentes = Proposta.query.filter_by(empresa_id=current_user.empresa_id).count() + 1
-    numero_proposta = f"PROP-{date.today().year}-{total_existentes:03d}"
+        exige_entrada = request.form.get('exige_entrada') in ['on', 'true']
+        valor_entrada = float(request.form.get('valor_entrada') or 0.0)
+        forma_pagamento_entrada = request.form.get('forma_pagamento_entrada', 'PIX')
+        qtd_parcelas = int(request.form.get('qtd_parcelas') or 1)
+        forma_pagamento_parcelas = request.form.get('forma_pagamento_parcelas', 'Boleto Bancário')
+        intervalo_dias = int(request.form.get('intervalo_dias') or 30)
+        
+        total_existentes = Proposta.query.filter_by(empresa_id=current_user.empresa_id).count() + 1
+        numero_proposta = f"PROP-{date.today().year}-{total_existentes:03d}"
 
-    nova_prop = Proposta(
+        nova_prop = Proposta(
+            empresa_id=current_user.empresa_id,
+            numero_proposta=numero_proposta,
+            cliente_id=cliente_id,
+            validade_dias=validade_dias,
+            condicoes_pagamento=condicoes,
+            observacoes=observacoes,
+            status='Aguardando Aprovação',
+            tipo_cobranca=tipo_cobranca,
+            periodicidade=periodicidade,
+            dia_vencimento=dia_vencimento,
+            exige_entrada=exige_entrada,
+            valor_entrada=valor_entrada,
+            forma_pagamento_entrada=forma_pagamento_entrada,
+            qtd_parcelas=qtd_parcelas,
+            forma_pagamento_parcelas=forma_pagamento_parcelas,
+            intervalo_dias=intervalo_dias,
+            tipo_documento='proposta',
+            numero_aditivo=0
+        )
+        db.session.add(nova_prop)
+        db.session.flush()
+
+        servicos_ids = request.form.getlist('tipo_servico_id[]')
+        valores = request.form.getlist('valor_unitario[]')
+        quantidades = request.form.getlist('quantidade[]')
+        unidades = request.form.getlist('unidade[]')
+        descricoes = request.form.getlist('descricao[]')
+
+        for i in range(len(servicos_ids)):
+            s_id = servicos_ids[i] if i < len(servicos_ids) else None
+            val = valores[i] if i < len(valores) else None
+            qtd = quantidades[i] if i < len(quantidades) else '1.0'
+            und = unidades[i] if i < len(unidades) else 'un'
+            desc = descricoes[i] if i < len(descricoes) else ''
+
+            if s_id and str(s_id).strip() and val and str(val).strip():
+                qtd_num = float(qtd or 1.0)
+                item = ItemProposta(
+                    proposta_id=nova_prop.id,
+                    tipo_servico_id=int(s_id),
+                    quantidade=qtd_num,
+                    unidade=und or 'un',
+                    valor_unitario=float(val),
+                    descricao_personalizada=desc
+                )
+                db.session.add(item)
+                db.session.flush()
+
+                # Clona os custos padrão do Catálogo para o Item
+                tipo_serv = TipoServico.query.get(int(s_id))
+                if tipo_serv and hasattr(tipo_serv, 'custos_padrao') and tipo_serv.custos_padrao:
+                    for cp in tipo_serv.custos_padrao:
+                        custo_analitico = ItemPropostaCusto(
+                            item_proposta_id=item.id,
+                            tipo_custo=cp.tipo_custo,
+                            descricao=cp.descricao,
+                            unidade=cp.unidade,
+                            quantidade=round((cp.quantidade or 1.0) * qtd_num, 2),
+                            custo_unitario=cp.custo_unitario or 0.0,
+                            visivel_proposta=False
+                        )
+                        db.session.add(custo_analitico)
+
+        db.session.commit()
+        flash(f'Proposta {nova_prop.numero_proposta} gerada com sucesso!', 'success')
+        return redirect(url_for('listar_propostas'))
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"\n[ERRO CRÍTICO AO GERAR PROPOSTA]: {e}\n")
+        flash(f'Erro ao salvar proposta: {str(e)}', 'danger')
+        return redirect(url_for('listar_propostas'))
+
+@app.route('/propostas/<int:id>/aditivo', methods=['POST'])
+@login_required
+def gerar_aditivo_proposta(id):
+    proposta_pai = Proposta.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    
+    total_aditivos = Proposta.query.filter_by(proposta_origem_id=proposta_pai.id).count() + 1
+    numero_aditivo_str = f"{proposta_pai.numero_proposta}-ADIT{total_aditivos:02d}"
+
+    novo_aditivo = Proposta(
         empresa_id=current_user.empresa_id,
-        numero_proposta=numero_proposta,
-        cliente_id=cliente_id,
-        validade_dias=validade_dias,
-        condicoes_pagamento=condicoes,
-        observacoes=observacoes,
+        numero_proposta=numero_aditivo_str,
+        cliente_id=proposta_pai.cliente_id,
+        proposta_origem_id=proposta_pai.id,
+        tipo_documento='aditivo',
+        numero_aditivo=total_aditivos,
+        validade_dias=15,
+        condicoes_pagamento=f"Termo Aditivo #{total_aditivos} referente à {proposta_pai.numero_proposta}",
         status='Aguardando Aprovação',
-        tipo_cobranca=tipo_cobranca,
-        periodicidade=periodicidade,
-        dia_vencimento=dia_vencimento,
-        exige_entrada=exige_entrada,
-        valor_entrada=valor_entrada,
-        forma_pagamento_entrada=forma_pagamento_entrada,
-        qtd_parcelas=qtd_parcelas,
-        forma_pagamento_parcelas=forma_pagamento_parcelas,
-        intervalo_dias=intervalo_dias
+        tipo_cobranca='pontual',
+        periodicidade=proposta_pai.periodicidade,
+        dia_vencimento=proposta_pai.dia_vencimento
     )
-    db.session.add(nova_prop)
-    db.session.flush()
-
-    servicos_ids = request.form.getlist('tipo_servico_id[]')
-    valores = request.form.getlist('valor_unitario[]')
-    descricoes = request.form.getlist('descricao[]')
-
-    for s_id, val, desc in zip(servicos_ids, valores, descricoes):
-        if s_id and val:
-            item = ItemProposta(
-                proposta_id=nova_prop.id,
-                tipo_servico_id=int(s_id),
-                valor_unitario=float(val),
-                descricao_personalizada=desc
-            )
-            db.session.add(item)
-
+    db.session.add(novo_aditivo)
     db.session.commit()
-    flash(f'Proposta {nova_prop.numero_proposta} gerada com sucesso!', 'success')
+
+    flash(f'Termo Aditivo {novo_aditivo.numero_proposta} criado! Adicione os serviços complementares.', 'info')
     return redirect(url_for('listar_propostas'))
 
 @app.route('/propostas/<int:id>/status', methods=['POST'])
@@ -703,101 +835,115 @@ def atualizar_status_proposta(id):
         proposta.status = novo_status
 
         if novo_status == 'Aprovado' and status_anterior != 'Aprovado':
-            hoje = date.today()
-
-            fatura = Fatura(
-                empresa_id=current_user.empresa_id,
-                cliente_id=proposta.cliente_id,
-                proposta_id=proposta.id,
-                descricao=f"Proposta {proposta.numero_proposta} ({len(proposta.itens)} itens)",
-                valor_total=proposta.valor_total,
-                data_emissao=hoje
-            )
-            db.session.add(fatura)
-            db.session.flush()
-
-            if proposta.tipo_cobranca == 'recorrente':
-                contrato = ContratoRecorrente(
+            try:
+                hoje = date.today()
+                prefixo = f"Termo Aditivo #{proposta.numero_aditivo} ({proposta.numero_proposta})" if proposta.tipo_documento == 'aditivo' else f"Proposta {proposta.numero_proposta}"
+                
+                # 1. Cria a Fatura Global vinculada
+                fatura = Fatura(
                     empresa_id=current_user.empresa_id,
                     cliente_id=proposta.cliente_id,
-                    tipo_servico_id=proposta.itens[0].tipo_servico_id if proposta.itens else None,
-                    proposta_origem_id=proposta.id,
-                    titulo=f"Contrato Mensal - {proposta.cliente.nome}",
-                    valor_periodo=proposta.valor_total,
-                    periodicidade=proposta.periodicidade,
-                    dia_vencimento=proposta.dia_vencimento,
-                    status='Ativo',
-                    data_inicio=hoje,
-                    observacoes=proposta.observacoes
+                    proposta_id=proposta.id,
+                    descricao=f"{prefixo} ({len(proposta.itens)} itens)",
+                    valor_total=float(proposta.valor_total or 0.0),
+                    data_emissao=hoje
                 )
-                db.session.add(contrato)
+                db.session.add(fatura)
                 db.session.flush()
-                fatura.contrato_id = contrato.id
 
-            exige_entrada = proposta.exige_entrada and (proposta.valor_entrada or 0) > 0
-            valor_entrada = float(proposta.valor_entrada or 0) if exige_entrada else 0.0
-            saldo_parcelar = max(0.0, proposta.valor_total - valor_entrada)
-            qtd_parc = max(1, min(12, proposta.qtd_parcelas or 1))
-            total_titulos = (1 if exige_entrada else 0) + (qtd_parc if saldo_parcelar > 0 else 0)
+                # 2. Cria Contrato Recorrente (se aplicável)
+                if proposta.tipo_cobranca == 'recorrente' and proposta.tipo_documento != 'aditivo':
+                    contrato = ContratoRecorrente(
+                        empresa_id=current_user.empresa_id,
+                        cliente_id=proposta.cliente_id,
+                        tipo_servico_id=proposta.itens[0].tipo_servico_id if proposta.itens else None,
+                        proposta_origem_id=proposta.id,
+                        titulo=f"Contrato Mensal - {proposta.cliente.nome}",
+                        valor_periodo=float(proposta.valor_total or 0.0),
+                        periodicidade=proposta.periodicidade or 'mensal',
+                        dia_vencimento=proposta.dia_vencimento or 10,
+                        status='Ativo',
+                        data_inicio=hoje,
+                        observacoes=proposta.observacoes
+                    )
+                    db.session.add(contrato)
+                    db.session.flush()
+                    fatura.contrato_id = contrato.id
 
-            num_seq = 1
+                # 3. Geração de Parcelas e Títulos Financeiros
+                exige_entrada = bool(proposta.exige_entrada and (proposta.valor_entrada or 0) > 0)
+                valor_entrada = float(proposta.valor_entrada or 0.0) if exige_entrada else 0.0
+                saldo_parcelar = max(0.0, float(proposta.valor_total or 0.0) - valor_entrada)
+                qtd_parc = max(1, min(12, int(proposta.qtd_parcelas or 1)))
+                total_titulos = (1 if exige_entrada else 0) + (qtd_parc if saldo_parcelar > 0 else 0)
 
-            if exige_entrada:
-                p_entrada = ParcelaFatura(
-                    empresa_id=current_user.empresa_id,
-                    fatura_id=fatura.id,
-                    numero_parcela=num_seq,
-                    total_parcelas=total_titulos,
-                    descricao_parcela="Entrada / Sinal de Mobilização",
-                    is_entrada=True,
-                    forma_pagamento=proposta.forma_pagamento_entrada or "PIX",
-                    valor=valor_entrada,
-                    data_vencimento=hoje,
-                    status="A Faturar"
-                )
-                db.session.add(p_entrada)
-                num_seq += 1
+                num_seq = 1
 
-            if saldo_parcelar > 0:
-                valor_cada_parcela = round(saldo_parcelar / qtd_parc, 2)
-                intervalo = proposta.intervalo_dias or 30
-
-                for i in range(1, qtd_parc + 1):
-                    dt_venc = hoje + relativedelta(days=i * intervalo)
-                    p_normal = ParcelaFatura(
+                if exige_entrada:
+                    p_entrada = ParcelaFatura(
                         empresa_id=current_user.empresa_id,
                         fatura_id=fatura.id,
                         numero_parcela=num_seq,
                         total_parcelas=total_titulos,
-                        descricao_parcela=f"Parcela {i}/{qtd_parc}",
-                        is_entrada=False,
-                        forma_pagamento=proposta.forma_pagamento_parcelas or "Boleto Bancário",
-                        valor=valor_cada_parcela,
-                        data_vencimento=dt_venc,
+                        descricao_parcela="Sinal / Entrada" if proposta.tipo_documento != 'aditivo' else "Entrada Aditivo",
+                        is_entrada=True,
+                        forma_pagamento=proposta.forma_pagamento_entrada or "PIX",
+                        valor=valor_entrada,
+                        data_vencimento=hoje + timedelta(days=3),
                         status="A Faturar"
                     )
-                    db.session.add(p_normal)
+                    db.session.add(p_entrada)
                     num_seq += 1
 
-            status_inicial_os = 'Bloqueado' if exige_entrada else ('Em Andamento' if proposta.tipo_cobranca != 'recorrente' else 'Pendente')
+                if saldo_parcelar > 0:
+                    valor_cada_parcela = round(saldo_parcelar / qtd_parc, 2)
+                    intervalo = int(proposta.intervalo_dias or 30)
 
-            for item in proposta.itens:
-                nova_ordem = ServicoCliente(
-                    empresa_id=current_user.empresa_id,
-                    cliente_id=proposta.cliente_id,
-                    tipo_servico_id=item.tipo_servico_id,
-                    fatura_id=fatura.id,
-                    valor_cobrado=item.valor_unitario,
-                    status=status_inicial_os,
-                    data_solicitacao=hoje,
-                    data_previsao=hoje + relativedelta(days=proposta.validade_dias or 30),
-                    observacoes=f"[Ref. {proposta.numero_proposta}] {item.descricao_personalizada or ''}".strip()
-                )
-                db.session.add(nova_ordem)
-            
-            db.session.commit()
-            flash(f'Proposta {proposta.numero_proposta} aprovada! Fatura gerada com {total_titulos} título(s).', 'success')
-            return redirect(url_for('listar_propostas'))
+                    for i in range(1, qtd_parc + 1):
+                        dt_venc = hoje + timedelta(days=i * intervalo)
+                        p_normal = ParcelaFatura(
+                            empresa_id=current_user.empresa_id,
+                            fatura_id=fatura.id,
+                            numero_parcela=num_seq,
+                            total_parcelas=total_titulos,
+                            descricao_parcela=f"Parcela {i}/{qtd_parc}",
+                            is_entrada=False,
+                            forma_pagamento=proposta.forma_pagamento_parcelas or "Boleto Bancário",
+                            valor=valor_cada_parcela,
+                            data_vencimento=dt_venc,
+                            status="A Faturar"
+                        )
+                        db.session.add(p_normal)
+                        num_seq += 1
+
+                # 4. Criação dos Lançamentos na Agenda de Serviços / O.S.
+                status_inicial_os = 'Bloqueado' if exige_entrada else ('Em Andamento' if proposta.tipo_cobranca != 'recorrente' else 'Pendente')
+                dias_validade = int(proposta.validade_dias or 30)
+                data_prev_os = hoje + timedelta(days=dias_validade)
+
+                for item in proposta.itens:
+                    nova_ordem = ServicoCliente(
+                        empresa_id=current_user.empresa_id,
+                        cliente_id=proposta.cliente_id,
+                        tipo_servico_id=item.tipo_servico_id,
+                        fatura_id=fatura.id,
+                        valor_cobrado=float(item.valor_total or 0.0),
+                        status=status_inicial_os,
+                        data_solicitacao=hoje,
+                        data_previsao=data_prev_os,
+                        observacoes=f"[{proposta.numero_proposta}] {item.descricao_personalizada or ''}".strip()
+                    )
+                    db.session.add(nova_ordem)
+                
+                db.session.commit()
+                flash(f'{prefixo} aprovada com sucesso! Fatura gerada no Financeiro com {total_titulos} título(s).', 'success')
+                return redirect(url_for('listar_propostas'))
+
+            except Exception as e:
+                db.session.rollback()
+                print(f"\n[ERRO CRÍTICO AO APROVAR PROPOSTA]: {type(e).__name__} - {e}\n")
+                flash(f'Erro ao aprovar proposta: {str(e)}', 'danger')
+                return redirect(url_for('listar_propostas'))
 
         db.session.commit()
         flash(f'Status da Proposta alterado para "{novo_status}"!', 'info')
@@ -814,17 +960,22 @@ def editar_proposta(id):
     proposta.condicoes_pagamento = request.form.get('condicoes_pagamento') or 'Conforme alinhamento comercial'
     proposta.observacoes = request.form.get('observacoes')
     
+    # Remove itens antigos e recria com a nova estrutura analítica
     ItemProposta.query.filter_by(proposta_id=proposta.id).delete()
     
     servicos_ids = request.form.getlist('tipo_servico_id[]')
     valores = request.form.getlist('valor_unitario[]')
+    quantidades = request.form.getlist('quantidade[]')
+    unidades = request.form.getlist('unidade[]')
     descricoes = request.form.getlist('descricao[]')
 
-    for s_id, val, desc in zip(servicos_ids, valores, descricoes):
+    for s_id, val, qtd, und, desc in zip(servicos_ids, valores, quantidades, unidades, descricoes):
         if s_id and val:
             item = ItemProposta(
                 proposta_id=proposta.id,
                 tipo_servico_id=int(s_id),
+                quantidade=float(qtd or 1.0),
+                unidade=und or 'un',
                 valor_unitario=float(val),
                 descricao_personalizada=desc
             )
@@ -848,6 +999,38 @@ def excluir_proposta(id):
         flash(f'Proposta "{numero}" excluída com sucesso!', 'info')
         
     return redirect(url_for('listar_propostas'))
+
+@app.route('/relatorios/lucratividade')
+@login_required
+def relatorio_lucratividade():
+    # Coleta todas as propostas aprovadas da empresa
+    propostas_aprovadas = Proposta.query.filter_by(
+        empresa_id=current_user.empresa_id, 
+        status='Aprovado'
+    ).order_by(Proposta.data_criacao.desc()).all()
+
+    receita_total = sum(p.valor_total for p in propostas_aprovadas)
+    custo_total = sum(p.custo_total_previsto for p in propostas_aprovadas)
+    lucro_total = receita_total - custo_total
+    margem_media = round((lucro_total / receita_total * 100.0), 1) if receita_total > 0 else 0.0
+
+    # Agrupamento de custos por categoria
+    custos_por_categoria = {'mao_de_obra': 0.0, 'material': 0.0, 'logistica': 0.0, 'taxa': 0.0}
+    for p in propostas_aprovadas:
+        for it in p.itens:
+            for c in it.custos:
+                cat = c.tipo_custo if c.tipo_custo in custos_por_categoria else 'taxa'
+                custos_por_categoria[cat] += (c.custo_total or 0.0)
+
+    return render_template(
+        'relatorio_lucratividade.html',
+        propostas=propostas_aprovadas,
+        receita_total=receita_total,
+        custo_total=custo_total,
+        lucro_total=lucro_total,
+        margem_media=margem_media,
+        custos_por_categoria=custos_por_categoria
+    )
 
 @app.route('/propostas/<int:id>/pdf')
 @login_required
@@ -972,13 +1155,14 @@ def gerar_pdf_proposta(id):
 
     for idx, item in enumerate(proposta.itens, 1):
         nome_serv = _limpar_texto(item.tipo_servico.nome if item.tipo_servico else 'Serviço Técnico')
+        qtd_und = f" ({item.quantidade} {item.unidade})" if hasattr(item, 'unidade') and item.unidade else ""
         escopo_raw = item.descricao_personalizada or (item.tipo_servico.descricao_padrao if item.tipo_servico else '') or "Conforme alinhamento técnico e comercial."
         escopo_fmt = _limpar_texto(escopo_raw)
 
         dados_servicos.append([
-            Paragraph(f"<b>{idx:02d}. {nome_serv}</b>", estilo_corpo),
+            Paragraph(f"<b>{idx:02d}. {nome_serv}{qtd_und}</b>", estilo_corpo),
             Paragraph(escopo_fmt, estilo_escopo),
-            Paragraph(f"R$ {item.valor_unitario:,.2f}", estilo_corpo_bold)
+            Paragraph(f"R$ {item.valor_total:,.2f}", estilo_corpo_bold)
         ])
 
     label_total = "VALOR DA MENSALIDADE" if proposta.tipo_cobranca == 'recorrente' else "TOTAL GLOBAL DO INVESTIMENTO"
@@ -1154,6 +1338,8 @@ def listar_catalogo():
 def novo_tipo_servico():
     nome = request.form.get('nome')
     modelo_cobranca = request.form.get('modelo_cobranca', 'pontual')
+    unidade_medida = request.form.get('unidade_medida', 'un')
+    margem_lucro_alvo = float(request.form.get('margem_lucro_alvo') or 30.0)
     valor_sugerido = float(request.form.get('valor_sugerido') or 0.0)
     descricao = request.form.get('descricao')
 
@@ -1161,12 +1347,33 @@ def novo_tipo_servico():
         empresa_id=current_user.empresa_id,
         nome=nome,
         modelo_cobranca=modelo_cobranca,
+        unidade_medida=unidade_medida,
+        margem_lucro_alvo=margem_lucro_alvo,
         valor_sugerido=valor_sugerido,
         descricao_padrao=descricao
     )
     db.session.add(novo_item)
+    db.session.flush()
+
+    # Custos modulares padrão da Ficha Técnica
+    tipos_custo = request.form.getlist('custo_tipo[]')
+    descricoes_custo = request.form.getlist('custo_desc[]')
+    quantidades_custo = request.form.getlist('custo_qtd[]')
+    valores_custo = request.form.getlist('custo_unit[]')
+
+    for t, d, q, v in zip(tipos_custo, descricoes_custo, quantidades_custo, valores_custo):
+        if d and v:
+            c = ServicoCustoPadrao(
+                tipo_servico_id=novo_item.id,
+                tipo_custo=t,
+                descricao=d,
+                quantidade=float(q or 1.0),
+                custo_unitario=float(v or 0.0)
+            )
+            db.session.add(c)
+
     db.session.commit()
-    flash(f'Serviço "{nome}" cadastrado no catálogo com sucesso!', 'success')
+    flash(f'Serviço "{nome}" cadastrado com sucesso no catálogo!', 'success')
     return redirect(url_for('listar_catalogo'))
 
 @app.route('/catalogo/excluir/<int:id>', methods=['POST'])
@@ -1174,14 +1381,16 @@ def novo_tipo_servico():
 def excluir_tipo_servico(id):
     item = TipoServico.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     
-    if item.execucoes or ItemProposta.query.filter_by(tipo_servico_id=item.id).first():
-        flash('Não é possível excluir este item pois ele já está vinculado a propostas ou serviços emitidos.', 'danger')
-    else:
-        db.session.delete(item)
-        db.session.commit()
-        flash('Item removido do catálogo.', 'info')
-        
+    vinculo_prop = ItemProposta.query.filter_by(tipo_servico_id=item.id).first()
+    if item.execucoes or vinculo_prop:
+        flash('Não é possível excluir este item pois ele já está vinculado a propostas ou ordens de serviço.', 'danger')
+        return redirect(url_for('listar_catalogo'))
+
+    db.session.delete(item)
+    db.session.commit()
+    flash(f'Serviço "{item.nome}" removido do catálogo com sucesso.', 'info')
     return redirect(url_for('listar_catalogo'))
+
 
 @app.route('/servicos/atualizar-operacao/<int:id>', methods=['POST'])
 @login_required
@@ -1192,24 +1401,55 @@ def atualizar_operacao_servico(id):
         flash('Esta atividade está bloqueada pelo Financeiro aguardando o pagamento do sinal.', 'danger')
         return redirect(url_for('consultar_servicos', status=request.form.get('filtro_retorno', 'agenda')))
 
-    servico.status = request.form.get('status', servico.status)
+    novo_status = request.form.get('status', servico.status)
     data_prev_str = request.form.get('data_previsao')
-    servico.data_previsao = datetime.strptime(data_prev_str, '%Y-%m-%d').date() if data_prev_str else None
-    servico.observacoes = request.form.get('observacoes')
     
-    # Novos campos genéricos de registro
+    servico.status = novo_status
+    if data_prev_str:
+        servico.data_previsao = datetime.strptime(data_prev_str, '%Y-%m-%d').date()
+        
     servico.detalhamento_execucao = request.form.get('detalhamento_execucao')
     servico.orientacoes_cliente = request.form.get('orientacoes_cliente')
+    servico.observacoes = request.form.get('observacoes')
 
+    # Upload de evidência técnica
     if 'arquivo_evidencia' in request.files:
         arq = request.files['arquivo_evidencia']
         if arq and arq.filename:
             nome_salvo = secure_filename(f"os_{servico.id}_{int(time.time())}_{arq.filename}")
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
             arq.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_salvo))
             servico.arquivo_evidencia = nome_salvo
 
+    # Captura das fases de cronograma e rastreio com datas e materiais
+    titulos_fase = request.form.getlist('fase_titulo[]')
+    descricoes_fase = request.form.getlist('fase_descricao[]')
+    status_fase_list = request.form.getlist('fase_status[]')
+    datas_inicio = request.form.getlist('fase_data_inicio[]')
+    datas_fim = request.form.getlist('fase_data_fim[]')
+    
+    # Remove as etapas anteriores para sincronizar a lista atualizada
+    ServicoEtapaRastreio.query.filter_by(servico_cliente_id=servico.id).delete()
+
+    if titulos_fase:
+        for idx, (tit, desc, stat, d_ini, d_fim) in enumerate(zip(titulos_fase, descricoes_fase, status_fase_list, datas_inicio, datas_fim)):
+            if tit.strip():
+                dt_inicio = datetime.strptime(d_ini, '%Y-%m-%d').date() if d_ini else None
+                dt_fim = datetime.strptime(d_fim, '%Y-%m-%d').date() if d_fim else None
+                
+                nova_etapa = ServicoEtapaRastreio(
+                    servico_cliente_id=servico.id,
+                    titulo_fase=tit.strip(),
+                    descricao_detalhes=desc.strip(),
+                    data_inicio=dt_inicio,
+                    data_fim=dt_fim,
+                    status_fase=stat or 'pendente',
+                    ordem=idx + 1
+                )
+                db.session.add(nova_etapa)
+
     db.session.commit()
-    flash('Acompanhamento e registro da atividade atualizados com sucesso!', 'success')
+    flash('Acompanhamento e cronograma atualizados com sucesso!', 'success')
     return redirect(url_for('consultar_servicos', status=request.form.get('filtro_retorno', 'agenda')))
 
 # -----------------------------------------------------------------------------
@@ -1316,8 +1556,12 @@ def atualizar_cobranca_fatura(id):
                 registro = f"[{datetime.now().strftime('%d/%m/%Y %H:%M')}] {nova_obs}\n"
                 p.historico_cobranca = (p.historico_cobranca or "") + registro
 
+    # Em atualizar_cobranca_fatura (quando status for 'Pago'):
     if novo_status == 'Pago':
-        servicos_bloqueados = ServicoCliente.query.filter_by(fatura_id=fatura.id).filter(ServicoCliente.status.in_(['Bloqueado', 'Pendente'])).all()
+        servicos_bloqueados = ServicoCliente.query.filter_by(
+            fatura_id=fatura.id, 
+            empresa_id=current_user.empresa_id
+        ).filter(ServicoCliente.status.in_(['Bloqueado', 'Pendente'])).all()
         for sc in servicos_bloqueados:
             sc.status = 'Em Andamento'
             sc.observacoes = (sc.observacoes or "") + " | [Pagamento Confirmado: Execução Liberada]"
@@ -1352,9 +1596,14 @@ def atualizar_cobranca_parcela(id):
         registro = f"[{datetime.now().strftime('%d/%m/%Y %H:%M')}] {nova_obs}\n"
         parcela.historico_cobranca = (parcela.historico_cobranca or "") + registro
 
+    # Em atualizar_cobranca_parcela (quando parcela de entrada for paga):
     if parcela.is_entrada and novo_status == 'Pago' and status_anterior != 'Pago':
         fatura = parcela.fatura
-        servicos_bloqueados = ServicoCliente.query.filter_by(fatura_id=fatura.id, status='Bloqueado').all()
+        servicos_bloqueados = ServicoCliente.query.filter_by(
+            fatura_id=fatura.id, 
+            empresa_id=current_user.empresa_id, 
+            status='Bloqueado'
+        ).all()
         for sc in servicos_bloqueados:
             sc.status = 'Em Andamento'
             sc.observacoes = (sc.observacoes or "") + " | [Sinal Confirmado: Execução Liberada]"
@@ -1803,19 +2052,45 @@ def webhook_asaas():
 def api_checkout_transparente():
     dados = request.get_json(silent=True) or {}
     plano_nome = dados.get('plano', 'MENSAL')
-    valor_total = dados.get('valor_total', 39.90)
-    parcelas = dados.get('parcelas', 1)
+    valor_total = float(dados.get('valor_total', 39.90))
+    parcelas = int(dados.get('parcelas', 1))
     forma_pagamento = dados.get('forma_pagamento', 'PIX')
     cartao_dados = dados.get('cartao')
-    
-    ip_cliente = request.headers.get('X-Forwarded-For', request.remote_addr)
-    if ip_cliente and ',' in ip_cliente:
-        ip_cliente = ip_cliente.split(',')[0].strip()
 
+    # 1. Obtém e valida a empresa PRIMEIRO
     empresa = getattr(current_user, 'empresa', None)
     if not empresa:
         return jsonify({"status": "error", "mensagem": "Empresa não vinculada ao usuário logado."}), 400
 
+    # 2. Processa e aplica o cupom se informado
+    cupom_cod = (dados.get('cupom') or '').strip().upper()
+    cupom_obj = None
+    if cupom_cod:
+        cupom_obj = CupomDesconto.query.filter_by(codigo=cupom_cod).first()
+        if cupom_obj and cupom_obj.is_valido:
+            fator = 1.0 - (cupom_obj.percentual_desconto / 100.0)
+            valor_total = max(1.0, round(valor_total * fator, 2))
+            cupom_obj.usos_atuais += 1
+            
+            # Registra na empresa
+            empresa.cupom_utilizado = cupom_obj.codigo
+            empresa.afiliado_id = cupom_obj.id
+            
+            if 'ANUAL' in str(plano_nome).upper():
+                empresa.cupom_aplicavel_recorrente = True
+                empresa.data_expiracao_cupom = date.today() + relativedelta(years=1)
+            else:
+                empresa.cupom_aplicavel_recorrente = False
+                empresa.data_expiracao_cupom = date.today() + relativedelta(months=1)
+        else:
+            return jsonify({"status": "error", "mensagem": "Cupom de desconto inválido ou expirado."}), 400
+
+    # 3. Trata IP do cliente
+    ip_cliente = request.headers.get('X-Forwarded-For', request.remote_addr)
+    if ip_cliente and ',' in ip_cliente:
+        ip_cliente = ip_cliente.split(',')[0].strip()
+
+    # 4. Chama a integração com o gateway
     resultado = criar_assinatura_transparente(
         empresa=empresa,
         nome_plano=plano_nome,
@@ -1845,10 +2120,326 @@ def api_checkout_transparente():
             "invoiceUrl": resultado.get('invoiceUrl')
         })
     else:
+        db.session.rollback()
         return jsonify({
             "status": "error",
             "mensagem": resultado.get('mensagem', 'Erro ao processar cobrança.')
         }), 400
+
+
+# -----------------------------------------------------------------------------
+# GESTÃO DE CUPONS E AFILIADOS (PAINEL MASTER)
+# -----------------------------------------------------------------------------
+from models import CupomDesconto
+
+@app.route('/admin/master/cupons', methods=['GET', 'POST'])
+@login_required
+@master_required
+def admin_master_cupons():
+    if request.method == 'POST':
+        codigo = request.form.get('codigo', '').strip().upper()
+        afiliado_nome = request.form.get('afiliado_nome', '').strip()
+        afiliado_email = request.form.get('afiliado_email', '').strip().lower()
+        afiliado_pix = request.form.get('afiliado_chave_pix', '').strip()
+        afiliado_zap = request.form.get('afiliado_whatsapp', '').strip()
+        desconto = float(request.form.get('percentual_desconto') or 0.0)
+        comissao = float(request.form.get('percentual_comissao') or 20.0)
+        limite = int(request.form.get('limite_usos') or 100)
+        dt_val = request.form.get('data_validade')
+        data_validade = datetime.strptime(dt_val, '%Y-%m-%d').date() if dt_val else None
+
+        if CupomDesconto.query.filter_by(codigo=codigo).first():
+            flash(f'O cupom "{codigo}" já existe no sistema.', 'danger')
+        else:
+            novo_cupom = CupomDesconto(
+                codigo=codigo,
+                afiliado_nome=afiliado_nome,
+                afiliado_email=afiliado_email,
+                afiliado_chave_pix=afiliado_pix,
+                afiliado_whatsapp=afiliado_zap,
+                percentual_desconto=desconto,
+                percentual_comissao=comissao,
+                limite_usos=limite,
+                data_validade=data_validade,
+                ativo=True
+            )
+            db.session.add(novo_cupom)
+            db.session.commit()
+            flash(f'Cupom "{codigo}" criado com sucesso para o afiliado {afiliado_nome}!', 'success')
+
+        return redirect(url_for('admin_master_cupons'))
+
+    cupons = CupomDesconto.query.order_by(CupomDesconto.data_criacao.desc()).all()
+    return render_template('admin/master_cupons.html', cupons=cupons, hoje=date.today())
+
+@app.route('/admin/master/cupons/<int:id>/status', methods=['POST'])
+@login_required
+@master_required
+def admin_toggle_cupom(id):
+    cupom = CupomDesconto.query.get_or_404(id)
+    cupom.ativo = not cupom.ativo
+    db.session.commit()
+    flash(f'Status do cupom "{cupom.codigo}" alterado.', 'info')
+    return redirect(url_for('admin_master_cupons'))
+
+# -----------------------------------------------------------------------------
+# ENDPOINT DE VALIDAÇÃO DE CUPOM NO CHECKOUT / CADASTRO
+# -----------------------------------------------------------------------------
+@app.route('/api/cupom/validar', methods=['POST'])
+def api_validar_cupom():
+    dados = request.get_json(silent=True) or {}
+    codigo = (dados.get('codigo') or '').strip().upper()
+    plano_nome = dados.get('plano', 'MENSAL').upper()
+
+    cupom = CupomDesconto.query.filter_by(codigo=codigo).first()
+    if not cupom or not cupom.is_valido:
+        return jsonify({"valido": False, "mensagem": "Cupom inválido, expirado ou esgotado."}), 400
+
+    cfg = PLANOS_CONFIG.get('ANUAL' if 'ANUAL' in plano_nome else ('SEMESTRAL' if 'SEMESTRAL' in plano_nome else 'MENSAL'))
+    valor_original = float(cfg['valor_total'])
+    
+    # Aplica o desconto proporcional
+    valor_desconto = (valor_original * (cupom.percentual_desconto / 100.0))
+    valor_final = max(1.0, round(valor_original - valor_desconto, 2))
+
+    return jsonify({
+        "valido": True,
+        "codigo": cupom.codigo,
+        "percentual": cupom.percentual_desconto,
+        "valor_original": valor_original,
+        "valor_final": valor_final,
+        "desconto_reais": round(valor_desconto, 2),
+        "mensagem": f"Cupom de {cupom.percentual_desconto}% aplicado com sucesso!"
+    })
+
+# -----------------------------------------------------------------------------
+# FASE 3: GERADOR DE MINUTAS & CONTRATOS PERSONALIZADOS (app.py)
+# -----------------------------------------------------------------------------
+
+@app.route('/cliente/<int:cliente_id>/contrato/novo', methods=['POST'])
+@login_required
+def gerar_minuta_contrato(cliente_id):
+    cliente = Cliente.query.filter_by(id=cliente_id, empresa_id=current_user.empresa_id).first_or_404()
+    proposta_id = request.form.get('proposta_id')
+    
+    proposta = None
+    if proposta_id:
+        proposta = Proposta.query.filter_by(id=int(proposta_id), empresa_id=current_user.empresa_id).first()
+
+    empresa = current_user.empresa
+    total_existentes = ContratoGerado.query.filter_by(empresa_id=empresa.id).count() + 1
+    num_doc = f"CONT-{date.today().year}-{total_existentes:03d}"
+
+    # Monta a discriminação dos serviços da proposta
+    itens_texto = ""
+    valor_contrato = "0,00"
+    condicoes_pgto = "A combinar entre as partes."
+    
+    if proposta:
+        valor_contrato = f"{proposta.valor_total:,.2f}"
+        condicoes_pgto = proposta.condicoes_pagamento or "Conforme alinhamento comercial prévio."
+        for idx, item in enumerate(proposta.itens, 1):
+            nome_serv = item.tipo_servico.nome if item.tipo_servico else "Serviço"
+            desc_serv = item.descricao_personalizada or (item.tipo_servico.descricao_padrao if item.tipo_servico else "")
+            itens_texto += f"<p><b>{idx}. {nome_serv} ({item.quantidade} {item.unidade}):</b> {desc_serv} — Valor: R$ {item.valor_total:,.2f}</p>"
+    else:
+        itens_texto = "<p>Prestação de serviços técnicos especializados sob demanda.</p>"
+
+    # Minuta Contratual Padrão com Cláusulas Editáveis
+    conteudo_padrao = f"""
+    <h3 style="text-align: center;">INSTRUMENTO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS</h3>
+    <p style="text-align: center;"><b>DOCUMENTO Nº {num_doc}</b></p>
+    <br>
+    <p><b>CONTRATADA:</b> {empresa.razao_social.upper()}, pessoa jurídica de direito privado/autônomo, inscrita no CNPJ/CPF sob nº {empresa.cnpj or 'Não informado'}, com sede em {empresa.endereco_completo or 'endereço comercial cadastrado'}.</p>
+    
+    <p><b>CONTRATANTE:</b> {cliente.nome.upper()}, inscrito(a) no CNPJ/CPF sob nº {cliente.cnpj_cpf}, com sede/domicílio em {cliente.logradouro or ''}, {cliente.numero or 'S/N'}, {cliente.bairro or ''}, {cliente.cidade or ''}/{cliente.estado or ''}.</p>
+    
+    <hr>
+    
+    <h4>CLÁUSULA 1ª - DO OBJETO</h4>
+    <p>O presente contrato tem por objeto a prestação dos serviços técnicos discriminados a seguir:</p>
+    {itens_texto}
+    
+    <h4>CLÁUSULA 2ª - DO VALOR E FORMA DE PAGAMENTO</h4>
+    <p>Pela prestação dos serviços ora contratados, o(a) <b>CONTRATANTE</b> pagará à <b>CONTRATADA</b> a quantia global de <b>R$ {valor_contrato}</b>.</p>
+    <p><b>Condições acordadas:</b> {condicoes_pgto}</p>
+    
+    <h4>CLÁUSULA 3ª - DAS OBRIGAÇÕES DAS PARTES</h4>
+    <p>A CONTRATADA compromete-se a executar os serviços descritos com zelo, rigor técnico e em estrita observância às normas técnicas e regulamentadoras aplicáveis. O CONTRATANTE obriga-se a fornecer as informações e acessos necessários para a perfeita execução dos trabalhos.</p>
+    
+    <h4>CLÁUSULA 4ª - DO PRAZO E RESCISÃO</h4>
+    <p>O presente instrumento vigorará até a conclusão e entrega final dos serviços contratados. Em caso de rescisão imotivada por qualquer das partes antes do término, fica estipulada a liquidação proporcional das etapas já executadas.</p>
+    
+    <h4>CLÁUSULA 5ª - DO FORO</h4>
+    <p>Para dirimir eventuais controvérsias oriundas do presente instrumento, as partes elegem o foro da comarca de {empresa.cidade or 'Suzano'}/{empresa.estado or 'SP'}, renunciando a qualquer outro por mais privilegiado que seja.</p>
+    <br>
+    <p style="text-align: right;">{empresa.cidade or 'São Paulo'}, {date.today().strftime('%d de %m de %Y')}.</p>
+    """
+
+    novo_contrato = ContratoGerado(
+        empresa_id=empresa.id,
+        cliente_id=cliente.id,
+        proposta_id=proposta.id if proposta else None,
+        numero_documento=num_doc,
+        titulo=f"Contrato de Prestação de Serviços - {cliente.nome}",
+        conteudo_html=conteudo_padrao.strip(),
+        status='minuta'
+    )
+    db.session.add(novo_contrato)
+    db.session.commit()
+
+    flash(f'Minuta {num_doc} criada com sucesso! Você pode revisar o texto abaixo.', 'success')
+    return redirect(url_for('detalhe_cliente', id=cliente.id))
+
+
+@app.route('/contrato/<int:id>/salvar-texto', methods=['POST'])
+@login_required
+def salvar_texto_contrato(id):
+    contrato = ContratoGerado.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    
+    contrato.titulo = request.form.get('titulo', contrato.titulo)
+    contrato.status = request.form.get('status', contrato.status)
+    contrato.conteudo_html = request.form.get('conteudo_html', contrato.conteudo_html)
+    
+    if contrato.status == 'assinado' and not contrato.data_assinatura:
+        contrato.data_assinatura = datetime.utcnow()
+
+    db.session.commit()
+    flash(f'Contrato "{contrato.numero_documento}" atualizado com sucesso!', 'success')
+    return redirect(url_for('detalhe_cliente', id=contrato.cliente_id))
+
+
+@app.route('/contrato/<int:id>/excluir', methods=['POST'])
+@login_required
+def excluir_contrato(id):
+    contrato = ContratoGerado.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    cliente_id = contrato.cliente_id
+    db.session.delete(contrato)
+    db.session.commit()
+    flash('Minuta de contrato removida.', 'info')
+    return redirect(url_for('detalhe_cliente', id=cliente_id))
+
+
+@app.route('/contrato/<int:id>/pdf')
+@login_required
+def gerar_pdf_contrato(id):
+    contrato = ContratoGerado.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    cliente = contrato.cliente
+    empresa = current_user.empresa
+    buffer = io.BytesIO()
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=36,
+        leftMargin=36,
+        topMargin=36,
+        bottomMargin=36
+    )
+
+    elementos = []
+    styles = getSampleStyleSheet()
+
+    cor_primaria_hex = empresa.cor_primaria if empresa.cor_primaria and empresa.cor_primaria.startswith('#') else "#1e3a8a"
+    cor_marca = colors.HexColor(cor_primaria_hex)
+
+    # Estilos Tipográficos
+    estilo_empresa_nome = ParagraphStyle('PDF_EmpresaNome', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=cor_marca)
+    estilo_empresa_sub = ParagraphStyle('PDF_EmpresaSub', parent=styles['Normal'], fontName='Helvetica', fontSize=7.5, leading=10, textColor=colors.HexColor("#475569"), alignment=2)
+    estilo_titulo_doc = ParagraphStyle('PDF_ContrTit', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, leading=15, textColor=cor_marca, alignment=1)
+    estilo_corpo = ParagraphStyle('PDF_ContrCorpo', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=13, textColor=colors.HexColor("#1e293b"), alignment=4)
+    estilo_subtit = ParagraphStyle('PDF_ContrSubTit', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=cor_marca)
+
+    # 1. Cabeçalho Timbrado Oficial
+    logo_elemento = None
+    if empresa.logo_filename:
+        caminho_logo = os.path.join(app.config['UPLOAD_FOLDER'], empresa.logo_filename)
+        if os.path.exists(caminho_logo):
+            try:
+                logo_elemento = RLImage(caminho_logo, width=1.6*inch, height=0.6*inch)
+                logo_elemento.hAlign = 'LEFT'
+            except Exception:
+                logo_elemento = None
+
+    razao_empresa = _limpar_texto(empresa.razao_social or 'EMPRESA PRESTADORA')
+    fantasia_empresa = _limpar_texto(empresa.nome_fantasia or '')
+    cnpj_empresa = _limpar_texto(empresa.cnpj or 'Não informado')
+    tel_empresa = _limpar_texto(empresa.telefone or 'Não informado')
+    email_empresa = _limpar_texto(empresa.email or '')
+    site_empresa = _limpar_texto(empresa.site or '')
+    end_empresa = _limpar_texto(empresa.endereco_completo or '')
+
+    info_empresa_html = f"""
+    <b>{razao_empresa.upper()}</b><br/>
+    {f"Nome Fantasia: {fantasia_empresa}<br/>" if fantasia_empresa else ""}
+    CNPJ/CPF: {cnpj_empresa} | Tel: {tel_empresa}<br/>
+    {f"E-mail: {email_empresa} | " if email_empresa else ""}{site_empresa}<br/>
+    {end_empresa}
+    """.strip()
+
+    if logo_elemento:
+        tab_topo = Table([[logo_elemento, Paragraph(info_empresa_html, estilo_empresa_sub)]], colWidths=[1.8*inch, 5.7*inch])
+    else:
+        tab_topo = Table([[Paragraph(f"<b>{razao_empresa.upper()}</b>", estilo_empresa_nome), Paragraph(info_empresa_html, estilo_empresa_sub)]], colWidths=[2.8*inch, 4.7*inch])
+
+    tab_topo.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('ALIGN', (1,0), (1,0), 'RIGHT'),
+    ]))
+    elementos.append(tab_topo)
+    elementos.append(Spacer(1, 4))
+    elementos.append(HRFlowable(width="100%", thickness=1.5, color=cor_marca, spaceAfter=12))
+
+    # 2. Título do Instrumento
+    elementos.append(Paragraph(f"<b>{_limpar_texto(contrato.titulo).upper()}</b>", estilo_titulo_doc))
+    elementos.append(Paragraph(f"<font color='#64748b' size='8'>DOCUMENTO Nº {_limpar_texto(contrato.numero_documento)}</font>", estilo_titulo_doc))
+    elementos.append(Spacer(1, 10))
+
+    # 3. Conteúdo das Cláusulas Formatadas
+    texto_raw = contrato.conteudo_html or ""
+    blocos = re.split(r'</?(?:p|h\d|div|li|tr)[^>]*>', texto_raw)
+
+    for bloco in blocos:
+        bloco_limpo = re.sub(r'<br\s*/?>', '<br/>', bloco).strip()
+        if not bloco_limpo:
+            continue
+
+        bloco_fmt = re.sub(r'<(?!/?(?:b|i|u|font|br))[^>]+>', '', bloco_limpo)
+
+        if re.match(r'^(?:CL[AÁ]USULA|INSTRUMENTO|\d+\.)', bloco_fmt, re.IGNORECASE):
+            elementos.append(Spacer(1, 4))
+            elementos.append(Paragraph(bloco_fmt, estilo_subtit))
+            elementos.append(Spacer(1, 2))
+        else:
+            elementos.append(Paragraph(bloco_fmt, estilo_corpo))
+            elementos.append(Spacer(1, 4))
+
+    # 4. Assinaturas
+    elementos.append(Spacer(1, 20))
+    nome_cli = _limpar_texto(cliente.nome or 'CONTRATANTE')
+    dados_assinaturas = [
+        [
+            Paragraph(f"____________________________________________<br/><b>CONTRATADA:</b> {razao_empresa.upper()}", estilo_corpo),
+            Paragraph(f"____________________________________________<br/><b>CONTRATANTE:</b> {nome_cli.upper()}", estilo_corpo)
+        ]
+    ]
+    tab_ass = Table(dados_assinaturas, colWidths=[3.75*inch, 3.75*inch])
+    tab_ass.setStyle(TableStyle([
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ]))
+    elementos.append(tab_ass)
+
+    doc.build(elementos)
+    buffer.seek(0)
+
+    nome_arquivo_pdf = f"Contrato_{contrato.numero_documento}.pdf"
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=nome_arquivo_pdf,
+        mimetype='application/pdf'
+    )
 
 # -----------------------------------------------------------------------------
 # 9. INICIALIZAÇÃO DO SERVIDOR

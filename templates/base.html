@@ -204,6 +204,9 @@
             <a href="{{ url_for('admin_master_usuarios') }}" class="nav-link-custom text-danger {% if request.endpoint == 'admin_master_usuarios' %}active{% endif %}">
                 <i class="bi bi-person-gear"></i><span>Gestão de Usuários</span>
             </a>
+            <a href="{{ url_for('admin_master_cupons') }}" class="nav-link-custom text-danger {% if request.endpoint == 'admin_master_cupons' %}active{% endif %}">
+                <i class="bi bi-tags-fill"></i><span>Cupons & Afiliados</span>
+            </a>
             <a href="{{ url_for('admin_master_chamados') }}" class="nav-link-custom text-danger {% if request.endpoint in ['admin_master_chamados', 'admin_atender_chamado'] %}active{% endif %}">
                 <i class="bi bi-headset"></i><span>Fila Global Tickets</span>
             </a>
@@ -247,6 +250,13 @@
             {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
             <a href="{{ url_for('financeiro') }}" id="tour-financeiro" class="nav-link-custom {% if request.endpoint == 'financeiro' %}active{% endif %}">
                 <i class="bi bi-cash-stack"></i><span>Financeiro</span>
+            </a>
+            {% endif %}
+
+            <!-- Lucratividade (Fase 4) -->
+            {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
+            <a href="{{ url_for('relatorio_lucratividade') }}" id="tour-lucratividade" class="nav-link-custom {% if request.endpoint == 'relatorio_lucratividade' %}active{% endif %}">
+                <i class="bi bi-graph-up-arrow"></i><span>Lucratividade</span>
             </a>
             {% endif %}
 
@@ -315,7 +325,13 @@
                     <i class="bi bi-cash-stack"></i><span>Financeiro</span>
                 </a>
                 {% endif %}
-
+                
+                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
+                <a href="{{ url_for('relatorio_lucratividade') }}" class="nav-link-custom {% if request.endpoint == 'relatorio_lucratividade' %}active{% endif %}">
+                    <i class="bi bi-graph-up-arrow"></i><span>Lucratividade</span>
+                </a>
+                {% endif %}
+                
                 {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_configuracoes %}
                 <a href="{{ url_for('perfil_empresa') }}" class="nav-link-custom {% if request.endpoint == 'perfil_empresa' %}active{% endif %}">
                     <i class="bi bi-gear-wide-connected"></i><span>Configurações</span>
