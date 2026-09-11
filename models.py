@@ -71,31 +71,43 @@ class Empresa(db.Model):
 
 class Usuario(UserMixin, db.Model):
     __tablename__ = 'usuarios'
+    
     id = db.Column(db.Integer, primary_key=True)
-    empresa_id = db.Column(db.Integer, db.ForeignKey('empresas.id'), nullable=True)  # <-- Alterado para True
+    empresa_id = db.Column(db.Integer, db.ForeignKey('empresas.id'), nullable=True)
     nome = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     senha_hash = db.Column(db.String(255), nullable=False)
-    cargo = db.Column(db.String(50), default="Administrador")
-    nivel_acesso = db.Column(db.String(20), default="admin")
+    cargo = db.Column(db.String(100), nullable=True)
+    nivel_acesso = db.Column(db.String(20), default='operador')  # 'admin', 'operador', 'master', 'afiliado'
     ativo = db.Column(db.Boolean, default=True)
-
+    
+    # Permissões do ERP Operacional
     perm_clientes = db.Column(db.Boolean, default=False)
     perm_propostas = db.Column(db.Boolean, default=False)
-    perm_servicos = db.Column(db.Boolean, default=True)
+    perm_servicos = db.Column(db.Boolean, default=False)
     perm_financeiro = db.Column(db.Boolean, default=False)
     perm_configuracoes = db.Column(db.Boolean, default=False)
-    
-    aceitou_termos_beta = db.Column(db.Boolean, default=False)
+    aceitou_termos_beta = db.Column(db.Boolean, default=True)
     data_aceite_termos = db.Column(db.DateTime, nullable=True)
-    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Dados e Conformidade do Afiliado / Parceiro
+    cpf_cnpj = db.Column(db.String(20), nullable=True)
+    chave_pix = db.Column(db.String(150), nullable=True)
+    whatsapp = db.Column(db.String(50), nullable=True)
+    rede_social_principal = db.Column(db.String(150), nullable=True)
+    tipo_parceiro = db.Column(db.String(50), nullable=True)
+    status_aprovacao = db.Column(db.String(30), default='aprovado')  # 'pendente', 'aprovado', 'rejeitado'
+    motivo_rejeicao = db.Column(db.Text, nullable=True)
+    aceitou_termos_afiliado = db.Column(db.Boolean, default=False)
+    data_aceite_termos_afiliado = db.Column(db.DateTime, nullable=True)
+
+    # Relacionamento 1 -> N com Cupons
+    cupons = db.relationship('CupomDesconto', backref='parceiro', lazy=True)
 
     def set_senha(self, senha):
-        self.senha_hash = generate_password_hash(senha, method='scrypt')
+        self.senha_hash = generate_password_hash(senha)
 
     def check_senha(self, senha):
-        if not self.senha_hash:
-            return False
         return check_password_hash(self.senha_hash, senha)
 
 
@@ -457,26 +469,19 @@ class ServicoEtapaRastreio(db.Model):
 
 class CupomDesconto(db.Model):
     __tablename__ = 'cupons_desconto'
+    
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
-    codigo = db.Column(db.String(30), unique=True, nullable=False)
-    afiliado_nome = db.Column(db.String(120), nullable=False)
-    afiliado_email = db.Column(db.String(120), nullable=False)
-    afiliado_chave_pix = db.Column(db.String(100), nullable=True)
-    afiliado_whatsapp = db.Column(db.String(30), nullable=True)
+    codigo = db.Column(db.String(50), unique=True, nullable=False)
     
-    percentual_desconto = db.Column(db.Float, default=20.0)
+    # Parâmetros Comerciais
+    percentual_desconto = db.Column(db.Float, nullable=False, default=10.0)
     percentual_comissao = db.Column(db.Float, default=20.0)
     limite_usos = db.Column(db.Integer, default=100)
     usos_atuais = db.Column(db.Integer, default=0)
     data_validade = db.Column(db.Date, nullable=True)
-    ativo = db.Column(db.Boolean, default=True)
-    aceitou_termos_afiliado = db.Column(db.Boolean, default=False)
-    data_aceite_termos = db.Column(db.DateTime, nullable=True)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
-
-    usuario = db.relationship('Usuario', backref=db.backref('cupom_afiliado', uselist=False))
-    empresas_indicadas = db.relationship('Empresa', backref='afiliado_responsavel', lazy=True)
+    ativo = db.Column(db.Boolean, default=True)
 
     @property
     def is_valido(self):
@@ -487,3 +492,41 @@ class CupomDesconto(db.Model):
         if self.data_validade and self.data_validade < date.today():
             return False
         return True
+
+class ComissaoAfiliado(db.Model):
+    __tablename__ = 'comissoes_afiliados'
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    cupom_id = db.Column(db.Integer, db.ForeignKey('cupons_desconto.id'), nullable=True)
+    empresa_id = db.Column(db.Integer, db.ForeignKey('empresas.id'), nullable=False)
+    
+    numero_parcela_parceiro = db.Column(db.Integer, nullable=False) # Ex: 2 (de 3)
+    total_parcelas_permitidas = db.Column(db.Integer, default=3)   # Ex: 3
+    
+    valor_mensalidade = db.Column(db.Float, nullable=False)
+    percentual_comissao = db.Column(db.Float, nullable=False)
+    valor_comissao = db.Column(db.Float, nullable=False)
+    mes_competencia = db.Column(db.String(7), nullable=False) # '2026-09'
+    status = db.Column(db.String(30), default='pendente')     # 'pendente', 'liberado', 'pago'
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_pagamento = db.Column(db.DateTime, nullable=True)
+    repasse_id = db.Column(db.Integer, db.ForeignKey('repasses_afiliados.id'), nullable=True)
+
+    empresa = db.relationship('Empresa', lazy=True)
+    parceiro = db.relationship('Usuario', foreign_keys=[usuario_id], lazy=True)
+
+class RepasseAfiliado(db.Model):
+    __tablename__ = 'repasses_afiliados'
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    mes_competencia = db.Column(db.String(7), nullable=False)
+    valor_total_pago = db.Column(db.Float, nullable=False)
+    qtd_faturas_inclusas = db.Column(db.Integer, default=0)
+    chave_pix_utilizada = db.Column(db.String(150), nullable=True)
+    arquivo_comprovante = db.Column(db.String(255), nullable=True)
+    data_pagamento = db.Column(db.DateTime, default=datetime.utcnow)
+    observacoes = db.Column(db.Text, nullable=True)
+
+    comissoes = db.relationship('ComissaoAfiliado', backref='repasse', lazy=True)

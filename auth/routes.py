@@ -105,6 +105,9 @@ def registro():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
 
+    # Captura o cupom via query string (?ref=CODIGO) se existir
+    cupom_url = request.args.get('ref', '').strip().upper()
+
     if request.method == 'POST':
         tipo_pessoa = request.form.get('tipo_pessoa', 'PJ')
         razao_social = (request.form.get('razao_social') or '').strip()
@@ -117,34 +120,48 @@ def registro():
         senha = request.form.get('senha', '')
         confirma_senha = request.form.get('confirma_senha', '')
         
-        # 1. Captura o código de cupom/indicação (digitado ou vindo por URL)
-        cupom_indicacao = (request.form.get('cupom_indicacao') or '').strip().upper()
+        # 1. Captura o código digitado ou o vindo da URL
+        cupom_indicacao = (request.form.get('cupom_indicacao') or cupom_url).strip().upper()
 
         # 2. Validação de CPF para Pessoa Física
         if tipo_pessoa == 'PF' and not is_cpf_valido(doc_identificacao):
             flash('O CPF informado é inválido. Por favor, revise os dígitos.', 'danger')
-            return render_template('auth/registro.html')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
 
         # 3. Validação de Senha Forte
         senha_valida, msg_erro = validar_senha_forte(senha)
         if not senha_valida:
             flash(msg_erro, 'warning')
-            return render_template('auth/registro.html')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
 
         # 4. Validação de Confirmação de Senha
         if senha != confirma_senha:
             flash('A senha e a confirmação de senha não conferem.', 'warning')
-            return render_template('auth/registro.html')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
 
         # 5. Validação prévia de duplicidade de E-mail
         if Usuario.query.filter_by(email=email).first():
             flash('Este e-mail já está cadastrado no sistema. Faça login.', 'warning')
-            return render_template('auth/registro.html')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
 
         # 6. Validação prévia de duplicidade de CNPJ/CPF (se informado)
         if doc_identificacao and Empresa.query.filter_by(cnpj=doc_identificacao).first():
             flash('Este CNPJ/CPF já possui uma conta cadastrada.', 'warning')
-            return render_template('auth/registro.html')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
+
+        # 7. BLINDAGEM ANTIFRAUDE: Validar se o cupom existe, está ativo e evitar autoindicação
+        cupom_obj = None
+        if cupom_indicacao:
+            cupom_obj = CupomDesconto.query.filter_by(codigo=cupom_indicacao).first()
+            if not cupom_obj or not cupom_obj.is_valido:
+                flash('O cupom ou link de indicação informado é inválido ou está expirado.', 'warning')
+                cupom_indicacao = None
+            elif cupom_obj.parceiro:
+                # Impede que o afiliado use seu próprio cupom (mesmo e-mail ou documento)
+                doc_afiliado = re.sub(r'\D', '', cupom_obj.parceiro.cpf_cnpj or '')
+                if cupom_obj.parceiro.email.lower() == email or (doc_identificacao and doc_identificacao == doc_afiliado):
+                    flash('Não é permitido utilizar seu próprio cupom de afiliado.', 'danger')
+                    return render_template('auth/registro.html', cupom_ref='')
 
         try:
             nova_empresa = Empresa(
@@ -156,7 +173,7 @@ def registro():
                 plano="Founder",
                 status_assinatura="trial",
                 data_vencimento=date.today() + relativedelta(days=14),
-                cupom_utilizado=cupom_indicacao if cupom_indicacao else None  # <--- Vincula aqui
+                cupom_utilizado=cupom_indicacao if cupom_indicacao else None
             )
             db.session.add(nova_empresa)
             db.session.flush()
@@ -171,13 +188,13 @@ def registro():
                 aceitou_termos_beta=True,
                 data_aceite_termos=datetime.utcnow()
             )
-            
-            if hasattr(novo_usuario, 'set_senha'):
-                novo_usuario.set_senha(senha)
-            else:
-                novo_usuario.senha_hash = generate_password_hash(senha)
-
+            novo_usuario.set_senha(senha)
             db.session.add(novo_usuario)
+
+            # Contabiliza o uso do cupom
+            if cupom_obj:
+                cupom_obj.usos_atuais = (cupom_obj.usos_atuais or 0) + 1
+
             db.session.commit()
 
             flash('Cadastro realizado com sucesso! Faça login para começar a usar.', 'success')
@@ -185,11 +202,13 @@ def registro():
 
         except Exception as e:
             db.session.rollback()
-            print(f"\n[ERRO DETALHADO NO REGISTRO]: {type(e).__name__} - {e}\n")
+            print(f"\n[ERRO NO REGISTRO]: {type(e).__name__} - {e}\n")
             flash(f'Erro ao processar o cadastro: {str(e)}', 'danger')
-            return render_template('auth/registro.html')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
 
-    return render_template('auth/registro.html')
+    return render_template('auth/registro.html', cupom_ref=cupom_url)
+
+
 @auth_bp.route('/esqueci-senha', methods=['GET', 'POST'])
 def esqueci_senha():
     if current_user.is_authenticated:
@@ -239,6 +258,9 @@ def registro_afiliado():
     if request.method == 'POST':
         nome = (request.form.get('nome') or '').strip()
         email = (request.form.get('email') or '').strip().lower()
+        cpf_cnpj = (request.form.get('cpf_cnpj') or '').strip()
+        rede_social = (request.form.get('rede_social_principal') or '').strip()
+        tipo_parceiro = request.form.get('tipo_parceiro', 'Outros')
         senha = request.form.get('senha', '')
         confirma_senha = request.form.get('confirma_senha', '')
 
@@ -255,36 +277,39 @@ def registro_afiliado():
             flash('Este e-mail já está cadastrado. Faça login na sua conta.', 'warning')
             return render_template('auth/registro_afiliado.html')
 
-        # 1. Cria o usuário com nível 'afiliado'
+        # 1. Cria a Conta de Usuário do Parceiro
         novo_user = Usuario(
             empresa_id=None,
             nome=nome,
             email=email,
+            cpf_cnpj=cpf_cnpj,
+            rede_social_principal=rede_social,
+            tipo_parceiro=tipo_parceiro,
             cargo="Afiliado Parceiro",
             nivel_acesso="afiliado",
-            ativo=True
+            ativo=True,
+            status_aprovacao="pendente"
         )
         novo_user.set_senha(senha)
         db.session.add(novo_user)
         db.session.flush()
 
-        # 2. Gera um código base sugerido (ex: PRIMEIRO NOME + NÚMERO)
+        # 2. Gera o Primeiro Cupom Vinculado ao ID do Parceiro
         codigo_sugerido = re.sub(r'[^A-Z0-9]', '', nome.split()[0].upper()) + "10"
         
         novo_cupom = CupomDesconto(
             usuario_id=novo_user.id,
             codigo=codigo_sugerido,
-            afiliado_nome=nome,
-            afiliado_email=email,
             percentual_desconto=10.0,
             percentual_comissao=20.0,
-            ativo=False # Fica pendente até aceitar os termos e preencher a chave PIX
+            limite_usos=100,
+            ativo=False  # Fica inativo até o Master aprovar o parceiro
         )
         db.session.add(novo_cupom)
         db.session.commit()
 
         login_user(novo_user)
-        flash('Conta criada! Complete seus dados e revise as regras para ativar seus links.', 'success')
+        flash('Cadastro realizado! Seus dados foram enviados para análise da equipe.', 'info')
         return redirect(url_for('painel_afiliado'))
 
     return render_template('auth/registro_afiliado.html')

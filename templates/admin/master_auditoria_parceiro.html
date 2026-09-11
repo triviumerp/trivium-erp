@@ -1,0 +1,508 @@
+{% extends 'base.html' %}
+
+{% block title %}Gerenciamento do Parceiro - {{ parceiro.nome }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+    <div>
+        <a href="{{ url_for('admin_master_cupons') }}" class="text-decoration-none small text-muted mb-1 d-inline-block no-print">
+            <i class="bi bi-arrow-left"></i> Voltar aos Cupons & Parceiros
+        </a>
+        <div class="d-flex align-items-center gap-2">
+            <h3 class="fw-bold text-dark mb-0">{{ parceiro.nome }}</h3>
+            {% if parceiro.status_aprovacao == 'aprovado' and parceiro.ativo %}
+                <span class="badge bg-success">Conta Ativa</span>
+            {% elif parceiro.status_aprovacao == 'rejeitado' or not parceiro.ativo %}
+                <span class="badge bg-danger">Contrato Cancelado / Inativo</span>
+            {% else %}
+                <span class="badge bg-warning text-dark">Aguardando Liberação</span>
+            {% endif %}
+        </div>
+        <span class="text-muted small">{{ parceiro.email }} &bull; PIX: <code>{{ parceiro.chave_pix or 'Não cadastrada' }}</code></span>
+    </div>
+    <div class="d-flex gap-2 no-print">
+        <button class="btn btn-outline-secondary fw-bold shadow-sm" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i> Imprimir Extrato / PDF
+        </button>
+    </div>
+</div>
+
+<!-- NAVEGAÇÃO POR ABAS -->
+<ul class="nav nav-pills mb-4 bg-white p-2 rounded-4 shadow-sm no-print" id="parceiroTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active fw-bold px-3" id="cupons-tab" data-bs-toggle="pill" data-bs-target="#tab-cupons" type="button" role="tab">
+            <i class="bi bi-tags-fill me-2 text-danger"></i>Cupons & Links Promocionais
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-bold px-3" id="acumulado-tab" data-bs-toggle="pill" data-bs-target="#tab-acumulado" type="button" role="tab">
+            <i class="bi bi-graph-up-arrow me-2 text-primary"></i>Acumulado & Clientes Indicados
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-bold px-3" id="repasses-tab" data-bs-toggle="pill" data-bs-target="#tab-repasses" type="button" role="tab">
+            <i class="bi bi-cash-coin me-2 text-success"></i>Histórico de Repasses PIX
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-bold px-3" id="perfil-tab" data-bs-toggle="pill" data-bs-target="#tab-perfil" type="button" role="tab">
+            <i class="bi bi-person-badge me-2 text-dark"></i>Dados & Gestão de Contrato
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="parceiroTabsContent">
+    
+    <!-- ABA 1: CUPONS & LINKS DESTE PARCEIRO -->
+    <div class="tab-pane fade show active" id="tab-cupons" role="tabpanel">
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm p-3 rounded-4 bg-white">
+                    <span class="small text-muted fw-bold">TOTAL DE CUPONS CRIADOS</span>
+                    <h3 class="fw-bold text-dark my-1">{{ cupons|length }}</h3>
+                    <small class="text-muted">Campanhas atreladas a este afiliado</small>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm p-3 rounded-4 bg-white">
+                    <span class="small text-muted fw-bold">TOTAL DE ATIVAÇÕES (USOS)</span>
+                    <h3 class="fw-bold text-primary my-1">{{ total_usos_cupons }}</h3>
+                    <small class="text-muted">Cadastros via cupom ou link</small>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm p-3 rounded-4 bg-white">
+                    <span class="small text-muted fw-bold">CONVERSÕES EFETIVAS</span>
+                    <h3 class="fw-bold text-success my-1">{{ empresas|length }}</h3>
+                    <small class="text-muted">Empresas registradas no ERP</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- LINK PRINCIPAL DE COMPARTILHAMENTO -->
+        <div class="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-light border">
+            <div class="row align-items-center g-3">
+                <div class="col-md-8">
+                    <span class="badge bg-primary mb-2">Link Oficial de Indicação do Parceiro</span>
+                    <div class="input-group">
+                        <input type="text" class="form-control font-monospace small" id="linkAfiliadoInput" value="{{ link_indicacao }}" readonly>
+                        <button class="btn btn-dark fw-bold px-3" onclick="navigator.clipboard.writeText(document.getElementById('linkAfiliadoInput').value); alert('Link copiado!');">
+                            <i class="bi bi-clipboard me-1"></i> Copiar Link
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-4 text-md-end">
+                    <button class="btn btn-danger fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoCupomParceiro">
+                        <i class="bi bi-plus-circle me-1"></i> Criar Cupom para Este Parceiro
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TABELA DE CUPONS DO PARCEIRO -->
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold text-dark mb-0"><i class="bi bi-tags text-danger me-2"></i>Cupons Vinculados</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>CÓDIGO</th>
+                                <th>DESCONTO</th>
+                                <th>COMISSÃO</th>
+                                <th>DURAÇÃO DO REPASSE</th>
+                                <th>USOS / LIMITE</th>
+                                <th>LINK INDIVIDUAL</th>
+                                <th>STATUS</th>
+                                <th class="text-end pe-3">AÇÃO</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in cupons %}
+                            <tr>
+                                <td class="fw-bold fs-6 text-primary">{{ c.codigo }}</td>
+                                <td><span class="badge bg-success">{{ c.percentual_desconto }}% OFF</span></td>
+                                <td><span class="badge bg-info text-dark">{{ c.percentual_comissao }}% Repasse</span></td>
+                                <td><strong>{{ c.meses_comissao_limite or 3 }} meses</strong></td>
+                                <td><strong>{{ c.usos_atuais }}</strong> / {{ c.limite_usos }}</td>
+                                <td>
+                                    {% set link_c = url_for('auth.registro', ref=c.codigo, _external=True) %}
+                                    <button class="btn btn-sm btn-light border" onclick="navigator.clipboard.writeText('{{ link_c }}'); alert('Link do cupom {{ c.codigo }} copiado!');">
+                                        <i class="bi bi-link-45deg me-1"></i>Copiar Link
+                                    </button>
+                                </td>
+                                <td>
+                                    {% if c.is_valido and parceiro.status_aprovacao == 'aprovado' %}
+                                        <span class="badge bg-success">Ativo</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Inativo / Bloqueado</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-3">
+                                    <form action="{{ url_for('admin_toggle_cupom', id=c.id) }}" method="POST" class="d-inline">
+                                        <button class="btn btn-sm {% if c.ativo %}btn-outline-danger{% else %}btn-outline-success{% endif %} fw-bold">
+                                            {{ 'Desativar' if c.ativo else 'Ativar' }}
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="8" class="text-center py-4 text-muted">Nenhum cupom gerado para este parceiro.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABA 2: ACUMULADO & CLIENTES -->
+    <div class="tab-pane fade" id="tab-acumulado" role="tabpanel">
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm p-3 rounded-4 bg-success text-white">
+                    <span class="small text-white-50 fw-bold">SALDO LIBERADO PARA PIX</span>
+                    <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(saldo_liberado) }}</h3>
+                    <small>Faturas confirmadas prontas para repasse</small>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm p-3 rounded-4 bg-dark text-white">
+                    <span class="small text-white-50 fw-bold">TOTAL HISTÓRICO PAGO</span>
+                    <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_ja_pago) }}</h3>
+                    <small>{{ repasses|length }} repasse(s) efetuado(s)</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold text-dark mb-0"><i class="bi bi-layers text-primary me-2"></i>Extrato de Mensalidades (Ciclos de Parcelas 1/3, 2/3, 3/3)</h6>
+                <span class="badge bg-light text-dark border">{{ comissoes|length }} lançamento(s)</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>CLIENTE INDICADO</th>
+                                <th>CICLO / PARCELA</th>
+                                <th>COMPETÊNCIA</th>
+                                <th>VALOR PLANO</th>
+                                <th>REPASSE (%)</th>
+                                <th>VALOR COMISSÃO</th>
+                                <th>STATUS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in comissoes %}
+                            <tr>
+                                <td>
+                                    <strong class="text-dark d-block">#{{ c.empresa_id }} - {{ c.empresa.razao_social or c.empresa.nome_fantasia }}</strong>
+                                    <small class="text-muted">CNPJ/CPF: {{ c.empresa.cnpj or '--' }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border fw-bold">
+                                        Parcela {{ c.numero_parcela_parceiro }} de {{ c.total_parcelas_permitidas }}
+                                    </span>
+                                </td>
+                                <td><code>{{ c.mes_competencia }}</code></td>
+                                <td>R$ {{ "%.2f"|format(c.valor_mensalidade) }}</td>
+                                <td>{{ c.percentual_comissao }}%</td>
+                                <td class="fw-bold text-success fs-6">R$ {{ "%.2f"|format(c.valor_comissao) }}</td>
+                                <td>
+                                    {% if c.status == 'pago' %}
+                                        <span class="badge bg-success">Liquidado</span>
+                                    {% elif c.status == 'liberado' %}
+                                        <span class="badge bg-primary">Liberado</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">Hold (30d)</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center py-4 text-muted">Nenhum cliente pagante registrado para este parceiro.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABA 3: HISTÓRICO DE REPASSES -->
+    <div class="tab-pane fade" id="tab-repasses" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-file-earmark-check text-success me-2"></i>Histórico de Liquidações Realizadas</h6>
+            <button class="btn btn-success btn-sm fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalLiquidarRepasse">
+                <i class="bi bi-cash-stack me-1"></i> Liquidar Novo Repasse PIX
+            </button>
+        </div>
+
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>DATA LIQUIDAÇÃO</th>
+                                <th>COMPETÊNCIA</th>
+                                <th>VALOR PAGO</th>
+                                <th>FATURAS LIQUIDADAS</th>
+                                <th>CHAVE PIX</th>
+                                <th>COMPROVANTE</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in repasses %}
+                            <tr>
+                                <td>{{ r.data_pagamento.strftime('%d/%m/%Y às %H:%M') }}</td>
+                                <td><strong>{{ r.mes_competencia }}</strong></td>
+                                <td class="fw-bold text-success">R$ {{ "%.2f"|format(r.valor_total_pago) }}</td>
+                                <td>{{ r.qtd_faturas_inclusas }} parcela(s)</td>
+                                <td><code>{{ r.chave_pix_utilizada }}</code></td>
+                                <td>
+                                    {% if r.arquivo_comprovante %}
+                                        <a href="{{ url_for('download_file', filename=r.arquivo_comprovante) }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold no-print">
+                                            <i class="bi bi-paperclip me-1"></i>Ver Comprovante
+                                        </a>
+                                        <span class="d-none d-print-inline text-muted small">Anexo: {{ r.arquivo_comprovante }}</span>
+                                    {% else %}
+                                        <span class="text-muted">Sem comprovante</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">Nenhum repasse registrado até o momento.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABA 4: DADOS & CONTRATO -->
+    <div class="tab-pane fade" id="tab-perfil" role="tabpanel">
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-person-lines-fill text-primary me-2"></i>Ficha Cadastral do Parceiro</h5>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted mb-0">Nome Completo</label>
+                            <p class="fw-bold text-dark mb-2">{{ parceiro.nome }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted mb-0">E-mail</label>
+                            <p class="fw-bold text-dark mb-2">{{ parceiro.email }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted mb-0">CPF / CNPJ</label>
+                            <p class="fw-bold text-dark mb-2">{{ parceiro.cpf_cnpj or 'Não informado' }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted mb-0">WhatsApp</label>
+                            <p class="fw-bold text-dark mb-2">{{ parceiro.whatsapp or 'Não informado' }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted mb-0">Canal / Rede Social</label>
+                            <p class="fw-bold text-dark mb-2">{{ parceiro.rede_social_principal or 'Não informado' }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted mb-0">Tipo de Parceiro</label>
+                            <p class="fw-bold text-dark mb-2">{{ parceiro.tipo_parceiro or 'Parceiro Padrão' }}</p>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small text-muted mb-0">Chave PIX Cadastrada</label>
+                            <p class="fw-bold text-primary mb-0 font-monospace fs-6">{{ parceiro.chave_pix or 'Nenhuma chave cadastrada' }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-shield-lock text-danger me-2"></i>Gestão de Contrato & Acesso</h5>
+                    
+                    {% if parceiro.motivo_rejeicao %}
+                    <div class="alert alert-danger p-3 small mb-3">
+                        <strong>Motivo de cancelamento / recusa:</strong><br>
+                        {{ parceiro.motivo_rejeicao }}
+                    </div>
+                    {% endif %}
+
+                    <div class="d-grid gap-2">
+                        {% if parceiro.status_aprovacao != 'aprovado' %}
+                        <form action="{{ url_for('admin_moderar_parceiro', user_id=parceiro.id) }}" method="POST">
+                            <input type="hidden" name="status_aprovacao" value="aprovado">
+                            <button type="submit" class="btn btn-success fw-bold w-100 py-2">
+                                <i class="bi bi-check-circle me-1"></i> Aprovar / Ativar Parceiro
+                            </button>
+                        </form>
+                        {% endif %}
+
+                        <button class="btn btn-outline-danger fw-bold py-2" data-bs-toggle="modal" data-bs-target="#modalCancelarContrato">
+                            <i class="bi bi-x-octagon me-1"></i> Cancelar Contrato / Desativar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- MODAL: CRIAR NOVO CUPOM PARA ESTE PARCEIRO -->
+<div class="modal fade" id="modalNovoCupomParceiro" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('admin_criar_cupom_parceiro', id=parceiro.id) }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-tag-fill text-danger me-2"></i>Novo Cupom para {{ parceiro.nome }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Código do Cupom *</label>
+                            <input type="text" name="codigo" class="form-control text-uppercase font-monospace" placeholder="EX: CANAL20" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Desconto ao Cliente (%) *</label>
+                            <input type="number" step="1" min="1" max="100" name="percentual_desconto" class="form-control" value="10" required>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Comissão do Parceiro (%) *</label>
+                            <input type="number" step="1" min="1" max="100" name="percentual_comissao" class="form-control" value="20" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Duração da Comissão (Meses) *</label>
+                            <input type="number" step="1" min="1" max="24" name="meses_comissao_limite" class="form-control" value="3" required>
+                            <small class="text-muted" style="font-size: 0.75rem;">Padrão: 3 primeiros meses</small>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Limite Máximo de Usos</label>
+                        <input type="number" name="limite_usos" class="form-control" value="100">
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger btn-sm fw-bold px-3">Criar e Vincular Cupom</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: LIQUIDAR REPASSE PIX -->
+<div class="modal fade" id="modalLiquidarRepasse" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('admin_liquidar_repasse', id=parceiro.id) }}" method="POST" enctype="multipart/form-data">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-cash-stack text-success me-2"></i>Liquidar Repasse PIX</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3 p-3 bg-light rounded-3 border">
+                        <small class="text-muted d-block">Chave PIX de Destino:</small>
+                        <span class="fw-bold text-dark fs-6">{{ parceiro.chave_pix or 'Não cadastrada pelo parceiro' }}</span>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Mês de Competência *</label>
+                            <input type="month" name="mes_competencia" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Valor do Repasse (R$) *</label>
+                            <input type="number" step="0.01" name="valor_pago" class="form-control form-control-sm fw-bold text-success" value="{{ '%.2f'|format(saldo_liberado) }}" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Anexar Comprovante PIX (PDF ou Imagem) *</label>
+                        <input type="file" name="comprovante" class="form-control form-control-sm" accept=".pdf,.png,.jpg,.jpeg" required>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Observações / Protocolo</label>
+                        <textarea name="observacoes" class="form-control form-control-sm" rows="2" placeholder="Ex: Transferência via Banco Inter"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success btn-sm fw-bold px-3">Confirmar Liquidação</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: CANCELAR CONTRATO COM JUSTIFICATIVA -->
+<div class="modal fade" id="modalCancelarContrato" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('admin_moderar_parceiro', user_id=parceiro.id) }}" method="POST">
+                <input type="hidden" name="status_aprovacao" value="rejeitado">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Cancelar / Suspender Parceiro</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="small text-muted mb-3">
+                        Ao cancelar o contrato, todos os cupons do parceiro serão desativados e os links de indicação deixarão de pontuar novas comissões.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Justificativa do Cancelamento *</label>
+                        <textarea name="motivo_rejeicao" class="form-control" rows="3" placeholder="Informe a razão do cancelamento..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+                    <button type="submit" class="btn btn-danger btn-sm fw-bold px-3">Confirmar Cancelamento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print {
+    .sidebar, nav.navbar, .no-print, .btn, footer, .modal, .modal-backdrop, .nav-pills {
+        display: none !important;
+    }
+    main, .container-fluid, .content, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        width: 100% !important;
+    }
+    .card {
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: none !important;
+        page-break-inside: avoid;
+    }
+    .tab-pane {
+        display: block !important;
+        opacity: 1 !important;
+    }
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+}
+</style>
+{% endblock %}

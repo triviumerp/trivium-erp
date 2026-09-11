@@ -32,9 +32,30 @@
                 <label class="form-label small fw-bold">Seu Nome Completo *</label>
                 <input type="text" name="nome" class="form-control" placeholder="Ex: Carlos Mendes" required>
             </div>
-            <div class="mb-3">
-                <label class="form-label small fw-bold">E-mail de Login *</label>
-                <input type="email" name="email" class="form-control" placeholder="seuemail@exemplo.com" required>
+            <div class="row g-2 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">E-mail de Login *</label>
+                    <input type="email" name="email" class="form-control" placeholder="seuemail@exemplo.com" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">CPF ou CNPJ (Para Repasse) *</label>
+                    <input type="text" name="cpf_cnpj" class="form-control" placeholder="000.000.000-00" required>
+                </div>
+            </div>
+            <div class="row g-2 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Perfil Principal / Rede Social / Site *</label>
+                    <input type="text" name="rede_social_principal" class="form-control" placeholder="Instagram, YouTube ou Site" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Como vai nos indicar? *</label>
+                    <select name="tipo_parceiro" class="form-select">
+                        <option value="Influenciador / Criador de Conteúdo">Criador de Conteúdo / Influencer</option>
+                        <option value="Contador / Consultor">Contador / Consultor de Empresas</option>
+                        <option value="Desenvolvedor / TI">Profissional de TI / Dev</option>
+                        <option value="Outros">Outros / Tráfego Orgânico</option>
+                    </select>
+                </div>
             </div>
             <div class="row g-2 mb-4">
                 <div class="col-6">
@@ -47,7 +68,7 @@
                 </div>
             </div>
             <button type="submit" class="btn btn-primary fw-bold w-100 py-2 rounded-3 shadow-sm">
-                Continuar Cadastro <i class="bi bi-arrow-right ms-1"></i>
+                Enviar Cadastro para Análise <i class="bi bi-arrow-right ms-1"></i>
             </button>
         </form>
 

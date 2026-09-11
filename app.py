@@ -15,8 +15,9 @@ load_dotenv()
 from flask import (
     Flask, render_template, request, redirect, 
     url_for, flash, send_from_directory, send_file, 
-    abort, jsonify, session
+    abort, jsonify, session, make_response
 )
+
 from flask_login import login_required, current_user, login_user
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash
@@ -33,7 +34,7 @@ from extensions import db, login_manager, limiter
 from models import (
     Empresa, Usuario, Cliente, Documento, TipoServico, 
     ServicoCliente, Proposta, ItemProposta, ContratoRecorrente, 
-    Fatura, ParcelaFatura, ChamadoSuporte, MensagemChamado, CupomDesconto, ServicoCustoPadrao, ItemPropostaCusto, ContratoGerado, ServicoEtapaRastreio
+    Fatura, ParcelaFatura, ChamadoSuporte, MensagemChamado, CupomDesconto, ServicoCustoPadrao, ItemPropostaCusto, ContratoGerado, ServicoEtapaRastreio, ComissaoAfiliado, RepasseAfiliado
 )
 from auth.routes import auth_bp
 
@@ -387,56 +388,72 @@ def interceptar_bloqueio_assinatura():
 @app.route('/painel-afiliado', methods=['GET', 'POST'])
 @login_required
 def painel_afiliado():
-    if current_user.nivel_acesso != 'afiliado' and current_user.nivel_acesso != 'master':
+    if current_user.nivel_acesso != 'afiliado':
+        flash('Acesso restrito a parceiros afiliados.', 'danger')
         return redirect(url_for('index'))
 
+    # Pega o primeiro cupom ativo ou principal do parceiro
     cupom = CupomDesconto.query.filter_by(usuario_id=current_user.id).first()
     if not cupom:
-        flash('Nenhum registro de afiliado vinculado a esta conta.', 'danger')
-        return redirect(url_for('auth.logout'))
+        # Cria um cupom inicial caso não exista
+        codigo_sugerido = re.sub(r'[^A-Z0-9]', '', current_user.nome.split()[0].upper()) + "10"
+        cupom = CupomDesconto(
+            usuario_id=current_user.id,
+            codigo=codigo_sugerido,
+            percentual_desconto=10.0,
+            percentual_comissao=20.0,
+            ativo=False
+        )
+        db.session.add(cupom)
+        db.session.commit()
 
     if request.method == 'POST':
-        novo_codigo = re.sub(r'[^A-Z0-9]', '', request.form.get('codigo', '').upper().strip())
+        novo_codigo = request.form.get('codigo', '').strip().upper()
         chave_pix = request.form.get('chave_pix', '').strip()
         whatsapp = request.form.get('whatsapp', '').strip()
-        aceitou = request.form.get('aceitou_termos') == 'on'
+        rede_social = request.form.get('rede_social_principal', '').strip()
+        aceitou_termos = bool(request.form.get('aceitou_termos'))
 
-        if not aceitou and not cupom.aceitou_termos_afiliado:
-            flash('Você precisa aceitar os termos do programa de afiliados.', 'warning')
-            return redirect(url_for('painel_afiliado'))
+        # Validação de código duplicado se for alterado
+        if novo_codigo != cupom.codigo:
+            existente = CupomDesconto.query.filter_by(codigo=novo_codigo).first()
+            if existente:
+                flash('Este código de cupom já está em uso por outro parceiro.', 'danger')
+                return redirect(url_for('painel_afiliado'))
+            cupom.codigo = novo_codigo
 
-        # Checa se o novo código já existe em outro cupom
-        outro = CupomDesconto.query.filter(CupomDesconto.codigo == novo_codigo, CupomDesconto.id != cupom.id).first()
-        if outro:
-            flash(f'O código "{novo_codigo}" já está em uso por outro parceiro.', 'danger')
-            return redirect(url_for('painel_afiliado'))
-
-        cupom.codigo = novo_codigo
-        cupom.afiliado_chave_pix = chave_pix
-        cupom.afiliado_whatsapp = whatsapp
-        cupom.aceitou_termos_afiliado = True
-        cupom.data_aceite_termos = datetime.utcnow()
-        cupom.ativo = True  # Ativa o cupom para uso imediato
+        current_user.chave_pix = chave_pix
+        current_user.whatsapp = whatsapp
+        current_user.rede_social_principal = rede_social
+        
+        if aceitou_termos:
+            current_user.aceitou_termos_afiliado = True
+            current_user.data_aceite_termos_afiliado = datetime.utcnow()
+            # Só ativa se o Master já tiver aprovado o cadastro
+            if current_user.status_aprovacao == 'aprovado':
+                cupom.ativo = True
 
         db.session.commit()
-        flash('Seu cadastro foi salvo e seu link de indicação já está ativo!', 'success')
+        flash('Informações e dados de repasse atualizados com sucesso!', 'success')
         return redirect(url_for('painel_afiliado'))
 
-    # Cálculo financeiro de comissões
-    empresas_ativas = [e for e in cupom.empresas_indicadas if e.status_assinatura == 'ativo']
-    total_assinantes_ativos = len(empresas_ativas)
-    
-    # Comissão estimada mensal (20% sobre o valor da mensalidade paga pelos indicados)
-    faturamento_mensal_indicados = sum(e.valor_mensalidade or 39.90 for e in empresas_ativas)
-    comissao_recorrente_estimada = faturamento_mensal_indicados * (cupom.percentual_comissao / 100.0)
+    link_indicacao = url_for('auth.registro', ref=cupom.codigo, _external=True)
 
-    url_base = request.host_url.rstrip('/')
-    link_indicacao = f"{url_base}/auth/registro?ref={cupom.codigo}"
+    # Empresas indicadas que usaram o cupom do parceiro
+    empresas_indicadas = Empresa.query.filter_by(cupom_utilizado=cupom.codigo).all()
+    total_assinantes_ativos = sum(1 for e in empresas_indicadas if e.status_assinatura == 'ativo')
+    
+    # Cálculo de comissão estimada recorrente (20% sobre faturamento ativo)
+    comissao_recorrente_estimada = sum(
+        (e.valor_mensalidade or 39.90) * (cupom.percentual_comissao / 100.0)
+        for e in empresas_indicadas if e.status_assinatura == 'ativo'
+    )
 
     return render_template(
         'afiliados/painel.html',
         cupom=cupom,
         link_indicacao=link_indicacao,
+        empresas_indicadas=empresas_indicadas,
         total_assinantes_ativos=total_assinantes_ativos,
         comissao_recorrente_estimada=comissao_recorrente_estimada
     )
@@ -2134,43 +2151,67 @@ from models import CupomDesconto
 
 @app.route('/admin/master/cupons', methods=['GET', 'POST'])
 @login_required
-@master_required
 def admin_master_cupons():
+    if current_user.nivel_acesso != 'master':
+        flash('Acesso restrito ao Administrador Master.', 'danger')
+        return redirect(url_for('index'))
+
     if request.method == 'POST':
         codigo = request.form.get('codigo', '').strip().upper()
-        afiliado_nome = request.form.get('afiliado_nome', '').strip()
-        afiliado_email = request.form.get('afiliado_email', '').strip().lower()
-        afiliado_pix = request.form.get('afiliado_chave_pix', '').strip()
-        afiliado_zap = request.form.get('afiliado_whatsapp', '').strip()
-        desconto = float(request.form.get('percentual_desconto') or 0.0)
-        comissao = float(request.form.get('percentual_comissao') or 20.0)
-        limite = int(request.form.get('limite_usos') or 100)
-        dt_val = request.form.get('data_validade')
-        data_validade = datetime.strptime(dt_val, '%Y-%m-%d').date() if dt_val else None
+        perc_desc = float(request.form.get('percentual_desconto', 10.0))
+        perc_comissao = float(request.form.get('percentual_comissao', 20.0))
+        limite = int(request.form.get('limite_usos', 100))
+        val_str = request.form.get('data_validade')
+        usuario_id = request.form.get('usuario_id') or None
 
         if CupomDesconto.query.filter_by(codigo=codigo).first():
-            flash(f'O cupom "{codigo}" já existe no sistema.', 'danger')
-        else:
-            novo_cupom = CupomDesconto(
-                codigo=codigo,
-                afiliado_nome=afiliado_nome,
-                afiliado_email=afiliado_email,
-                afiliado_chave_pix=afiliado_pix,
-                afiliado_whatsapp=afiliado_zap,
-                percentual_desconto=desconto,
-                percentual_comissao=comissao,
-                limite_usos=limite,
-                data_validade=data_validade,
-                ativo=True
-            )
-            db.session.add(novo_cupom)
-            db.session.commit()
-            flash(f'Cupom "{codigo}" criado com sucesso para o afiliado {afiliado_nome}!', 'success')
+            flash('Já existe um cupom com este código.', 'warning')
+            return redirect(url_for('admin_master_cupons'))
 
+        novo_cupom = CupomDesconto(
+            usuario_id=int(usuario_id) if usuario_id else None,
+            codigo=codigo,
+            percentual_desconto=perc_desc,
+            percentual_comissao=perc_comissao,
+            limite_usos=limite,
+            data_validade=datetime.strptime(val_str, '%Y-%m-%d').date() if val_str else None,
+            ativo=True
+        )
+        db.session.add(novo_cupom)
+        db.session.commit()
+        flash(f'Cupom {codigo} criado com sucesso!', 'success')
         return redirect(url_for('admin_master_cupons'))
 
-    cupons = CupomDesconto.query.order_by(CupomDesconto.data_criacao.desc()).all()
-    return render_template('admin/master_cupons.html', cupons=cupons, hoje=date.today())
+    cupons = CupomDesconto.query.order_by(CupomDesconto.id.desc()).all()
+    parceiros = Usuario.query.filter_by(nivel_acesso='afiliado').all()
+
+    return render_template(
+        'admin/master_cupons.html',
+        cupons=cupons,
+        parceiros=parceiros,
+        hoje=date.today()
+    )
+
+@app.route('/admin/master/parceiro/<int:user_id>/moderar', methods=['POST'])
+@login_required
+def admin_moderar_parceiro(user_id):
+    if current_user.nivel_acesso != 'master':
+        return redirect(url_for('index'))
+
+    parceiro = Usuario.query.get_or_404(user_id)
+    decisao = request.form.get('status_aprovacao') # 'aprovado' ou 'rejeitado'
+    motivo = request.form.get('motivo_rejeicao', '')
+
+    parceiro.status_aprovacao = decisao
+    parceiro.motivo_rejeicao = motivo if decisao == 'rejeitado' else None
+
+    # Ativa ou desativa os cupons do parceiro
+    for c in parceiro.cupons:
+        c.ativo = (decisao == 'aprovado' and parceiro.aceitou_termos_afiliado)
+
+    db.session.commit()
+    flash(f'Parceiro {parceiro.nome} atualizado para {decisao}.', 'success')
+    return redirect(url_for('admin_master_cupons'))
 
 @app.route('/admin/master/cupons/<int:id>/status', methods=['POST'])
 @login_required
@@ -2181,36 +2222,192 @@ def admin_toggle_cupom(id):
     db.session.commit()
     flash(f'Status do cupom "{cupom.codigo}" alterado.', 'info')
     return redirect(url_for('admin_master_cupons'))
+@app.route('/admin/master/afiliados', methods=['GET'])
+@login_required
+def admin_master_afiliados():
+    if current_user.nivel_acesso != 'master':
+        flash('Acesso restrito.', 'danger')
+        return redirect(url_for('index'))
+    
+    cupons = CupomDesconto.query.all()
+    return render_template('admin/master_afiliados.html', cupons=cupons)
+
+@app.route('/admin/master/afiliado/<int:id>/status', methods=['POST'])
+@login_required
+def admin_alterar_status_afiliado(id):
+    if current_user.nivel_acesso != 'master':
+        return redirect(url_for('index'))
+    
+    cupom = CupomDesconto.query.get_or_404(id)
+    novo_status = request.form.get('status_aprovacao') # 'aprovado' ou 'rejeitado'
+    
+    cupom.status_aprovacao = novo_status
+    if novo_status == 'aprovado':
+        cupom.ativo = True
+    else:
+        cupom.ativo = False
+        cupom.motivo_rejeicao = request.form.get('motivo_rejeicao', '')
+        
+    db.session.commit()
+    flash(f'Status do afiliado {cupom.afiliado_nome} atualizado para {novo_status}.', 'success')
+    return redirect(url_for('admin_master_afiliados'))
+
+# -----------------------------------------------------------------------------
+# AUDITORIA DO PARCEIRO (DETALHE, HISTÓRICO DE CLIENTES E PARCELAS)
+# -----------------------------------------------------------------------------
+@app.route('/admin/master/parceiro/<int:id>/auditoria', methods=['GET'])
+@login_required
+def admin_auditoria_parceiro(id):
+    if current_user.nivel_acesso != 'master':
+        return redirect(url_for('index'))
+
+    parceiro = Usuario.query.get_or_404(id)
+    cupons = CupomDesconto.query.filter_by(usuario_id=parceiro.id).order_by(CupomDesconto.id.desc()).all()
+    codigos = [c.codigo for c in cupons]
+
+    # Empresas indicadas
+    empresas = Empresa.query.filter(Empresa.cupom_utilizado.in_(codigos)).all() if codigos else []
+
+    # Histórico financeiro
+    comissoes = ComissaoAfiliado.query.filter_by(usuario_id=parceiro.id).order_by(ComissaoAfiliado.id.desc()).all()
+    repasses = RepasseAfiliado.query.filter_by(usuario_id=parceiro.id).order_by(RepasseAfiliado.id.desc()).all()
+
+    saldo_liberado = sum(c.valor_comissao for c in comissoes if c.status == 'liberado')
+    total_ja_pago = sum(r.valor_total_pago for r in repasses)
+    total_usos_cupons = sum(c.usos_atuais or 0 for c in cupons)
+
+    # Link de indicação primário
+    cupom_primario = cupons[0].codigo if cupons else 'PADRAO'
+    link_indicacao = url_for('auth.registro', ref=cupom_primario, _external=True)
+
+    return render_template(
+        'admin/master_auditoria_parceiro.html',
+        parceiro=parceiro,
+        cupons=cupons,
+        empresas=empresas,
+        comissoes=comissoes,
+        repasses=repasses,
+        saldo_liberado=saldo_liberado,
+        total_ja_pago=total_ja_pago,
+        total_usos_cupons=total_usos_cupons,
+        link_indicacao=link_indicacao
+    )
+
+# -----------------------------------------------------------------------------
+# LIQUIDAR REPASSE COM ANEXO DE COMPROVANTE PIX
+# -----------------------------------------------------------------------------
+@app.route('/admin/master/parceiro/<int:id>/liquidar-repasse', methods=['POST'])
+@login_required
+def admin_liquidar_repasse(id):
+    if current_user.nivel_acesso != 'master':
+        return redirect(url_for('index'))
+
+    parceiro = Usuario.query.get_or_404(id)
+    mes_comp = request.form.get('mes_competencia', datetime.utcnow().strftime('%Y-%m'))
+    valor_pago = float(request.form.get('valor_pago', 0.0))
+    observacoes = request.form.get('observacoes', '')
+
+    # Upload do Comprovante PIX
+    nome_arquivo_salvo = None
+    arquivo = request.files.get('comprovante')
+    if arquivo and arquivo.filename:
+        ext = arquivo.filename.rsplit('.', 1)[-1].lower()
+        if ext in ['pdf', 'png', 'jpg', 'jpeg']:
+            nome_arquivo_salvo = f"repasse_afiliado_{parceiro.id}_{int(datetime.utcnow().timestamp())}.{ext}"
+            arquivo.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_arquivo_salvo))
+
+    novo_repasse = RepasseAfiliado(
+        usuario_id=parceiro.id,
+        mes_competencia=mes_comp,
+        valor_total_pago=valor_pago,
+        chave_pix_utilizada=parceiro.chave_pix,
+        arquivo_comprovante=nome_arquivo_salvo,
+        observacoes=observacoes
+    )
+    db.session.add(novo_repasse)
+    db.session.flush()
+
+    # Atualiza as comissões liberadas que foram pagas neste lote
+    comissoes_liberadas = ComissaoAfiliado.query.filter_by(usuario_id=parceiro.id, status='liberado').all()
+    for c in comissoes_liberadas:
+        c.status = 'pago'
+        c.data_pagamento = datetime.utcnow()
+        c.repasse_id = novo_repasse.id
+
+    novo_repasse.qtd_faturas_inclusas = len(comissoes_liberadas)
+    db.session.commit()
+
+    flash(f'Repasse de R$ {valor_pago:.2f} liquidado com sucesso para {parceiro.nome}!', 'success')
+    return redirect(url_for('admin_auditoria_parceiro', id=parceiro.id))
 
 # -----------------------------------------------------------------------------
 # ENDPOINT DE VALIDAÇÃO DE CUPOM NO CHECKOUT / CADASTRO
 # -----------------------------------------------------------------------------
 @app.route('/api/cupom/validar', methods=['POST'])
 def api_validar_cupom():
-    dados = request.get_json(silent=True) or {}
-    codigo = (dados.get('codigo') or '').strip().upper()
-    plano_nome = dados.get('plano', 'MENSAL').upper()
+    dados = request.get_json() or {}
+    codigo = str(dados.get('codigo', '')).strip().upper()
+    nome_plano = str(dados.get('plano', 'MENSAL')).upper()
 
     cupom = CupomDesconto.query.filter_by(codigo=codigo).first()
     if not cupom or not cupom.is_valido:
-        return jsonify({"valido": False, "mensagem": "Cupom inválido, expirado ou esgotado."}), 400
+        return jsonify({'valido': False, 'mensagem': 'Cupom inválido, esgotado ou inativo.'})
 
-    cfg = PLANOS_CONFIG.get('ANUAL' if 'ANUAL' in plano_nome else ('SEMESTRAL' if 'SEMESTRAL' in plano_nome else 'MENSAL'))
-    valor_original = float(cfg['valor_total'])
+    if cupom.parceiro and cupom.parceiro.status_aprovacao != 'aprovado':
+        return jsonify({'valido': False, 'mensagem': 'Este cupom de parceiro ainda está em moderação.'})
+
+    # Valores base dos planos
+    precos = {
+        'MENSAL': 39.90,
+        'SEMESTRAL': 209.40,
+        'ANUAL': 358.80
+    }
     
-    # Aplica o desconto proporcional
-    valor_desconto = (valor_original * (cupom.percentual_desconto / 100.0))
-    valor_final = max(1.0, round(valor_original - valor_desconto, 2))
+    chave = 'ANUAL' if 'ANUAL' in nome_plano else ('SEMESTRAL' if 'SEMESTRAL' in nome_plano else 'MENSAL')
+    valor_original = precos.get(chave, 39.90)
+    desconto = valor_original * (cupom.percentual_desconto / 100.0)
+    valor_final = round(valor_original - desconto, 2)
 
     return jsonify({
-        "valido": True,
-        "codigo": cupom.codigo,
-        "percentual": cupom.percentual_desconto,
-        "valor_original": valor_original,
-        "valor_final": valor_final,
-        "desconto_reais": round(valor_desconto, 2),
-        "mensagem": f"Cupom de {cupom.percentual_desconto}% aplicado com sucesso!"
+        'valido': True,
+        'codigo': cupom.codigo,
+        'desconto_percentual': cupom.percentual_desconto,
+        'valor_original': valor_original,
+        'valor_final': valor_final,
+        'mensagem': f'Cupom {cupom.codigo} aplicado! {cupom.percentual_desconto}% de desconto.'
     })
+
+@app.route('/admin/master/parceiro/<int:id>/criar-cupom', methods=['POST'])
+@login_required
+def admin_criar_cupom_parceiro(id):
+    if current_user.nivel_acesso != 'master':
+        return redirect(url_for('index'))
+
+    parceiro = Usuario.query.get_or_404(id)
+    codigo = (request.form.get('codigo') or '').strip().upper()
+    desconto = float(request.form.get('percentual_desconto', 10.0))
+    comissao = float(request.form.get('percentual_comissao', 20.0))
+    limite = int(request.form.get('limite_usos', 100))
+    meses_limite = int(request.form.get('meses_comissao_limite', 3))
+
+    if CupomDesconto.query.filter_by(codigo=codigo).first():
+        flash('Este código de cupom já existe no sistema.', 'warning')
+        return redirect(url_for('admin_auditoria_parceiro', id=parceiro.id))
+
+    novo_cupom = CupomDesconto(
+        usuario_id=parceiro.id,
+        codigo=codigo,
+        percentual_desconto=desconto,
+        percentual_comissao=comissao,
+        limite_usos=limite,
+        meses_comissao_limite=meses_limite,
+        ativo=True if parceiro.status_aprovacao == 'aprovado' else False
+    )
+    db.session.add(novo_cupom)
+    db.session.commit()
+
+    flash(f'Cupom {codigo} gerado e vinculado a {parceiro.nome} com sucesso!', 'success')
+    return redirect(url_for('admin_auditoria_parceiro', id=parceiro.id))
 
 # -----------------------------------------------------------------------------
 # FASE 3: GERADOR DE MINUTAS & CONTRATOS PERSONALIZADOS (app.py)

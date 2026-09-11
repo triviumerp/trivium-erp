@@ -21,18 +21,71 @@
     </nav>
 
     <div class="container py-4">
+
+        <!-- Mensagens Flash -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show border-0 shadow-sm mb-4" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <!-- ALERTA DE STATUS DE MODERAÇÃO / ANÁLISE -->
+        {% if current_user.status_aprovacao == 'pendente' %}
+        <div class="alert alert-warning border-0 shadow-sm rounded-4 p-4 mb-4">
+            <div class="d-flex align-items-center gap-3">
+                <i class="bi bi-clock-history fs-1 text-warning"></i>
+                <div>
+                    <h5 class="fw-bold text-dark mb-1">Cadastro em Análise de Segurança</h5>
+                    <p class="mb-0 small text-muted">
+                        Seu perfil de parceiro foi submetido e está sendo avaliado por nossa equipe de conformidade antifraude. Seus links de indicação e cupons serão ativados automaticamente após a aprovação.
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% elif current_user.status_aprovacao == 'rejeitado' %}
+        <div class="alert alert-danger border-0 shadow-sm rounded-4 p-4 mb-4">
+            <div class="d-flex align-items-center gap-3">
+                <i class="bi bi-exclamation-triangle-fill fs-1 text-danger"></i>
+                <div>
+                    <h5 class="fw-bold mb-1">Cadastro de Parceiro Não Aprovado</h5>
+                    <p class="mb-0 small">
+                        <b>Motivo informado:</b> {{ current_user.motivo_rejeicao or 'Inconformidade cadastral. Entre em contato com o suporte para mais detalhes.' }}
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Banner de Link e Cupom -->
         <div class="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-primary text-white">
             <div class="row align-items-center g-3">
                 <div class="col-lg-8">
-                    <span class="badge bg-white text-primary fw-bold mb-2">Seu Cupom Exclusivo: {{ cupom.codigo }}</span>
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="badge bg-white text-primary fw-bold">Cupom: {{ cupom.codigo }}</span>
+                        {% if cupom.is_valido and current_user.status_aprovacao == 'aprovado' %}
+                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Link Ativo</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark"><i class="bi bi-lock me-1"></i>Bloqueado (Pendente Moderação)</span>
+                        {% endif %}
+                    </div>
                     <h3 class="fw-bold mb-1">Compartilhe e Ganhe {{ cupom.percentual_comissao }}% Recorrente</h3>
                     <p class="mb-0 text-white-50 small">Seu indicado ganha {{ cupom.percentual_desconto }}% de desconto e você recebe comissão mensalmente enquanto ele continuar ativo.</p>
                 </div>
                 <div class="col-lg-4 text-lg-end">
-                    <button class="btn btn-light fw-bold text-primary px-4 py-2 shadow-sm" onclick="navigator.clipboard.writeText('{{ link_indicacao }}'); alert('Link de afiliado copiado!');">
+                    {% if current_user.status_aprovacao == 'aprovado' and cupom.is_valido %}
+                    <button class="btn btn-light fw-bold text-primary px-4 py-2 shadow-sm" onclick="navigator.clipboard.writeText('{{ link_indicacao }}'); alert('Link de afiliado copiado com sucesso!');">
                         <i class="bi bi-clipboard me-1"></i> Copiar Meu Link
                     </button>
+                    {% else %}
+                    <button class="btn btn-light fw-bold text-muted px-4 py-2 shadow-sm" disabled title="Aguardando aprovação do cadastro">
+                        <i class="bi bi-lock me-1"></i> Link Indisponível
+                    </button>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -43,7 +96,7 @@
                 <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
                     <span class="small text-muted fw-bold">TOTAL DE CADASTROS</span>
                     <h3 class="fw-bold text-dark my-1">{{ cupom.usos_atuais }}</h3>
-                    <small class="text-muted">Empresas que usaram seu código</small>
+                    <small class="text-muted">Empresas que utilizaram seu cupom</small>
                 </div>
             </div>
             <div class="col-md-4">
@@ -55,30 +108,34 @@
             </div>
             <div class="col-md-4">
                 <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                    <span class="small text-muted fw-bold">COMISSÃO MENSAL ESTIMADA</span>
+                    <span class="small text-muted fw-bold">COMISSÃO RECORRENTE ESTIMADA</span>
                     <h3 class="fw-bold text-success my-1">R$ {{ "%.2f"|format(comissao_recorrente_estimada) }}</h3>
                     <small class="text-muted">Repasse via Pix todo dia 10</small>
                 </div>
             </div>
         </div>
 
-        <!-- Formulário de Dados de Recebimento -->
-        <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+        <!-- Formulário de Dados Cadastrais & Repasse PIX -->
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
             <h5 class="fw-bold text-dark mb-3"><i class="bi bi-gear-wide-connected text-primary me-2"></i>Configuração da Conta & Repasse PIX</h5>
             
             <form id="formAfiliado" method="POST">
                 <div class="row g-3 mb-3">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label small fw-bold">Código do Seu Cupom *</label>
                         <input type="text" name="codigo" class="form-control text-uppercase font-monospace" value="{{ cupom.codigo }}" required>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label small fw-bold">Chave PIX para Recebimento *</label>
-                        <input type="text" name="chave_pix" class="form-control" placeholder="CPF, E-mail, Celular..." value="{{ cupom.afiliado_chave_pix or '' }}" required>
+                        <input type="text" name="chave_pix" class="form-control" placeholder="CPF, E-mail, Celular..." value="{{ current_user.chave_pix or '' }}" required>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label small fw-bold">WhatsApp de Contato *</label>
-                        <input type="text" name="whatsapp" class="form-control" placeholder="(11) 99999-9999" value="{{ cupom.afiliado_whatsapp or '' }}" required>
+                        <input type="text" name="whatsapp" class="form-control" placeholder="(11) 99999-9999" value="{{ current_user.whatsapp or '' }}" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Rede Social / Canal Principal *</label>
+                        <input type="text" name="rede_social_principal" class="form-control" placeholder="Instagram, YouTube, Site..." value="{{ current_user.rede_social_principal or '' }}" required>
                     </div>
                 </div>
 
@@ -93,23 +150,23 @@
                     <div class="modal-dialog modal-dialog-centered modal-lg">
                         <div class="modal-content border-0 shadow rounded-4">
                             <div class="modal-header bg-light">
-                                <h5 class="modal-title fw-bold text-dark"><i class="bi bi-file-text text-primary me-2"></i>Regras do Programa de Afiliados</h5>
+                                <h5 class="modal-title fw-bold text-dark"><i class="bi bi-file-text text-primary me-2"></i>Regras do Programa de Parceiros</h5>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                             </div>
                             <div class="modal-body p-4 small text-muted">
                                 <h6 class="fw-bold text-dark">1. Comissionamento Recorrente</h6>
-                                <p>Você receberá <b>{{ cupom.percentual_comissao }}%</b> sobre o valor líquido pago de cada mensalidade de clientes indicados que utilizarem seu link ou cupom.</p>
+                                <p>Você receberá <b>{{ cupom.percentual_comissao }}%</b> sobre o valor líquido pago de cada mensalidade das empresas indicadas que se cadastrarem com seu cupom ou link.</p>
 
                                 <h6 class="fw-bold text-dark">2. Regra de Pagamento</h6>
-                                <p>Os repasses são calculados no fechamento de cada mês e depositados via <b>PIX</b> na chave cadastrada até o dia 10 do mês subsequente.</p>
+                                <p>Os repasses são consolidados no fechamento de cada mês e creditados via <b>PIX</b> na chave cadastrada até o dia 10 do mês subsequente.</p>
 
-                                <h6 class="fw-bold text-dark">3. Cancelamentos e Reembolsos</h6>
-                                <p>Comissões são computadas somente para assinaturas confirmadas e ativas. Inadimplência ou estornos suspendem a comissão do ciclo correspondente.</p>
+                                <h6 class="fw-bold text-dark">3. Cancelamentos e Retenção Antifraude</h6>
+                                <p>Comissões são apuradas exclusivamente para faturas pagas e sem contestação (chargeback). Inadimplências ou cancelamentos suspendem o repasse do ciclo correspondente.</p>
 
                                 <div class="form-check p-3 bg-light rounded-3 border mt-3">
-                                    <input class="form-check-input" type="checkbox" name="aceitou_termos" id="chkTermos" {% if cupom.aceitou_termos_afiliado %}checked{% endif %} required>
+                                    <input class="form-check-input" type="checkbox" name="aceitou_termos" id="chkTermos" {% if current_user.aceitou_termos_afiliado %}checked{% endif %} required>
                                     <label class="form-check-label fw-bold text-dark" for="chkTermos">
-                                        Li e concordo com as regras e condições de comissionamento do Trivium ERP.
+                                        Li e concordo com os termos e regras de comissionamento do Trivium ERP.
                                     </label>
                                 </div>
                             </div>
@@ -124,6 +181,60 @@
                 </div>
             </form>
         </div>
+
+        <!-- Tabela de Empresas Indicadas -->
+        <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+            <h5 class="fw-bold text-dark mb-3"><i class="bi bi-buildings text-primary me-2"></i>Empresas Cadastradas com Seu Cupom</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 small">
+                    <thead class="table-light">
+                        <tr>
+                            <th>EMPRESA INDICADA</th>
+                            <th>DATA DE CADASTRO</th>
+                            <th>STATUS DO PLANO</th>
+                            <th>PLANO</th>
+                            <th class="text-end pe-3">COMISSÃO RECORRENTE</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for emp in empresas_indicadas %}
+                        <tr>
+                            <td>
+                                <strong class="text-dark d-block">{{ emp.razao_social or emp.nome_fantasia }}</strong>
+                                <span class="text-muted">{{ emp.email or '--' }}</span>
+                            </td>
+                            <td>{{ emp.data_criacao.strftime('%d/%m/%Y') if emp.data_criacao else '--' }}</td>
+                            <td>
+                                {% if emp.status_assinatura == 'ativo' %}
+                                    <span class="badge bg-success">Assinatura Ativa</span>
+                                {% elif emp.status_assinatura == 'trial' %}
+                                    <span class="badge bg-warning text-dark">Em Período de Testes</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Inadimplente / Bloqueado</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ emp.plano or 'Plano Flex' }}</td>
+                            <td class="text-end pe-3">
+                                {% if emp.status_assinatura == 'ativo' %}
+                                    {% set val_comissao = (emp.valor_mensalidade or 39.90) * (cupom.percentual_comissao / 100.0) %}
+                                    <span class="fw-bold text-success">R$ {{ "%.2f"|format(val_comissao) }}/mês</span>
+                                {% else %}
+                                    <span class="text-muted">R$ 0,00</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-muted">
+                                Nenhuma empresa cadastrada pelo seu link até o momento.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -135,7 +246,7 @@
     function submeterFormulario() {
         const chk = document.getElementById('chkTermos');
         if (!chk.checked) {
-            alert('Você precisa marcar a caixa de aceite dos termos.');
+            alert('Você precisa aceitar os termos do programa de parceiros.');
             return;
         }
         document.getElementById('formAfiliado').submit();

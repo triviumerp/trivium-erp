@@ -31,6 +31,8 @@
         {% endwith %}
 
         <form method="POST" id="formRegistro">
+            <!-- Input Oculto de Cupom / Indicação -->
+            <input type="hidden" name="cupom_indicacao" value="{{ cupom_ref or request.args.get('ref', '') }}">
             <!-- SELETOR PJ / PF -->
             <div class="mb-3">
                 <label class="form-label small fw-bold text-muted d-block">Tipo de Perfil</label>
