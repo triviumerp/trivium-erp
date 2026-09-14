@@ -98,345 +98,350 @@
                                     placeholder="000.000.000-00">
                             </div>
 
-                            <!-- CAMPOS COMUNS (CONTATO) -->
+                            <!-- CONTATOS -->
                             <div class="col-md-6">
                                 <label class="form-label small fw-bold text-dark">Telefone / WhatsApp *</label>
-                                <input type="text" name="telefone" class="form-control" value="{{ perfil.telefone or '' }}" required placeholder="(11) 99999-9999">
+                                <input type="text" name="telefone" class="form-control" value="{{ perfil.telefone or '' }}" required>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label small fw-bold text-dark">E-mail de Contato / Financeiro *</label>
-                                <input type="email" name="email" class="form-control" value="{{ perfil.email or '' }}" required placeholder="contato@empresa.com.br">
+                                <label class="form-label small fw-bold text-dark">E-mail Comercial *</label>
+                                <input type="email" name="email" class="form-control" value="{{ perfil.email or '' }}" required>
                             </div>
-                        </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-dark">Site Oficial / Portfólio</label>
+                                <input type="text" name="site" class="form-control" value="{{ perfil.site or '' }}" placeholder="www.minhaempresa.com.br">
+                            </div>
 
-                        <hr class="my-4 text-muted">
+                            <hr class="my-4 text-muted">
 
-                        <!-- 2. ENDEREÇO ESTRUTURADO COM BUSCA AUTOMÁTICA DE CEP -->
-                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-geo-alt text-primary me-2"></i>Endereço da Sede</h6>
-                        <div class="row g-3 mb-4">
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold">CEP</label>
+                            <!-- ENDEREÇO ESTRUTURADO COM VIA CEP -->
+                            <h6 class="fw-bold text-dark mb-2"><i class="bi bi-geo-alt text-primary me-2"></i>Endereço Comercial</h6>
+                            
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold text-dark">CEP</label>
                                 <div class="input-group">
-                                    <input type="text" name="cep" id="cep_empresa" class="form-control" placeholder="00000-000" maxlength="9" value="{{ perfil.cep or '' }}">
-                                    <button class="btn btn-outline-secondary" type="button" id="btn-busca-cep-empresa" onclick="buscarCEPEmpresa()" title="Buscar endereço pelo CEP">
-                                        <i class="bi bi-search" id="icone-busca-cep-empresa"></i>
-                                    </button>
+                                    <input type="text" name="cep" id="cep_empresa" class="form-control" value="{{ perfil.cep or '' }}" maxlength="9" placeholder="00000-000">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="buscarCepEmpresa()"><i class="bi bi-search"></i></button>
                                 </div>
-                                <small id="cep-empresa-status" class="text-muted d-block mt-1" style="font-size: 0.75rem;"></small>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold">Logradouro (Rua, Av, etc)</label>
+                            <div class="col-md-7">
+                                <label class="form-label small fw-bold text-dark">Logradouro (Rua, Avenida, etc.)</label>
                                 <input type="text" name="logradouro" id="logradouro_empresa" class="form-control" value="{{ perfil.logradouro or '' }}">
                             </div>
                             <div class="col-md-2">
-                                <label class="form-label small fw-bold">Número</label>
+                                <label class="form-label small fw-bold text-dark">Número</label>
                                 <input type="text" name="numero" id="numero_empresa" class="form-control" value="{{ perfil.numero or '' }}">
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label small fw-bold">Complemento</label>
-                                <input type="text" name="complemento" id="complemento_empresa" class="form-control" placeholder="Sala, Bloco, Galpão..." value="{{ perfil.complemento or '' }}">
+                                <label class="form-label small fw-bold text-dark">Complemento</label>
+                                <input type="text" name="complemento" id="complemento_empresa" class="form-control" value="{{ perfil.complemento or '' }}" placeholder="Sala, Andar, Galpão...">
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label small fw-bold">Bairro</label>
+                                <label class="form-label small fw-bold text-dark">Bairro</label>
                                 <input type="text" name="bairro" id="bairro_empresa" class="form-control" value="{{ perfil.bairro or '' }}">
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label small fw-bold">Cidade</label>
+                                <label class="form-label small fw-bold text-dark">Cidade</label>
                                 <input type="text" name="cidade" id="cidade_empresa" class="form-control" value="{{ perfil.cidade or '' }}">
                             </div>
                             <div class="col-md-1">
-                                <label class="form-label small fw-bold">UF</label>
-                                <input type="text" name="estado" id="estado_empresa" class="form-control text-uppercase" maxlength="2" placeholder="SP" value="{{ perfil.estado or '' }}">
+                                <label class="form-label small fw-bold text-dark">UF</label>
+                                <input type="text" name="estado" id="estado_empresa" class="form-control text-uppercase" maxlength="2" value="{{ perfil.estado or '' }}">
                             </div>
-                        </div>
 
-                        <hr class="my-4 text-muted">
+                            <hr class="my-4 text-muted">
 
-                        <!-- 3. IDENTIDADE VISUAL & WHITE-LABEL -->
-                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-palette text-primary me-2"></i>Personalização Visual & Logotipo</h6>
-                        <div class="row g-3 align-items-center mb-4">
+                            <!-- PERSONALIZAÇÃO VISUAL (WHITE-LABEL) -->
+                            <h6 class="fw-bold text-dark mb-2"><i class="bi bi-palette text-primary me-2"></i>Personalização Visual (White-label)</h6>
+                            
                             <div class="col-md-6">
-                                <label class="form-label small fw-bold">Logotipo Oficial (PNG, JPG, WEBP)</label>
-                                <input type="file" name="logo" class="form-control" accept="image/*">
-                                <small class="text-muted d-block mt-1">Recomendado formato horizontal com fundo transparente.</small>
-                            </div>
-                            <div class="col-md-6 text-center">
+                                <label class="form-label small fw-bold text-dark">Logotipo da Empresa</label>
+                                <input type="file" name="logo" class="form-control" accept="image/png, image/jpeg, image/webp">
+                                <small class="text-muted d-block mt-1">Recomendado: PNG com fundo transparente.</small>
                                 {% if perfil.logo_filename %}
-                                    <div class="p-2 border rounded-3 bg-light d-inline-block">
-                                        <img src="{{ url_for('download_file', filename=perfil.logo_filename) }}" alt="Logo Empresa" style="max-height: 50px; max-width: 180px; object-fit: contain;">
-                                    </div>
-                                {% else %}
-                                    <div class="p-3 border rounded-3 bg-light text-muted small">
-                                        <i class="bi bi-image fs-4 d-block mb-1 text-secondary"></i> Nenhum logo personalizado anexado
-                                    </div>
+                                <div class="mt-2 p-2 bg-light border rounded text-center">
+                                    <img src="{{ url_for('download_file', filename=perfil.logo_filename) }}" alt="Logo" style="max-height: 50px; max-width: 100%;">
+                                </div>
                                 {% endif %}
                             </div>
+
                             <div class="col-md-6">
-                                <label class="form-label small fw-bold">Cor Primária do Sistema & Propostas</label>
-                                <div class="d-flex align-items-center gap-2">
+                                <label class="form-label small fw-bold text-dark">Cor Primária do Sistema & PDF</label>
+                                <div class="d-flex align-items-center gap-3 mt-1">
                                     <input type="color" name="cor_primaria" class="form-control form-control-color" value="{{ perfil.cor_primaria or '#1e3a8a' }}">
-                                    <span class="small text-muted">Aplica-se ao cabeçalho dos relatórios e PDFs.</span>
+                                    <span class="small text-muted">Esta cor define os títulos dos seus relatórios em PDF.</span>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="text-end">
-                            <button type="submit" class="btn btn-primary fw-bold px-4">Salvar Alterações Cadastrais</button>
+                        <div class="text-end mt-4 pt-3 border-top">
+                            <button type="submit" class="btn btn-primary fw-bold px-4">Salvar Dados da Empresa</button>
                         </div>
                     </form>
                 </div>
             </div>
 
-            <!-- ABA 2: MINHA CONTA & SENHA (USUÁRIO) -->
+            <!-- ABA 2: MINHA CONTA & SENHA -->
             <div class="tab-pane fade" id="tab-usuario" role="tabpanel">
                 <div class="card-custom p-4">
-                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-shield-lock text-primary me-2"></i>Credenciais de Acesso</h5>
-
+                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-shield-lock text-primary me-2"></i>Segurança & Dados de Acesso</h5>
+                    
                     <form method="POST" action="{{ url_for('perfil_empresa') }}">
                         <input type="hidden" name="form_type" value="dados_usuario">
 
                         <div class="row g-3 mb-4">
                             <div class="col-md-6">
-                                <label class="form-label small fw-bold">Nome do Usuário *</label>
+                                <label class="form-label small fw-bold text-dark">Seu Nome</label>
                                 <input type="text" name="nome_usuario" class="form-control" value="{{ current_user.nome }}" required>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label small fw-bold">E-mail de Login *</label>
+                                <label class="form-label small fw-bold text-dark">E-mail de Login</label>
                                 <input type="email" name="email_login" class="form-control" value="{{ current_user.email }}" required>
                             </div>
                         </div>
 
-                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-key text-secondary me-2"></i>Alterar Senha de Acesso</h6>
-                        <div class="row g-3 mb-4">
+                        <hr class="my-4 text-muted">
+                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-key text-primary me-2"></i>Alterar Senha de Acesso</h6>
+
+                        <div class="row g-3">
                             <div class="col-md-4">
-                                <label class="form-label small fw-bold">Senha Atual</label>
+                                <label class="form-label small fw-bold text-dark">Senha Atual</label>
                                 <input type="password" name="senha_atual" class="form-control" placeholder="••••••••">
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label small fw-bold">Nova Senha</label>
-                                <input type="password" name="nova_senha" class="form-control" placeholder="Nova senha">
-                                <small class="text-muted d-block mt-1" style="font-size: 0.72rem;">
-                                    Inclua símbolos como <code>@</code>, <code>#</code>, <code>$</code> ou <code>!</code> para maior segurança.
-                                </small>
+                                <label class="form-label small fw-bold text-dark">Nova Senha</label>
+                                <input type="password" name="nova_senha" class="form-control" placeholder="Mínimo 8 caracteres">
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label small fw-bold">Confirmar Nova Senha</label>
-                                <input type="password" name="confirma_senha" class="form-control" minlength="4" placeholder="Repita a senha">
+                                <label class="form-label small fw-bold text-dark">Confirmar Nova Senha</label>
+                                <input type="password" name="confirma_senha" class="form-control" placeholder="Repita a nova senha">
                             </div>
                         </div>
 
-                        <div class="text-end">
-                            <button type="submit" class="btn btn-primary fw-bold px-4">Atualizar Credenciais</button>
+                        <div class="text-end mt-4 pt-3 border-top">
+                            <button type="submit" class="btn btn-primary fw-bold px-4">Atualizar Meus Dados</button>
                         </div>
                     </form>
                 </div>
             </div>
 
-            <!-- ABA 3: ASSINATURA, STATUS & CHECKOUT NATIVO -->
+            <!-- ABA 3: ASSINATURA & PLANOS COM CHECKOUT INTEGRADO -->
             <div class="tab-pane fade" id="tab-pagamento" role="tabpanel">
-                <div class="card-custom p-4 mb-4">
+                
+                <!-- CARD STATUS DA ASSINATURA ATUALIZADO -->
+                <div class="card border-0 shadow-sm p-4 rounded-4 bg-white mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-credit-card-2-back text-primary me-2"></i>Status da Assinatura</h5>
-                        <div>
-                            {% if perfil.status_assinatura == 'ativo' %}
-                                <span class="badge bg-success px-3 py-2 fs-6"><i class="bi bi-check-circle me-1"></i>Assinatura Ativa</span>
-                            {% elif perfil.status_assinatura == 'trial' %}
-                                <span class="badge bg-warning text-dark px-3 py-2 fs-6"><i class="bi bi-clock-history me-1"></i>Período de Testes</span>
-                            {% else %}
-                                <span class="badge bg-danger px-3 py-2 fs-6"><i class="bi bi-exclamation-triangle me-1"></i>Acesso Pendente</span>
-                            {% endif %}
-                        </div>
+                        <h5 class="fw-bold text-dark mb-0">
+                            <i class="bi bi-credit-card-2-front text-primary me-2"></i>Status da Assinatura
+                        </h5>
+                        {% if perfil.status_assinatura == 'trial' %}
+                            <span class="badge bg-warning text-dark px-3 py-2 fw-bold">
+                                <i class="bi bi-clock-history me-1"></i>Período de Testes ({{ perfil.dias_restantes_trial }} dias restantes)
+                            </span>
+                        {% elif perfil.status_assinatura == 'ativo' %}
+                            <span class="badge bg-success px-3 py-2 fw-bold">
+                                <i class="bi bi-check-circle me-1"></i>Assinatura Ativa
+                            </span>
+                        {% else %}
+                            <span class="badge bg-danger px-3 py-2 fw-bold">
+                                <i class="bi bi-x-circle me-1"></i>Acesso Suspenso
+                            </span>
+                        {% endif %}
                     </div>
 
-                    <div class="row g-3 bg-light rounded-3 p-3 border mb-4">
-                        <div class="col-sm-6 col-md-3">
-                            <span class="text-muted small d-block">Plano Atual:</span>
-                            <strong class="text-dark">{{ perfil.plano or 'Plano Flex' }}</strong>
-                        </div>
-                        <div class="col-sm-6 col-md-3">
-                            <span class="text-muted small d-block">Valor Contratado:</span>
-                            <strong class="text-success">R$ {{ "%.2f"|format(perfil.valor_mensalidade or 39.90) }}/mês</strong>
-                        </div>
-                        <div class="col-sm-6 col-md-3">
-                            <span class="text-muted small d-block">Próximo Vencimento:</span>
-                            <strong class="text-dark">
-                                {{ perfil.data_vencimento.strftime('%d/%m/%Y') if perfil.data_vencimento else 'Em aberto' }}
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Plano Atual:</small>
+                            <strong class="text-dark fs-6">
+                                {% if perfil.status_assinatura == 'trial' %}
+                                    Período de Testes (Trial)
+                                {% else %}
+                                    {{ perfil.plano or 'Plano Flex' }}
+                                {% endif %}
                             </strong>
                         </div>
-                        <div class="col-sm-6 col-md-3">
-                            <span class="text-muted small d-block">Forma de Pagamento:</span>
-                            <strong class="text-primary">{{ perfil.forma_pagamento_asaas or 'Pix / Cartão' }}</strong>
+
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Valor Contratado:</small>
+                            <strong class="text-success fs-6">
+                                {% if perfil.status_assinatura == 'trial' %}
+                                    R$ 0,00 (Gratuito)
+                                {% else %}
+                                    R$ {{ "%.2f"|format(perfil.valor_mensalidade or 0.0) }}/mês
+                                {% endif %}
+                            </strong>
+                        </div>
+
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">
+                                {% if perfil.status_assinatura == 'trial' %}
+                                    Término do Trial (Bloqueio):
+                                {% else %}
+                                    Próximo Vencimento:
+                                {% endif %}
+                            </small>
+                            <strong class="text-dark fs-6">
+                                {{ perfil.data_vencimento.strftime('%d/%m/%Y') if perfil.data_vencimento else 'Não definido' }}
+                            </strong>
+                        </div>
+
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Forma de Pagamento:</small>
+                            <strong class="text-primary fs-6">
+                                {{ perfil.forma_pagamento_asaas or 'Pix / Cartão' }}
+                            </strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GRADE DE PLANOS COM MODAL DE CHECKOUT -->
+                <h5 class="fw-bold text-dark mb-3">Escolha ou Altere o Ciclo da sua Assinatura</h5>
+                
+                <div class="row g-3 mb-4">
+                    <!-- PLANO MENSAL -->
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm p-4 rounded-4 bg-white h-100 d-flex flex-column justify-content-between">
+                            <div>
+                                <span class="badge bg-light text-secondary border fw-bold mb-2">Mensal</span>
+                                <h4 class="fw-bold text-dark mb-1">Plano Flex</h4>
+                                <p class="text-muted small">Sem fidelidade, cancele quando quiser.</p>
+                                <div class="d-flex align-items-baseline gap-1 mb-3">
+                                    <h3 class="fw-bold text-dark mb-0">R$ 39,90</h3>
+                                    <span class="text-muted small">/mês</span>
+                                </div>
+                                <ul class="list-unstyled small text-muted mb-4">
+                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Acesso completo a todos os módulos</li>
+                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Emissão ilimitada de propostas em PDF</li>
+                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Controle financeiro & parcelamento</li>
+                                </ul>
+                            </div>
+                            <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2 rounded-3" onclick="abrirCheckoutPerfil('MENSAL', 39.90, 1, 'R$ 39,90/mês')">
+                                Contratar Mensal
+                            </button>
                         </div>
                     </div>
 
-                    <!-- OPÇÕES DE PLANOS -->
-                    <h6 class="fw-bold text-dark mb-3">Escolha o Ciclo de Assinatura</h6>
-                    <div class="row g-3">
-                        <!-- PLANO MENSAL -->
-                        <div class="col-lg-4">
-                            <div class="border rounded-4 p-4 h-100 d-flex flex-column justify-content-between bg-white shadow-sm">
-                                <div>
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge bg-light text-secondary border px-3 py-1">Mensal</span>
-                                    </div>
-                                    <h5 class="fw-bold text-dark mb-1">Plano Flex</h5>
-                                    <p class="text-muted small">Sem fidelidade, cancele quando quiser.</p>
-                                    
-                                    <div class="my-3 pb-3 border-bottom">
-                                        <span class="display-6 fw-bold text-dark">R$ 39,90</span>
-                                        <span class="text-muted small">/mês</span>
-                                        <div class="small text-muted mt-1">Cobrança mensal recorrente</div>
-                                    </div>
-
-                                    <ul class="list-unstyled small text-muted mb-4 space-y-2">
-                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Acesso completo a todos os módulos</li>
-                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Emissão ilimitada de propostas e OS</li>
-                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Suporte técnico padrão</li>
-                                    </ul>
+                    <!-- PLANO SEMESTRAL -->
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm p-4 rounded-4 bg-white h-100 d-flex flex-column justify-content-between">
+                            <div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle fw-bold">Semestral</span>
+                                    <span class="badge bg-success-subtle text-success small fw-bold">Economize 12%</span>
                                 </div>
-                                <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2" onclick="abrirCheckoutModal('MENSAL', 39.90, 1, 'R$ 39,90/mês')">
-                                    <i class="bi bi-arrow-repeat me-1"></i> Assinar Mensal
-                                </button>
+                                <h4 class="fw-bold text-dark mb-1">Plano Semestral</h4>
+                                <p class="text-muted small">Maior comodidade e economia semestral.</p>
+                                <div class="d-flex align-items-baseline gap-1 mb-1">
+                                    <h3 class="fw-bold text-dark mb-0">R$ 34,90</h3>
+                                    <span class="text-muted small">/mês</span>
+                                </div>
+                                <small class="text-success fw-bold d-block mb-3">Total de R$ 209,40 em até 6x</small>
+                                <ul class="list-unstyled small text-muted mb-4">
+                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Tudo do Plano Flex</li>
+                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Cobrança única a cada 6 meses</li>
+                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Prioridade no suporte técnico</li>
+                                </ul>
                             </div>
+                            <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2 rounded-3" onclick="abrirCheckoutPerfil('SEMESTRAL', 209.40, 6, '6x de R$ 34,90')">
+                                Contratar Semestral
+                            </button>
                         </div>
+                    </div>
 
-                        <!-- PLANO SEMESTRAL -->
-                        <div class="col-lg-4">
-                            <div class="border rounded-4 p-4 h-100 d-flex flex-column justify-content-between bg-white shadow-sm position-relative">
-                                <div>
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle px-3 py-1">Semestral</span>
-                                        <span class="badge bg-success-subtle text-success small">Economize 12%</span>
-                                    </div>
-                                    <h5 class="fw-bold text-dark mb-1">Plano Semestral</h5>
-                                    <p class="text-muted small">Maior comodidade e economia semestral.</p>
-                                    
-                                    <div class="my-3 pb-3 border-bottom">
-                                        <span class="display-6 fw-bold text-dark">R$ 34,90</span>
-                                        <span class="text-muted small">/mês</span>
-                                        <div class="small text-muted mt-1">Total de R$ 209,40 em até <strong>6x sem juros</strong></div>
-                                    </div>
-
-                                    <ul class="list-unstyled small text-muted mb-4 space-y-2">
-                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Tudo do Plano Flex</li>
-                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Cobrança única a cada 6 meses</li>
-                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Prioridade no atendimento</li>
-                                    </ul>
+                    <!-- PLANO ANUAL -->
+                    <div class="col-md-4">
+                        <div class="card border-primary shadow p-4 rounded-4 bg-white h-100 d-flex flex-column justify-content-between border-2 position-relative">
+                            <span class="position-absolute top-0 end-0 translate-middle-y me-3 badge bg-primary px-3 py-1 fw-bold shadow-sm">
+                                <i class="bi bi-star-fill me-1"></i> Mais Vantajoso
+                            </span>
+                            <div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge bg-primary fw-bold">Anual Founder</span>
+                                    <span class="badge bg-success-subtle text-success small fw-bold">Economize 25%</span>
                                 </div>
-                                <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2" onclick="abrirCheckoutModal('SEMESTRAL', 209.40, 6, '6x de R$ 34,90')">
-                                    <i class="bi bi-credit-card me-1"></i> Assinar Semestral
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- PLANO ANUAL -->
-                        <div class="col-lg-4">
-                            <div class="border border-2 border-primary rounded-4 p-4 h-100 d-flex flex-column justify-content-between bg-white shadow position-relative">
-                                <span class="position-absolute top-0 end-50 translate-middle-y badge bg-primary px-3 py-2 rounded-pill shadow-sm" style="transform: translate(50%, -50%);">
-                                    <i class="bi bi-star-fill me-1"></i> Mais Vantajoso
-                                </span>
-                                <div>
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge bg-primary px-3 py-1">Anual Founder</span>
-                                        <span class="badge bg-success-subtle text-success small">Economize 25%</span>
-                                    </div>
-                                    <h5 class="fw-bold text-primary mb-1">Plano Anual</h5>
-                                    <p class="text-muted small">Máxima economia com acesso anual garantido.</p>
-                                    
-                                    <div class="my-3 pb-3 border-bottom">
-                                        <span class="display-6 fw-bold text-primary">R$ 29,90</span>
-                                        <span class="text-muted small">/mês</span>
-                                        <div class="small text-muted mt-1">Total de R$ 358,80 em até <strong>12x sem juros</strong></div>
-                                    </div>
-
-                                    <ul class="list-unstyled small text-muted mb-4 space-y-2">
-                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Acesso anual completo e ininterrupto</li>
-                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>White-label com logotipo personalizado</li>
-                                        <li class="mb-2"><i class="bi bi-check2 text-success me-2 fw-bold"></i>Suporte VIP prioritário</li>
-                                    </ul>
+                                <h4 class="fw-bold text-primary mb-1">Plano Anual</h4>
+                                <p class="text-muted small">Máxima economia com acesso ininterrupto.</p>
+                                <div class="d-flex align-items-baseline gap-1 mb-1">
+                                    <h3 class="fw-bold text-primary mb-0">R$ 29,90</h3>
+                                    <span class="text-muted small">/mês</span>
                                 </div>
-                                <button type="button" class="btn btn-primary fw-bold w-100 py-2 shadow-sm" onclick="abrirCheckoutModal('ANUAL', 358.80, 12, '12x de R$ 29,90')">
-                                    <i class="bi bi-lightning-charge-fill me-1"></i> Assinar Anual
-                                </button>
+                                <small class="text-primary fw-bold d-block mb-3">Total de R$ 358,80 em até 12x</small>
+                                <ul class="list-unstyled small text-muted mb-4">
+                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-primary me-2"></i>Acesso anual ininterrupto</li>
+                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-primary me-2"></i>White-label com logotipo e cores</li>
+                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-primary me-2"></i>Suporte VIP Prioritário</li>
+                                </ul>
                             </div>
+                            <button type="button" class="btn btn-primary fw-bold w-100 py-2 rounded-3 shadow-sm" onclick="abrirCheckoutPerfil('ANUAL', 358.80, 12, '12x de R$ 29,90')">
+                                Contratar Anual
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- ABA 4: GESTÃO DE USUÁRIOS & EQUIPE -->
+            <!-- ABA 4: USUÁRIOS & EQUIPE (PERMISSÕES MODULARES) -->
             <div class="tab-pane fade" id="tab-equipe" role="tabpanel">
                 <div class="card-custom p-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
-                            <h5 class="fw-bold text-dark mb-0"><i class="bi bi-people text-primary me-2"></i>Usuários da Conta</h5>
-                            <small class="text-muted">Cadastre operadores e gerencie permissões de acesso aos módulos.</small>
+                            <h5 class="fw-bold text-dark mb-0"><i class="bi bi-people text-primary me-2"></i>Equipe & Permissões</h5>
+                            <p class="text-muted small mb-0">Gerencie colaboradores e restrinja o acesso a módulos específicos.</p>
                         </div>
-                        {% if current_user.nivel_acesso in ['admin', 'master'] %}
-                            <button class="btn btn-sm btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalNovoUsuario">
-                                <i class="bi bi-person-plus-fill me-1"></i>Novo Usuário
-                            </button>
-                        {% endif %}
+                        <button class="btn btn-primary btn-sm fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoUsuario">
+                            <i class="bi bi-person-plus me-1"></i>Novo Usuário
+                        </button>
                     </div>
 
                     <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="table-light small">
+                        <table class="table table-hover align-middle mb-0 small">
+                            <thead class="table-light">
                                 <tr>
-                                    <th>Nome</th>
-                                    <th>E-mail</th>
-                                    <th>Perfil / Função</th>
-                                    <th>Permissões</th>
-                                    <th class="text-end pe-2">Ações</th>
+                                    <th>NOME / E-MAIL</th>
+                                    <th>CARGO</th>
+                                    <th>NÍVEL</th>
+                                    <th>PERMISSÕES ATIVAS</th>
+                                    <th class="text-end pe-3">AÇÕES</th>
                                 </tr>
                             </thead>
-                            <tbody class="small">
+                            <tbody>
                                 {% for u in usuarios_equipe %}
                                 <tr>
-                                    <td class="fw-bold text-dark">{{ u.nome }}</td>
-                                    <td>{{ u.email }}</td>
+                                    <td>
+                                        <strong class="text-dark d-block">{{ u.nome }}</strong>
+                                        <span class="text-muted">{{ u.email }}</span>
+                                    </td>
+                                    <td><span class="badge bg-light text-dark border">{{ u.cargo or 'Colaborador' }}</span></td>
+                                    <td>
+                                        <span class="badge {{ 'bg-primary' if u.nivel_acesso in ['admin', 'master'] else 'bg-secondary' }}">
+                                            {{ u.nivel_acesso|upper }}
+                                        </span>
+                                    </td>
                                     <td>
                                         {% if u.nivel_acesso in ['admin', 'master'] %}
-                                            <span class="badge bg-primary">Administrador</span>
+                                            <span class="badge bg-success">Acesso Total (Administrador)</span>
                                         {% else %}
-                                            <span class="badge bg-secondary">{{ u.cargo or 'Operacional' }}</span>
+                                            {% if u.perm_clientes %}<span class="badge bg-light text-dark border me-1">Clientes</span>{% endif %}
+                                            {% if u.perm_propostas %}<span class="badge bg-light text-dark border me-1">Propostas</span>{% endif %}
+                                            {% if u.perm_servicos %}<span class="badge bg-light text-dark border me-1">Serviços</span>{% endif %}
+                                            {% if u.perm_financeiro %}<span class="badge bg-light text-dark border me-1">Financeiro</span>{% endif %}
+                                            {% if u.perm_configuracoes %}<span class="badge bg-light text-dark border me-1">Configurações</span>{% endif %}
                                         {% endif %}
                                     </td>
-                                    <td>
-                                        {% if u.perm_servicos %}<span class="badge bg-success">OS / Serviços</span>{% endif %}
-                                        {% if u.perm_clientes %}<span class="badge bg-info text-dark">Clientes</span>{% endif %}
-                                        {% if u.perm_propostas %}<span class="badge bg-info text-dark">Orçamentos</span>{% endif %}
-                                        {% if u.perm_financeiro %}<span class="badge bg-warning text-dark">Financeiro</span>{% endif %}
-                                        {% if u.nivel_acesso in ['admin', 'master'] or u.perm_configuracoes %}
-                                            <span class="badge bg-danger">Acesso Total</span>
-                                        {% else %}
-                                            <span class="badge bg-light text-muted border"><i class="bi bi-lock-fill me-1"></i>Config Bloqueadas</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-end pe-2">
-                                        {% if u.id != current_user.id and current_user.nivel_acesso in ['admin', 'master'] %}
-                                            <!-- Botão Editar Permissões -->
-                                            <button class="btn btn-sm btn-outline-primary me-1" title="Editar Permissões" data-bs-toggle="modal" data-bs-target="#modalEditarUsuario{{ u.id }}">
-                                                <i class="bi bi-sliders"></i> Editar
+                                    <td class="text-end pe-3">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalResetSenha{{ u.id }}" title="Resetar Senha">
+                                                <i class="bi bi-key"></i>
                                             </button>
-                                            <!-- Botão Resetar Senha -->
-                                            <button class="btn btn-sm btn-outline-warning text-dark me-1" title="Redefinir Senha" data-bs-toggle="modal" data-bs-target="#modalResetSenha{{ u.id }}">
-                                                <i class="bi bi-key-fill"></i> Resetar
+                                            <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditarUsuario{{ u.id }}" title="Editar Permissões">
+                                                <i class="bi bi-pencil-square"></i>
                                             </button>
-                                            <!-- Botão Excluir -->
-                                            <form action="{{ url_for('excluir_usuario_equipe', id=u.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Deseja realmente remover o acesso deste usuário?');">
-                                                <button class="btn btn-sm btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
+                                            {% if u.id != current_user.id %}
+                                            <form action="{{ url_for('excluir_usuario_equipe', id=u.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Remover este usuário?')">
+                                                <button class="btn btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
                                             </form>
-                                        {% else %}
-                                            <small class="text-muted fst-italic">Sua Conta (Atual)</small>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="5" class="text-center py-4 text-muted">
-                                        <i class="bi bi-person-x fs-3 d-block mb-1"></i>
-                                        Nenhum usuário cadastrado nesta conta.
+                                            {% endif %}
+                                        </div>
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -451,196 +456,8 @@
 </div>
 
 <!-- ==================================================================== -->
-<!-- MODAIS DO MÓDULO DE USUÁRIOS & EQUIPE -->
+<!-- MODAL DE CHECKOUT TRANSPARENTE INTEGRADO NA TELA DE CONFIGURAÇÕES -->
 <!-- ==================================================================== -->
-
-<!-- 1. MODAL NOVO USUÁRIO -->
-<div class="modal fade" id="modalNovoUsuario" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <form action="{{ url_for('criar_usuario_equipe') }}" method="POST">
-                <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-person-plus text-primary me-2"></i>Novo Usuário da Equipe</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-7">
-                            <label class="form-label small fw-bold">Nome do Colaborador *</label>
-                            <input type="text" name="nome" class="form-control form-control-sm" placeholder="Ex: Lucas Operacional" required>
-                        </div>
-                        <div class="col-md-5">
-                            <label class="form-label small fw-bold">Cargo / Função</label>
-                            <input type="text" name="cargo" id="input_cargo" class="form-control form-control-sm" placeholder="Ex: Consultor Técnico">
-                        </div>
-                    </div>
-
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold">E-mail de Login *</label>
-                            <input type="email" name="email" class="form-control form-control-sm" placeholder="colaborador@empresa.com" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold">Senha Padrão Inicial *</label>
-                            <input type="password" name="senha_padrao" class="form-control form-control-sm" placeholder="Mínimo 4 dígitos" required minlength="4">
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-primary">Modelo de Perfil Sugerido</label>
-                        <select id="select_perfil_rapido" name="perfil_predefinido" class="form-select form-select-sm fw-bold border-primary" onchange="aplicarPerfilPredefinido(this.value)">
-                            <option value="tecnico" selected>🛠️ Técnico / Operacional (Apenas OS e Campo)</option>
-                            <option value="comercial">💼 Comercial / Vendas (Clientes + Orçamentos)</option>
-                            <option value="financeiro">💰 Financeiro / Cobrança (Faturas + Clientes)</option>
-                            <option value="admin">⭐ Administrador / Sócio (Controle Total)</option>
-                            <option value="custom">⚙️ Personalizado (Definir manualmente)</option>
-                        </select>
-                    </div>
-
-                    <div class="p-3 bg-light rounded border">
-                        <label class="form-label small fw-bold d-block mb-2">Permissões Específicas:</label>
-                        
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_servicos" id="chkServicos" checked>
-                            <label class="form-check-label small" for="chkServicos"><b>Serviços / OS:</b> Acompanhar e Concluir Atividades</label>
-                        </div>
-
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_clientes" id="chkClientes">
-                            <label class="form-check-label small" for="chkClientes"><b>Clientes:</b> Acessar Carteira e Documentos</label>
-                        </div>
-
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_propostas" id="chkPropostas">
-                            <label class="form-check-label small" for="chkPropostas"><b>Orçamentos:</b> Criar e Ver Propostas Comerciais</label>
-                        </div>
-
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_financeiro" id="chkFinanceiro">
-                            <label class="form-check-label small" for="chkFinanceiro"><b>Financeiro:</b> Faturamento, Baixa de Boletos e Faturas</label>
-                        </div>
-
-                        <div class="form-check form-switch mb-1">
-                            <input class="form-check-input" type="checkbox" name="perm_configuracoes" id="chkConfig">
-                            <label class="form-check-label small text-danger fw-bold" for="chkConfig"><b>Configurações & Planos:</b> Acesso Administrativo Total</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Criar Usuário</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- 2. MODAIS DE EDIÇÃO DE PERMISSÕES (1 POR USUÁRIO) -->
-{% for u in usuarios_equipe %}
-{% if u.id != current_user.id %}
-<div class="modal fade" id="modalEditarUsuario{{ u.id }}" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <form action="{{ url_for('editar_usuario_equipe', id=u.id) }}" method="POST">
-                <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-sliders text-primary me-2"></i>Editar Usuário: {{ u.nome }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-7">
-                            <label class="form-label small fw-bold">Nome do Colaborador *</label>
-                            <input type="text" name="nome" class="form-control form-control-sm" value="{{ u.nome }}" required>
-                        </div>
-                        <div class="col-md-5">
-                            <label class="form-label small fw-bold">Cargo / Função</label>
-                            <input type="text" name="cargo" id="input_cargo_edit{{ u.id }}" class="form-control form-control-sm" value="{{ u.cargo or '' }}">
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted">E-mail de Acesso</label>
-                        <input type="email" class="form-control form-control-sm bg-light" value="{{ u.email }}" disabled>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-primary">Predefinir Perfil</label>
-                        <select class="form-select form-select-sm fw-bold border-primary" data-user-id="{{ u.id }}" onchange="aplicarPerfilEdicao(this)">
-                            <option value="">-- Selecionar Modelo Rápido --</option>
-                            <option value="tecnico">🛠️ Técnico / Operacional (Apenas OS)</option>
-                            <option value="comercial">💼 Comercial / Vendas (Clientes + Orçamentos)</option>
-                            <option value="financeiro">💰 Financeiro / Cobrança (Faturas + Clientes)</option>
-                            <option value="admin">⭐ Administrador / Sócio (Controle Total)</option>
-                        </select>
-                    </div>
-
-                    <div class="p-3 bg-light rounded border">
-                        <label class="form-label small fw-bold d-block mb-2">Permissões de Acesso:</label>
-                        
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_servicos" id="chkServicos{{ u.id }}" {% if u.perm_servicos %}checked{% endif %}>
-                            <label class="form-check-label small" for="chkServicos{{ u.id }}"><b>Serviços / OS:</b> Acompanhar e Concluir Atividades</label>
-                        </div>
-
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_clientes" id="chkClientes{{ u.id }}" {% if u.perm_clientes %}checked{% endif %}>
-                            <label class="form-check-label small" for="chkClientes{{ u.id }}"><b>Clientes:</b> Acessar Carteira e Documentos</label>
-                        </div>
-
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_propostas" id="chkPropostas{{ u.id }}" {% if u.perm_propostas %}checked{% endif %}>
-                            <label class="form-check-label small" for="chkPropostas{{ u.id }}"><b>Orçamentos:</b> Criar e Ver Propostas Comerciais</label>
-                        </div>
-
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_financeiro" id="chkFinanceiro{{ u.id }}" {% if u.perm_financeiro %}checked{% endif %}>
-                            <label class="form-check-label small" for="chkFinanceiro{{ u.id }}"><b>Financeiro:</b> Faturamento, Baixa de Boletos e Faturas</label>
-                        </div>
-
-                        <div class="form-check form-switch mb-1">
-                            <input class="form-check-input" type="checkbox" name="perm_configuracoes" id="chkConfig{{ u.id }}" {% if u.perm_configuracoes or u.nivel_acesso in ['admin', 'master'] %}checked{% endif %}>
-                            <label class="form-check-label small text-danger fw-bold" for="chkConfig{{ u.id }}"><b>Configurações & Planos:</b> Acesso Administrativo Total</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Salvar Permissões</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-{% endif %}
-{% endfor %}
-
-<!-- 3. MODAIS DE RESETAR SENHA (1 POR USUÁRIO) -->
-{% for u in usuarios_equipe %}
-{% if u.id != current_user.id %}
-<div class="modal fade" id="modalResetSenha{{ u.id }}" tabindex="-1">
-    <div class="modal-dialog modal-sm modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <form action="{{ url_for('resetar_senha_equipe', id=u.id) }}" method="POST">
-                <div class="modal-header bg-light">
-                    <h6 class="modal-title fw-bold">Nova Senha: {{ u.nome }}</h6>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-3">
-                    <label class="form-label small fw-bold">Nova Senha</label>
-                    <input type="password" name="nova_senha" class="form-control form-control-sm" placeholder="Mínimo 4 caracteres" required minlength="4">
-                </div>
-                <div class="modal-footer bg-light p-2">
-                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-sm btn-warning fw-bold">Salvar Senha</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-{% endif %}
-{% endfor %}
-
-<!-- MODAL DE CHECKOUT TRANSPARENTE -->
 <div class="modal fade" id="modalCheckoutTransparente" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow">
@@ -648,49 +465,56 @@
                 <h5 class="modal-title fw-bold" id="tituloModalPlano">Finalizar Assinatura</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-4">                
-                <!-- CAMPO DE APLICAÇÃO DE CUPOM NO CHECKOUT -->
-                <div class="p-3 bg-light rounded-3 border mb-3">
-                    <label class="small text-muted fw-bold mb-1 d-block"><i class="bi bi-tag-fill text-primary me-1"></i>Possui cupom de desconto?</label>
-                    <div class="input-group input-group-sm">
-                        <input type="text" id="input_cupom_checkout" class="form-control font-monospace text-uppercase" placeholder="EX: PARCEIRO30">
-                        <button class="btn btn-outline-primary fw-bold" type="button" onclick="aplicarCupomCheckout()">
-                            <i class="bi bi-check2"></i> Aplicar
-                        </button>
+            <div class="modal-body p-4">
+
+                <!-- CAMPO DE CUPOM COM VALIDAÇÃO E AUTO-PREENCHIMENTO -->
+                <div class="mb-3 p-3 bg-light rounded-3 border text-start">
+                    <label class="small text-muted fw-bold d-block">Cupom Promocional de Desconto</label>
+                    <div class="input-group input-group-sm mt-1">
+                        <input type="text" id="cupomCheckoutInput" class="form-control font-monospace fw-bold text-uppercase" 
+                               value="{{ current_user.empresa.cupom_utilizado or '' }}" placeholder="EX: LUCAS10">
+                        <button class="btn btn-outline-primary fw-bold" type="button" onclick="validarCupomAoVivo()">Validar</button>
                     </div>
-                    <small id="status_cupom_checkout" class="d-none mt-1 fw-semibold" style="font-size: 0.78rem;"></small>
+                    <small id="statusCupomCheckout" class="text-muted d-block mt-1">
+                        {% if current_user.empresa.cupom_utilizado %}
+                            <span class="text-success"><i class="bi bi-check-circle me-1"></i>Cupom vinculado do seu cadastro</span>
+                        {% else %}
+                            Possui um código de parceiro? Digite acima.
+                        {% endif %}
+                    </small>
                 </div>
+
                 <ul class="nav nav-pills nav-fill mb-3" id="pills-tab" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active fw-bold" id="tab-cartao" data-bs-toggle="pill" data-bs-target="#conteudo-cartao" type="button" role="tab">
-                            <i class="bi bi-credit-card me-1"></i> Cartão (Parcelado)
+                            <i class="bi bi-credit-card me-1"></i> Cartão
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link fw-bold" id="tab-pix" data-bs-toggle="pill" data-bs-target="#conteudo-pix" type="button" role="tab">
-                            <i class="bi bi-qr-code me-1"></i> PIX Instantâneo
+                            <i class="bi bi-qr-code me-1"></i> PIX
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link fw-bold" id="tab-boleto" data-bs-toggle="pill" data-bs-target="#conteudo-boleto" type="button" role="tab">
-                            <i class="bi bi-upc-scan me-1"></i> Boleto (À Vista)
+                            <i class="bi bi-upc-scan me-1"></i> Boleto
                         </button>
                     </li>
                 </ul>
 
                 <div class="tab-content pt-2">
-                    <!-- ABA CARTÃO DE CRÉDITO -->
+                    <!-- CARTÃO DE CRÉDITO -->
                     <div class="tab-pane fade show active" id="conteudo-cartao" role="tabpanel">
                         <form id="formCartaoCheckout">
-                            <div class="mb-2">
+                            <div class="mb-2 text-start">
                                 <label class="small text-muted fw-bold">Número do Cartão</label>
                                 <input type="text" id="cc_numero" class="form-control" placeholder="0000 0000 0000 0000" maxlength="19" required>
                             </div>
-                            <div class="mb-2">
+                            <div class="mb-2 text-start">
                                 <label class="small text-muted fw-bold">Nome Impresso no Cartão</label>
-                                <input type="text" id="cc_nome" class="form-control" placeholder="Ex: CARLOS E SILVA" required>
+                                <input type="text" id="cc_nome" class="form-control" placeholder="Ex: RODRIGO ANTUNES" required>
                             </div>
-                            <div class="row g-2 mb-3">
+                            <div class="row g-2 mb-3 text-start">
                                 <div class="col-4">
                                     <label class="small text-muted fw-bold">Mês</label>
                                     <input type="text" id="cc_mes" class="form-control" placeholder="MM" maxlength="2" required>
@@ -710,21 +534,21 @@
                         </form>
                     </div>
 
-                    <!-- ABA PIX -->
+                    <!-- PIX -->
                     <div class="tab-pane fade text-center" id="conteudo-pix" role="tabpanel">
-                        <p class="text-muted small mb-3">Liberação imediata assim que o Pix for pago.</p>
+                        <p class="text-muted small mb-3">Liberação instantânea assim que a transferência for confirmada.</p>
                         <button type="button" class="btn btn-success fw-bold w-100 py-2 shadow-sm" onclick="processarPagamento('PIX')">
                             <i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX
                         </button>
                         <div id="resultadoPix" class="mt-3 d-none">
-                            <div class="alert alert-info small" id="msgPix">Carregando código...</div>
+                            <div class="alert alert-info small" id="msgPix">Carregando dados...</div>
                         </div>
                     </div>
 
-                    <!-- ABA BOLETO BANCÁRIO -->
+                    <!-- BOLETO -->
                     <div class="tab-pane fade text-center" id="conteudo-boleto" role="tabpanel">
                         <div class="alert alert-light border small text-muted text-start mb-3">
-                            <i class="bi bi-info-circle text-primary me-1"></i> O boleto será emitido no <strong>valor total à vista</strong> do ciclo contratado com vencimento para 3 dias úteis. A conta é liberada após a compensação bancária.
+                            <i class="bi bi-info-circle text-primary me-1"></i> O boleto é emitido no valor integral com vencimento para 3 dias úteis. A liberação ocorre após compensação bancária.
                         </div>
                         <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2 shadow-sm" onclick="processarPagamento('BOLETO')">
                             <i class="bi bi-file-earmark-pdf me-1"></i> Gerar Boleto Bancário
@@ -737,11 +561,149 @@
     </div>
 </div>
 
-<script>
-let planoEscolhido = 'MENSAL';
-let valorTotalEscolhido = 39.90;
-let parcelasEscolhidas = 1;
+<!-- ==================================================================== -->
+<!-- MODAL: NOVO USUÁRIO DA EQUIPE -->
+<!-- ==================================================================== -->
+<div class="modal fade" id="modalNovoUsuario" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('criar_usuario_equipe') }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-person-plus text-primary me-2"></i>Cadastrar Colaborador</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nome do Colaborador *</label>
+                        <input type="text" name="nome" class="form-control" placeholder="Ex: João da Silva" required>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">E-mail de Login *</label>
+                            <input type="email" name="email" class="form-control" placeholder="joao@empresa.com" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Senha Inicial *</label>
+                            <input type="password" name="senha_padrao" class="form-control" placeholder="Mínimo 6 dígitos" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Cargo / Função</label>
+                        <input type="text" name="cargo" class="form-control" placeholder="Ex: Técnico de Campo, Financeiro...">
+                    </div>
+                    
+                    <h6 class="fw-bold text-dark mb-2 mt-4"><i class="bi bi-shield-check text-primary me-1"></i>Permissões de Acesso aos Módulos</h6>
+                    <div class="p-3 bg-light rounded-3 border">
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_clientes" id="p_cli" checked>
+                            <label class="form-check-label small fw-bold" for="p_cli">Carteira de Clientes</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_propostas" id="p_prop" checked>
+                            <label class="form-check-label small fw-bold" for="p_prop">Catálogo & Propostas Comerciais</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_servicos" id="p_serv" checked>
+                            <label class="form-check-label small fw-bold" for="p_serv">Agenda & Ordens de Serviço</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_financeiro" id="p_fin">
+                            <label class="form-check-label small fw-bold text-danger" for="p_fin">Financeiro & Faturamento</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="perm_configuracoes" id="p_conf">
+                            <label class="form-check-label small fw-bold text-danger" for="p_conf">Acesso Administrador (Configurações Gerais)</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Criar Usuário</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
+<!-- ==================================================================== -->
+<!-- MODAIS DE RESET DE SENHA E EDIÇÃO DE USUÁRIOS DA EQUIPE -->
+<!-- ==================================================================== -->
+{% for u in usuarios_equipe %}
+<div class="modal fade" id="modalResetSenha{{ u.id }}" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('resetar_senha_equipe', id=u.id) }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h6 class="modal-title fw-bold text-dark"><i class="bi bi-key text-primary me-2"></i>Resetar Senha</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-3">
+                    <p class="small text-muted mb-2">Defina uma nova senha para <b>{{ u.nome }}</b>:</p>
+                    <input type="password" name="nova_senha" class="form-control form-control-sm" placeholder="Nova senha" required>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold w-100">Gravar Nova Senha</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalEditarUsuario{{ u.id }}" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('editar_usuario_equipe', id=u.id) }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-person-gear text-primary me-2"></i>Editar {{ u.nome }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nome</label>
+                        <input type="text" name="nome" class="form-control form-control-sm" value="{{ u.nome }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Cargo</label>
+                        <input type="text" name="cargo" class="form-control form-control-sm" value="{{ u.cargo or '' }}">
+                    </div>
+
+                    {% if u.id != current_user.id %}
+                    <h6 class="fw-bold text-dark mb-2 mt-3"><i class="bi bi-shield-lock text-primary me-1"></i>Permissões</h6>
+                    <div class="p-3 bg-light rounded-3 border">
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_clientes" id="pe_cli{{ u.id }}" {% if u.perm_clientes %}checked{% endif %}>
+                            <label class="form-check-label small fw-bold" for="pe_cli{{ u.id }}">Clientes</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_propostas" id="pe_prop{{ u.id }}" {% if u.perm_propostas %}checked{% endif %}>
+                            <label class="form-check-label small fw-bold" for="pe_prop{{ u.id }}">Propostas</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_servicos" id="pe_serv{{ u.id }}" {% if u.perm_servicos %}checked{% endif %}>
+                            <label class="form-check-label small fw-bold" for="pe_serv{{ u.id }}">Serviços</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_financeiro" id="pe_fin{{ u.id }}" {% if u.perm_financeiro %}checked{% endif %}>
+                            <label class="form-check-label small fw-bold text-danger" for="pe_fin{{ u.id }}">Financeiro</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="perm_configuracoes" id="pe_conf{{ u.id }}" {% if u.perm_configuracoes %}checked{% endif %}>
+                            <label class="form-check-label small fw-bold text-danger" for="pe_conf{{ u.id }}">Administrador</label>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<script>
 function alternarTipoPessoa() {
     const isPj = document.getElementById('tipo_pj').checked;
     const camposPJ = document.querySelectorAll('.campo-pj');
@@ -756,142 +718,41 @@ function alternarTipoPessoa() {
     }
 }
 
-function buscarCEPEmpresa() {
-    const cepInput = document.getElementById('cep_empresa');
-    const statusText = document.getElementById('cep-empresa-status');
-    const iconeBusca = document.getElementById('icone-busca-cep-empresa');
-    const cep = cepInput.value.replace(/\D/g, '');
-
-    if (cep.length !== 8) {
-        statusText.innerText = 'Digite um CEP válido com 8 dígitos.';
-        statusText.className = 'text-danger d-block mt-1';
-        return;
-    }
-
-    if (iconeBusca) iconeBusca.className = 'spinner-border spinner-border-sm text-primary';
-    statusText.innerText = 'Consultando endereço...';
-    statusText.className = 'text-muted d-block mt-1';
-
-    fetch('https://viacep.com.br/ws/' + cep + '/json/')
-        .then(response => response.json())
-        .then(dados => {
-            if (iconeBusca) iconeBusca.className = 'bi bi-search';
-            if (dados.erro) {
-                statusText.innerText = 'CEP não encontrado.';
-                statusText.className = 'text-danger d-block mt-1';
-            } else {
-                document.getElementById('logradouro_empresa').value = dados.logradouro || '';
-                document.getElementById('bairro_empresa').value = dados.bairro || '';
-                document.getElementById('cidade_empresa').value = dados.localidade || '';
-                document.getElementById('estado_empresa').value = dados.uf || '';
-                statusText.innerText = 'Endereço localizado com sucesso!';
-                statusText.className = 'text-success d-block mt-1';
-                document.getElementById('numero_empresa').focus();
-            }
-        })
-        .catch(() => {
-            if (iconeBusca) iconeBusca.className = 'bi bi-search';
-            statusText.innerText = 'Erro ao consultar o serviço de CEP.';
-            statusText.className = 'text-danger d-block mt-1';
-        });
-}
-
-function aplicarPerfilPredefinido(perfil) {
-    const chkServ = document.getElementById('chkServicos');
-    const chkCli = document.getElementById('chkClientes');
-    const chkProp = document.getElementById('chkPropostas');
-    const chkFin = document.getElementById('chkFinanceiro');
-    const chkConf = document.getElementById('chkConfig');
-    const inputCargo = document.getElementById('input_cargo');
-
-    if (perfil === 'tecnico') {
-        chkServ.checked = true;
-        chkCli.checked = false;
-        chkProp.checked = false;
-        chkFin.checked = false;
-        chkConf.checked = false;
-        if (inputCargo) inputCargo.value = 'Operador Técnico';
-    } else if (perfil === 'comercial') {
-        chkServ.checked = false;
-        chkCli.checked = true;
-        chkProp.checked = true;
-        chkFin.checked = false;
-        chkConf.checked = false;
-        if (inputCargo) inputCargo.value = 'Consultor Comercial';
-    } else if (perfil === 'financeiro') {
-        chkServ.checked = false;
-        chkCli.checked = true;
-        chkProp.checked = false;
-        chkFin.checked = true;
-        chkConf.checked = false;
-        if (inputCargo) inputCargo.value = 'Analista Financeiro';
-    } else if (perfil === 'admin') {
-        chkServ.checked = true;
-        chkCli.checked = true;
-        chkProp.checked = true;
-        chkFin.checked = true;
-        chkConf.checked = true;
-        if (inputCargo) inputCargo.value = 'Administrador / Sócio';
+function buscarCepEmpresa() {
+    const cep = document.getElementById('cep_empresa').value.replace(/\D/g, '');
+    if (cep.length === 8) {
+        fetch(`https://viacep.com.br/ws/${cep}/json/`)
+            .then(r => r.json())
+            .then(dados => {
+                if (!dados.erro) {
+                    document.getElementById('logradouro_empresa').value = dados.logradouro || '';
+                    document.getElementById('bairro_empresa').value = dados.bairro || '';
+                    document.getElementById('cidade_empresa').value = dados.localidade || '';
+                    document.getElementById('estado_empresa').value = dados.uf || '';
+                    document.getElementById('numero_empresa').focus();
+                }
+            });
     }
 }
 
-function aplicarPerfilEdicao(selectElement) {
-    const userId = selectElement.dataset.userId;
-    const perfil = selectElement.value;
-    if (!perfil) return;
+document.addEventListener('DOMContentLoaded', alternarTipoPessoa);
 
-    const chkServ = document.getElementById('chkServicos' + userId);
-    const chkCli = document.getElementById('chkClientes' + userId);
-    const chkProp = document.getElementById('chkPropostas' + userId);
-    const chkFin = document.getElementById('chkFinanceiro' + userId);
-    const chkConf = document.getElementById('chkConfig' + userId);
-    const inputCargo = document.getElementById('input_cargo_edit' + userId);
+let planoEscolhido = 'MENSAL';
+let valorTotalEscolhido = 39.90;
+let parcelasEscolhidas = 1;
 
-    if (perfil === 'tecnico') {
-        if (chkServ) chkServ.checked = true;
-        if (chkCli) chkCli.checked = false;
-        if (chkProp) chkProp.checked = false;
-        if (chkFin) chkFin.checked = false;
-        if (chkConf) chkConf.checked = false;
-        if (inputCargo) inputCargo.value = 'Operador Técnico';
-    } else if (perfil === 'comercial') {
-        if (chkServ) chkServ.checked = false;
-        if (chkCli) chkCli.checked = true;
-        if (chkProp) chkProp.checked = true;
-        if (chkFin) chkFin.checked = false;
-        if (chkConf) chkConf.checked = false;
-        if (inputCargo) inputCargo.value = 'Consultor Comercial';
-    } else if (perfil === 'financeiro') {
-        if (chkServ) chkServ.checked = false;
-        if (chkCli) chkCli.checked = true;
-        if (chkProp) chkProp.checked = false;
-        if (chkFin) chkFin.checked = true;
-        if (chkConf) chkConf.checked = false;
-        if (inputCargo) inputCargo.value = 'Analista Financeiro';
-    } else if (perfil === 'admin') {
-        if (chkServ) chkServ.checked = true;
-        if (chkCli) chkCli.checked = true;
-        if (chkProp) chkProp.checked = true;
-        if (chkFin) chkFin.checked = true;
-        if (chkConf) chkConf.checked = true;
-        if (inputCargo) inputCargo.value = 'Administrador / Sócio';
-    }
-}
-
-function abrirCheckoutModal(plano, valorTotal, parcelas, rotulo) {
+function abrirCheckoutPerfil(plano, valorTotal, parcelas, rotulo) {
     planoEscolhido = plano;
     valorTotalEscolhido = valorTotal;
     parcelasEscolhidas = parcelas;
     
     const tituloEl = document.getElementById('tituloModalPlano');
-    if (tituloEl) {
-        tituloEl.innerText = 'Finalizar Assinatura: ' + plano + ' (' + rotulo + ')';
-    }
+    if (tituloEl) tituloEl.innerText = `Finalizar Assinatura: ${plano} (${rotulo})`;
     
     const areaPix = document.getElementById('resultadoPix');
     if (areaPix) {
         areaPix.classList.add('d-none');
-        areaPix.innerHTML = '<div class="alert alert-info small" id="msgPix">Carregando código...</div>';
+        areaPix.innerHTML = '<div class="alert alert-info small" id="msgPix">Carregando...</div>';
     }
 
     const areaBoleto = document.getElementById('resultadoBoleto');
@@ -901,34 +762,62 @@ function abrirCheckoutModal(plano, valorTotal, parcelas, rotulo) {
     }
 
     const modalEl = document.getElementById('modalCheckoutTransparente');
-    if (modalEl) {
-        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+
+    const cupomAtual = document.getElementById('cupomCheckoutInput')?.value;
+    if (cupomAtual) {
+        validarCupomAoVivo();
     }
 }
 
-function copiarCodigoPix() {
-    const campo = document.getElementById('pixCopiaColaInput');
-    if (campo) {
-        navigator.clipboard.writeText(campo.value);
-        alert('Código Pix copiado com sucesso!');
+function validarCupomAoVivo() {
+    const codigo = document.getElementById('cupomCheckoutInput')?.value.trim();
+    const statusEl = document.getElementById('statusCupomCheckout');
+
+    if (!codigo) {
+        if (statusEl) statusEl.innerHTML = '<span class="text-muted">Nenhum cupom inserido.</span>';
+        return;
     }
+
+    fetch('/api/cupom/validar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigo: codigo, plano: planoEscolhido })
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.valido) {
+            valorTotalEscolhido = res.valor_final;
+            if (statusEl) {
+                statusEl.innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle me-1"></i>${res.mensagem} Valor com desconto: R$ ${res.valor_final.toFixed(2)}</span>`;
+            }
+        } else {
+            if (statusEl) {
+                statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${res.mensagem}</span>`;
+            }
+        }
+    })
+    .catch(() => {
+        if (statusEl) statusEl.innerHTML = '<span class="text-danger">Erro ao validar cupom.</span>';
+    });
 }
 
 function processarPagamento(tipo) {
+    const cupomDigitado = document.getElementById('cupomCheckoutInput')?.value || '';
     const payload = {
         plano: planoEscolhido,
         valor_total: valorTotalEscolhido,
         parcelas: parcelasEscolhidas,
         forma_pagamento: tipo,
-        cupom: cupomAplicado
+        cupom: cupomDigitado
     };
 
     if (tipo === 'CREDIT_CARD') {
-        const num = document.getElementById('cc_numero') ? document.getElementById('cc_numero').value : '';
-        const nome = document.getElementById('cc_nome') ? document.getElementById('cc_nome').value : '';
-        const mes = document.getElementById('cc_mes') ? document.getElementById('cc_mes').value : '';
-        const ano = document.getElementById('cc_ano') ? document.getElementById('cc_ano').value : '';
-        const cvv = document.getElementById('cc_cvv') ? document.getElementById('cc_cvv').value : '';
+        const num = document.getElementById('cc_numero')?.value || '';
+        const nome = document.getElementById('cc_nome')?.value || '';
+        const mes = document.getElementById('cc_mes')?.value || '';
+        const ano = document.getElementById('cc_ano')?.value || '';
+        const cvv = document.getElementById('cc_cvv')?.value || '';
 
         if (!num || !nome || !mes || !ano || !cvv) {
             alert('Por favor, preencha todos os campos do cartão.');
@@ -980,52 +869,47 @@ function processarPagamento(tipo) {
                 const copiaCola = (res.pix && res.pix.payload) ? res.pix.payload : '';
                 const encodedImg = (res.pix && res.pix.encodedImage) ? res.pix.encodedImage : '';
 
-                if (copiaCola || encodedImg) {
-                    let imgHtml = '';
-                    if (encodedImg) {
-                        imgHtml = '<img src="data:image/png;base64,' + encodedImg + '" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">';
-                    } else {
-                        const urlQr = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(copiaCola);
-                        imgHtml = '<img src="' + urlQr + '" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">';
-                    }
+                let imgTag = encodedImg 
+                    ? `<img src="data:image/png;base64,${encodedImg}" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">`
+                    : `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(copiaCola)}" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">`;
 
-                    areaPix.innerHTML = 
-                        '<div class="card p-3 border-success text-center shadow-sm mt-3">' +
-                            '<h6 class="fw-bold text-success mb-2"><i class="bi bi-qr-code me-1"></i> QR Code Pix Gerado</h6>' +
-                            '<div class="my-2 text-center">' + imgHtml + '</div>' +
-                            '<label class="small text-muted fw-bold d-block text-start mb-1">Código Pix Copia e Cola:</label>' +
-                            '<div class="input-group mb-3">' +
-                                '<input type="text" id="pixCopiaColaInput" class="form-control form-control-sm font-monospace" value="' + copiaCola + '" readonly>' +
-                                '<button class="btn btn-outline-primary btn-sm fw-bold" type="button" onclick="copiarCodigoPix()">' +
-                                    '<i class="bi bi-clipboard me-1"></i>Copiar' +
-                                '</button>' +
-                            '</div>' +
-                            '<small class="text-muted">A liberação da sua conta ocorrerá imediatamente após o pagamento.</small>' +
-                        '</div>';
-                }
+                areaPix.innerHTML = `
+                    <div class="card p-3 border-success text-center shadow-sm mt-3">
+                        <h6 class="fw-bold text-success mb-2"><i class="bi bi-qr-code me-1"></i> QR Code Pix Gerado</h6>
+                        <div class="my-2 text-center">${imgTag}</div>
+                        <label class="small text-muted fw-bold d-block text-start mb-1">Código Pix Copia e Cola:</label>
+                        <div class="input-group mb-3">
+                            <input type="text" id="pixInput" class="form-control form-control-sm font-monospace" value="${copiaCola}" readonly>
+                            <button class="btn btn-outline-primary btn-sm fw-bold" type="button" onclick="navigator.clipboard.writeText(document.getElementById('pixInput').value); alert('Código copiado!');">
+                                Copiar
+                            </button>
+                        </div>
+                        <small class="text-muted">A liberação do sistema ocorrerá automaticamente após o pagamento.</small>
+                    </div>
+                `;
             } else if (tipo === 'BOLETO') {
                 const areaBoleto = document.getElementById('resultadoBoleto');
                 areaBoleto.classList.remove('d-none');
-                
                 const linkBoleto = res.bankSlipUrl || res.invoiceUrl || (res.dados && (res.dados.bankSlipUrl || res.dados.invoiceUrl)) || '';
 
-                areaBoleto.innerHTML = 
-                    '<div class="card p-3 border-primary text-center shadow-sm mt-3">' +
-                        '<h6 class="fw-bold text-primary mb-2"><i class="bi bi-file-earmark-check me-1"></i> Boleto Gerado</h6>' +
-                        '<p class="small text-muted mb-3">Clique no botão abaixo para visualizar ou imprimir o boleto:</p>' +
-                        '<a href="' + linkBoleto + '" target="_blank" rel="noopener noreferrer" class="btn btn-primary fw-bold py-2">' +
-                            '<i class="bi bi-printer me-1"></i> Imprimir / Visualizar Boleto' +
-                        '</a>' +
-                    '</div>';
+                areaBoleto.innerHTML = `
+                    <div class="card p-3 border-primary text-center shadow-sm mt-3">
+                        <h6 class="fw-bold text-primary mb-2"><i class="bi bi-file-earmark-check me-1"></i> Boleto Gerado</h6>
+                        <p class="small text-muted mb-3">Clique abaixo para visualizar o boleto:</p>
+                        <a href="${linkBoleto}" target="_blank" rel="noopener noreferrer" class="btn btn-primary fw-bold py-2">
+                            <i class="bi bi-printer me-1"></i> Visualizar Boleto
+                        </a>
+                    </div>
+                `;
             } else {
-                alert('Assinatura processada com sucesso via Cartão!');
+                alert('Assinatura ativada com sucesso via Cartão!');
                 window.location.reload();
             }
         } else {
             alert('Atenção: ' + res.mensagem);
         }
     })
-    .catch(err => {
+    .catch(() => {
         if (tipo === 'PIX' && btnPix) {
             btnPix.disabled = false;
             btnPix.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX';
@@ -1035,164 +919,6 @@ function processarPagamento(tipo) {
             btnBoleto.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i> Gerar Boleto Bancário';
         }
         alert('Erro de comunicação com o servidor.');
-    });
-}
-
-function mascaraCNPJ(v) {
-    v = v.replace(/\D/g, "").slice(0, 14);
-    v = v.replace(/^(\d{2})(\d)/, "$1.$2");
-    v = v.replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3");
-    v = v.replace(/\.(\d{3})(\d)/, ".$1/$2");
-    v = v.replace(/(\d{4})(\d)/, "$1-$2");
-    return v;
-}
-
-function mascaraCPF(v) {
-    v = v.replace(/\D/g, "").slice(0, 11);
-    v = v.replace(/(\d{3})(\d)/, "$1.$2");
-    v = v.replace(/(\d{3})(\d)/, "$1.$2");
-    v = v.replace(/(\d{3})(\d{1,2})$/, "$1-$2");
-    return v;
-}
-
-function mascaraTelefone(v) {
-    v = v.replace(/\D/g, "").slice(0, 11);
-    if (v.length > 10) {
-        v = v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
-    } else if (v.length > 5) {
-        v = v.replace(/^(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3");
-    } else if (v.length > 2) {
-        v = v.replace(/^(\d{2})(\d{0,5})/, "($1) $2");
-    } else {
-        v = v.replace(/^(\d*)/, "($1");
-    }
-    return v;
-}
-
-function mascaraCEP(v) {
-    v = v.replace(/\D/g, "").slice(0, 8);
-    return v.replace(/^(\d{5})(\d)/, "$1-$2");
-}
-
-function aplicarMascarasIniciais() {
-    const inputCNPJ = document.getElementById('cnpj_input');
-    if (inputCNPJ && inputCNPJ.value) inputCNPJ.value = mascaraCNPJ(inputCNPJ.value);
-
-    const inputCPF = document.getElementById('cpf_input');
-    if (inputCPF && inputCPF.value) inputCPF.value = mascaraCPF(inputCPF.value);
-
-    const inputTel = document.querySelector('input[name="telefone"]');
-    if (inputTel && inputTel.value) inputTel.value = mascaraTelefone(inputTel.value);
-
-    const inputCEP = document.getElementById('cep_empresa');
-    if (inputCEP && inputCEP.value) inputCEP.value = mascaraCEP(inputCEP.value);
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    alternarTipoPessoa();
-    aplicarMascarasIniciais();
-
-    const inputCNPJ = document.getElementById('cnpj_input');
-    if (inputCNPJ) {
-        inputCNPJ.addEventListener('input', (e) => { e.target.value = mascaraCNPJ(e.target.value); });
-    }
-
-    const inputCPF = document.getElementById('cpf_input');
-    if (inputCPF) {
-        inputCPF.addEventListener('input', (e) => { e.target.value = mascaraCPF(e.target.value); });
-    }
-
-    const inputTel = document.querySelector('input[name="telefone"]');
-    if (inputTel) {
-        inputTel.addEventListener('input', (e) => { e.target.value = mascaraTelefone(e.target.value); });
-    }
-
-    const campoCep = document.getElementById('cep_empresa');
-    if (campoCep) {
-        campoCep.addEventListener('input', (e) => { e.target.value = mascaraCEP(e.target.value); });
-        campoCep.addEventListener('blur', function() {
-            if (this.value.replace(/\D/g, '').length === 8) buscarCEPEmpresa();
-        });
-        campoCep.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                buscarCEPEmpresa();
-            }
-        });
-    }
-});
-let cupomAplicado = null;
-
-function abrirCheckoutModal(plano, valorTotal, parcelas, rotulo) {
-    planoEscolhido = plano;
-    valorTotalEscolhido = valorTotal;
-    parcelasEscolhidas = parcelas;
-    cupomAplicado = null;
-    
-    // Reseta campo e status de cupom
-    const inputCupom = document.getElementById('input_cupom_checkout');
-    if (inputCupom) inputCupom.value = '';
-    const statusCupom = document.getElementById('status_cupom_checkout');
-    if (statusCupom) {
-        statusCupom.className = 'd-none mt-1 fw-semibold';
-        statusCupom.innerText = '';
-    }
-
-    const tituloEl = document.getElementById('tituloModalPlano');
-    if (tituloEl) {
-        tituloEl.innerText = 'Finalizar Assinatura: ' + plano + ' (' + rotulo + ')';
-    }
-    
-    const areaPix = document.getElementById('resultadoPix');
-    if (areaPix) areaPix.classList.add('d-none');
-
-    const areaBoleto = document.getElementById('resultadoBoleto');
-    if (areaBoleto) areaBoleto.classList.add('d-none');
-
-    const modalEl = document.getElementById('modalCheckoutTransparente');
-    if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
-}
-
-function aplicarCupomCheckout() {
-    const input = document.getElementById('input_cupom_checkout');
-    const status = document.getElementById('status_cupom_checkout');
-    const codigo = (input ? input.value : '').trim().toUpperCase();
-
-    if (!codigo) {
-        status.className = 'd-block text-danger mt-1 fw-semibold';
-        status.innerText = 'Digite um código de cupom.';
-        return;
-    }
-
-    status.className = 'd-block text-muted mt-1';
-    status.innerText = 'Validando cupom...';
-
-    fetch('/api/cupom/validar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codigo: codigo, plano: planoEscolhido })
-    })
-    .then(r => r.json())
-    .then(res => {
-        if (res.valido) {
-            cupomAplicado = res.codigo;
-            valorTotalEscolhido = res.valor_final;
-            status.className = 'd-block text-success mt-1 fw-bold';
-            status.innerText = `✓ ${res.mensagem} (Novo total: R$ ${res.valor_final.toFixed(2)})`;
-            
-            const tituloEl = document.getElementById('tituloModalPlano');
-            if (tituloEl) {
-                tituloEl.innerText = `Finalizar Assinatura: ${planoEscolhido} (R$ ${res.valor_final.toFixed(2)})`;
-            }
-        } else {
-            cupomAplicado = null;
-            status.className = 'd-block text-danger mt-1 fw-semibold';
-            status.innerText = res.mensagem || 'Cupom inválido.';
-        }
-    })
-    .catch(() => {
-        status.className = 'd-block text-danger mt-1 fw-semibold';
-        status.innerText = 'Erro ao validar cupom.';
     });
 }
 </script>
