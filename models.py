@@ -479,6 +479,7 @@ class CupomDesconto(db.Model):
     percentual_comissao = db.Column(db.Float, default=20.0)
     limite_usos = db.Column(db.Integer, default=100)
     usos_atuais = db.Column(db.Integer, default=0)
+    meses_comissao_limite = db.Column(db.Integer, default=3)  # <--- ADICIONAR ESTA LINHA
     data_validade = db.Column(db.Date, nullable=True)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
     ativo = db.Column(db.Boolean, default=True)
