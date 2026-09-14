@@ -2385,28 +2385,36 @@ def admin_criar_cupom_parceiro(id):
 
     parceiro = Usuario.query.get_or_404(id)
     codigo = (request.form.get('codigo') or '').strip().upper()
-    desconto = float(request.form.get('percentual_desconto', 10.0))
-    comissao = float(request.form.get('percentual_comissao', 20.0))
-    limite = int(request.form.get('limite_usos', 100))
-    meses_limite = int(request.form.get('meses_comissao_limite', 3))
+    desconto = float(request.form.get('percentual_desconto') or 10.0)
+    comissao = float(request.form.get('percentual_comissao') or 20.0)
+    limite = int(request.form.get('limite_usos') or 100)
+    meses_limite = int(request.form.get('meses_comissao_limite') or 3)
 
-    if CupomDesconto.query.filter_by(codigo=codigo).first():
-        flash('Este código de cupom já existe no sistema.', 'warning')
+    if not codigo:
+        flash('O código do cupom é obrigatório.', 'warning')
         return redirect(url_for('admin_auditoria_parceiro', id=parceiro.id))
 
-    novo_cupom = CupomDesconto(
-        usuario_id=parceiro.id,
-        codigo=codigo,
-        percentual_desconto=desconto,
-        percentual_comissao=comissao,
-        limite_usos=limite,
-        meses_comissao_limite=meses_limite,
-        ativo=True if parceiro.status_aprovacao == 'aprovado' else False
-    )
-    db.session.add(novo_cupom)
-    db.session.commit()
+    if CupomDesconto.query.filter_by(codigo=codigo).first():
+        flash(f'O código de cupom "{codigo}" já existe no sistema.', 'warning')
+        return redirect(url_for('admin_auditoria_parceiro', id=parceiro.id))
 
-    flash(f'Cupom {codigo} gerado e vinculado a {parceiro.nome} com sucesso!', 'success')
+    try:
+        novo_cupom = CupomDesconto(
+            usuario_id=parceiro.id,
+            codigo=codigo,
+            percentual_desconto=desconto,
+            percentual_comissao=comissao,
+            limite_usos=limite,
+            meses_comissao_limite=meses_limite,
+            ativo=True if parceiro.status_aprovacao == 'aprovado' else False
+        )
+        db.session.add(novo_cupom)
+        db.session.commit()
+        flash(f'Cupom {codigo} gerado e vinculado a {parceiro.nome} com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao gravar cupom no banco de dados: {str(e)}', 'danger')
+
     return redirect(url_for('admin_auditoria_parceiro', id=parceiro.id))
 
 # -----------------------------------------------------------------------------

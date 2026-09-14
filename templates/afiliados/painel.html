@@ -74,7 +74,7 @@
                         {% endif %}
                     </div>
                     <h3 class="fw-bold mb-1">Compartilhe e Ganhe {{ cupom.percentual_comissao }}% Recorrente</h3>
-                    <p class="mb-0 text-white-50 small">Seu indicado ganha {{ cupom.percentual_desconto }}% de desconto e você recebe comissão mensalmente enquanto ele continuar ativo.</p>
+                    <p class="mb-0 text-white-50 small">Seu indicado ganha {{ cupom.percentual_desconto }}% de desconto e você recebe comissão por ciclo contratual enquanto ele continuar ativo.</p>
                 </div>
                 <div class="col-lg-4 text-lg-end">
                     {% if current_user.status_aprovacao == 'aprovado' and cupom.is_valido %}
@@ -155,7 +155,7 @@
                             </div>
                             <div class="modal-body p-4 small text-muted">
                                 <h6 class="fw-bold text-dark">1. Comissionamento Recorrente</h6>
-                                <p>Você receberá <b>{{ cupom.percentual_comissao }}%</b> sobre o valor líquido pago de cada mensalidade das empresas indicadas que se cadastrarem com seu cupom ou link.</p>
+                                <p>Você receberá <b>{{ cupom.percentual_comissao }}%</b> sobre o valor líquido pago de cada mensalidade das empresas indicadas durante os ciclos ativos estabelecidos.</p>
 
                                 <h6 class="fw-bold text-dark">2. Regra de Pagamento</h6>
                                 <p>Os repasses são consolidados no fechamento de cada mês e creditados via <b>PIX</b> na chave cadastrada até o dia 10 do mês subsequente.</p>
@@ -182,44 +182,58 @@
             </form>
         </div>
 
-        <!-- Tabela de Empresas Indicadas -->
+        <!-- TABELA DE EMPRESAS INDICADAS COM ANONIMIZAÇÃO LGPD -->
         <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
             <h5 class="fw-bold text-dark mb-3"><i class="bi bi-buildings text-primary me-2"></i>Empresas Cadastradas com Seu Cupom</h5>
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0 small">
                     <thead class="table-light">
                         <tr>
-                            <th>EMPRESA INDICADA</th>
+                            <th>EMPRESA INDICADA (LGPD)</th>
                             <th>DATA DE CADASTRO</th>
                             <th>STATUS DO PLANO</th>
                             <th>PLANO</th>
-                            <th class="text-end pe-3">COMISSÃO RECORRENTE</th>
+                            <th class="text-end pe-3">COMISSÃO ESTIMADA</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for emp in empresas_indicadas %}
                         <tr>
                             <td>
-                                <strong class="text-dark d-block">{{ emp.razao_social or emp.nome_fantasia }}</strong>
-                                <span class="text-muted">{{ emp.email or '--' }}</span>
+                                <strong class="text-dark d-block">
+                                    {% set nome_emp = emp.razao_social or emp.nome_fantasia or 'Empresa' %}
+                                    {% if nome_emp|length > 6 %}
+                                        {{ nome_emp[:2] }}**********{{ nome_emp[-2:] }}
+                                    {% else %}
+                                        {{ nome_emp[:2] }}****
+                                    {% endif %}
+                                </strong>
+                                <span class="text-muted" style="font-size: 0.78rem;">
+                                    {% if emp.email and '@' in emp.email %}
+                                        {% set partes = emp.email.split('@') %}
+                                        {{ partes[0][:2] }}*****@{{ partes[1][:2] }}*****.com
+                                    {% else %}
+                                        cli*****@email.com
+                                    {% endif %}
+                                </span>
                             </td>
                             <td>{{ emp.data_criacao.strftime('%d/%m/%Y') if emp.data_criacao else '--' }}</td>
                             <td>
                                 {% if emp.status_assinatura == 'ativo' %}
                                     <span class="badge bg-success">Assinatura Ativa</span>
                                 {% elif emp.status_assinatura == 'trial' %}
-                                    <span class="badge bg-warning text-dark">Em Período de Testes</span>
+                                    <span class="badge bg-warning text-dark">Período de Testes</span>
                                 {% else %}
                                     <span class="badge bg-secondary">Inadimplente / Bloqueado</span>
                                 {% endif %}
                             </td>
-                            <td>{{ emp.plano or 'Plano Flex' }}</td>
+                            <td>{{ 'Período de Testes (Trial)' if emp.status_assinatura == 'trial' else (emp.plano or 'Plano Flex') }}</td>
                             <td class="text-end pe-3">
                                 {% if emp.status_assinatura == 'ativo' %}
                                     {% set val_comissao = (emp.valor_mensalidade or 39.90) * (cupom.percentual_comissao / 100.0) %}
                                     <span class="fw-bold text-success">R$ {{ "%.2f"|format(val_comissao) }}/mês</span>
                                 {% else %}
-                                    <span class="text-muted">R$ 0,00</span>
+                                    <span class="text-muted">R$ 0,00 (Trial)</span>
                                 {% endif %}
                             </td>
                         </tr>

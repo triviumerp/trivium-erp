@@ -67,9 +67,9 @@
             <i class="bi bi-shield-lock-fill"></i>
         </div>
 
-        <h2 class="fw-extrabold text-dark mb-2">Acesso Temporariamente Suspenso</h2>
+        <h2 class="fw-extrabold text-dark mb-2">Acesso ou Período de Testes</h2>
         <p class="text-muted mx-auto mb-4" style="max-width: 680px; font-size: 0.98rem;">
-            O período de avaliação da empresa <strong>{{ current_user.empresa.razao_social }}</strong> encerrou. Escolha um ciclo de assinatura abaixo para liberação imediata via Pix, Cartão ou Boleto pelo Asaas.
+            Empresa: <strong>{{ current_user.empresa.razao_social }}</strong>. Escolha um ciclo de assinatura abaixo para ativação imediata via Pix, Cartão ou Boleto pelo Asaas.
         </p>
 
         <!-- GRADE DE 3 PLANOS OFICIAIS -->
@@ -191,6 +191,24 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
+
+                    <!-- CAMPO DE CUPOM COM VALIDAÇÃO E AUTO-PREENCHIMENTO -->
+                    <div class="mb-3 p-3 bg-light rounded-3 border text-start">
+                        <label class="small text-muted fw-bold d-block">Cupom Promocional de Desconto</label>
+                        <div class="input-group input-group-sm mt-1">
+                            <input type="text" id="cupomCheckoutInput" class="form-control font-monospace fw-bold text-uppercase" 
+                                   value="{{ current_user.empresa.cupom_utilizado or '' }}" placeholder="EX: LUCAS10">
+                            <button class="btn btn-outline-primary fw-bold" type="button" onclick="validarCupomAoVivo()">Validar</button>
+                        </div>
+                        <small id="statusCupomCheckout" class="text-muted d-block mt-1">
+                            {% if current_user.empresa.cupom_utilizado %}
+                                <span class="text-success"><i class="bi bi-check-circle me-1"></i>Cupom vinculado do seu cadastro</span>
+                            {% else %}
+                                Possui um código de parceiro? Digite acima.
+                            {% endif %}
+                        </small>
+                    </div>
+
                     <ul class="nav nav-pills nav-fill mb-3" id="pills-tab" role="tablist">
                         <li class="nav-item" role="presentation">
                             <button class="nav-link active fw-bold" id="tab-cartao" data-bs-toggle="pill" data-bs-target="#conteudo-cartao" type="button" role="tab">
@@ -219,7 +237,7 @@
                                 </div>
                                 <div class="mb-2 text-start">
                                     <label class="small text-muted fw-bold">Nome Impresso no Cartão</label>
-                                    <input type="text" id="cc_nome" class="form-control" placeholder="Ex: CARLOS E SILVA" required>
+                                    <input type="text" id="cc_nome" class="form-control" placeholder="Ex: RODRIGO ANTUNES" required>
                                 </div>
                                 <div class="row g-2 mb-3 text-start">
                                     <div class="col-4">
@@ -296,14 +314,54 @@
 
         const modalEl = document.getElementById('modalCheckoutTransparente');
         if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+
+        // Se já tiver cupom herdado do cadastro, valida e aplica o desconto automaticamente
+        const cupomAtual = document.getElementById('cupomCheckoutInput')?.value;
+        if (cupomAtual) {
+            validarCupomAoVivo();
+        }
+    }
+
+    function validarCupomAoVivo() {
+        const codigo = document.getElementById('cupomCheckoutInput')?.value.trim();
+        const statusEl = document.getElementById('statusCupomCheckout');
+
+        if (!codigo) {
+            if (statusEl) statusEl.innerHTML = '<span class="text-muted">Nenhum cupom inserido.</span>';
+            return;
+        }
+
+        fetch('/api/cupom/validar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ codigo: codigo, plano: planoEscolhido })
+        })
+        .then(r => r.json())
+        .then(res => {
+            if (res.valido) {
+                valorTotalEscolhido = res.valor_final;
+                if (statusEl) {
+                    statusEl.innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle me-1"></i>${res.mensagem} Valor com desconto: R$ ${res.valor_final.toFixed(2)}</span>`;
+                }
+            } else {
+                if (statusEl) {
+                    statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${res.mensagem}</span>`;
+                }
+            }
+        })
+        .catch(() => {
+            if (statusEl) statusEl.innerHTML = '<span class="text-danger">Erro ao validar cupom.</span>';
+        });
     }
 
     function processarPagamento(tipo) {
+        const cupomDigitado = document.getElementById('cupomCheckoutInput')?.value || '';
         const payload = {
             plano: planoEscolhido,
             valor_total: valorTotalEscolhido,
             parcelas: parcelasEscolhidas,
-            forma_pagamento: tipo
+            forma_pagamento: tipo,
+            cupom: cupomDigitado
         };
 
         if (tipo === 'CREDIT_CARD') {

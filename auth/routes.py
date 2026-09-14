@@ -105,7 +105,6 @@ def registro():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
 
-    # Captura o cupom via query string (?ref=CODIGO) se existir
     cupom_url = request.args.get('ref', '').strip().upper()
 
     if request.method == 'POST':
@@ -120,36 +119,14 @@ def registro():
         senha = request.form.get('senha', '')
         confirma_senha = request.form.get('confirma_senha', '')
         
-        # 1. Captura o código digitado ou o vindo da URL
         cupom_indicacao = (request.form.get('cupom_indicacao') or cupom_url).strip().upper()
 
-        # 2. Validação de CPF para Pessoa Física
+        # 1. Validação de CPF para Pessoa Física
         if tipo_pessoa == 'PF' and not is_cpf_valido(doc_identificacao):
             flash('O CPF informado é inválido. Por favor, revise os dígitos.', 'danger')
             return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
 
-        # 3. Validação de Senha Forte
-        senha_valida, msg_erro = validar_senha_forte(senha)
-        if not senha_valida:
-            flash(msg_erro, 'warning')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
-
-        # 4. Validação de Confirmação de Senha
-        if senha != confirma_senha:
-            flash('A senha e a confirmação de senha não conferem.', 'warning')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
-
-        # 5. Validação prévia de duplicidade de E-mail
-        if Usuario.query.filter_by(email=email).first():
-            flash('Este e-mail já está cadastrado no sistema. Faça login.', 'warning')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
-
-        # 6. Validação prévia de duplicidade de CNPJ/CPF (se informado)
-        if doc_identificacao and Empresa.query.filter_by(cnpj=doc_identificacao).first():
-            flash('Este CNPJ/CPF já possui uma conta cadastrada.', 'warning')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
-
-        # 7. BLINDAGEM ANTIFRAUDE: Validar se o cupom existe, está ativo e evitar autoindicação
+        # 2. BLINDAGEM ANTIFRAUDE PRIMEIRO: Impede autoindicação por e-mail ou documento
         cupom_obj = None
         if cupom_indicacao:
             cupom_obj = CupomDesconto.query.filter_by(codigo=cupom_indicacao).first()
@@ -157,11 +134,30 @@ def registro():
                 flash('O cupom ou link de indicação informado é inválido ou está expirado.', 'warning')
                 cupom_indicacao = None
             elif cupom_obj.parceiro:
-                # Impede que o afiliado use seu próprio cupom (mesmo e-mail ou documento)
                 doc_afiliado = re.sub(r'\D', '', cupom_obj.parceiro.cpf_cnpj or '')
                 if cupom_obj.parceiro.email.lower() == email or (doc_identificacao and doc_identificacao == doc_afiliado):
-                    flash('Não é permitido utilizar seu próprio cupom de afiliado.', 'danger')
+                    flash('Não é permitido utilizar seu próprio cupom de afiliado para autoindicação.', 'danger')
                     return render_template('auth/registro.html', cupom_ref='')
+
+        # 3. Validação de Senha Forte
+        senha_valida, msg_erro = validar_senha_forte(senha)
+        if not senha_valida:
+            flash(msg_erro, 'warning')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
+
+        # 4. Confirmação de Senha
+        if senha != confirma_senha:
+            flash('A senha e a confirmação de senha não conferem.', 'warning')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
+
+        # 5. Validação de Duplicidade de Usuário / Empresa
+        if Usuario.query.filter_by(email=email).first():
+            flash('Este e-mail já está cadastrado no sistema. Faça login.', 'warning')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
+
+        if doc_identificacao and Empresa.query.filter_by(cnpj=doc_identificacao).first():
+            flash('Este CNPJ/CPF já possui uma conta cadastrada.', 'warning')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
 
         try:
             nova_empresa = Empresa(
@@ -170,8 +166,9 @@ def registro():
                 cnpj=doc_identificacao if doc_identificacao else None,
                 telefone=telefone,
                 email=email,
-                plano="Founder",
+                plano="Período de Testes (Trial)",
                 status_assinatura="trial",
+                valor_mensalidade=0.0,
                 data_vencimento=date.today() + relativedelta(days=14),
                 cupom_utilizado=cupom_indicacao if cupom_indicacao else None
             )
@@ -191,7 +188,6 @@ def registro():
             novo_usuario.set_senha(senha)
             db.session.add(novo_usuario)
 
-            # Contabiliza o uso do cupom
             if cupom_obj:
                 cupom_obj.usos_atuais = (cupom_obj.usos_atuais or 0) + 1
 
@@ -202,7 +198,6 @@ def registro():
 
         except Exception as e:
             db.session.rollback()
-            print(f"\n[ERRO NO REGISTRO]: {type(e).__name__} - {e}\n")
             flash(f'Erro ao processar o cadastro: {str(e)}', 'danger')
             return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
 
