@@ -9,6 +9,7 @@
 </head>
 <body class="bg-light">
 
+    <!-- Topbar Afiliado -->
     <nav class="navbar navbar-expand-lg bg-white border-bottom px-4 py-3">
         <div class="container-fluid">
             <span class="navbar-brand fw-bold text-primary mb-0"><i class="bi bi-award-fill me-2"></i>Trivium Parceiros</span>
@@ -21,6 +22,7 @@
 
     <div class="container py-4">
 
+        <!-- Mensagens Flash -->
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
@@ -32,6 +34,7 @@
         {% endif %}
         {% endwith %}
 
+        <!-- Avisos de Moderação -->
         {% if current_user.status_aprovacao == 'pendente' %}
         <div class="alert alert-warning border-0 shadow-sm rounded-4 p-4 mb-4">
             <div class="d-flex align-items-center gap-3">
@@ -56,42 +59,13 @@
         </div>
         {% endif %}
 
-        <!-- BANNER DE DIVULGAÇÃO: CUPOM PRINCIPAL -->
-        <div class="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-primary text-white">
-            <div class="row align-items-center g-3">
-                <div class="col-lg-8">
-                    <div class="d-flex align-items-center gap-2 mb-2">
-                        <span class="badge bg-white text-primary fw-bold fs-6">Cupom Principal: {{ cupom_principal.codigo }}</span>
-                        {% if cupom_principal.is_valido and current_user.status_aprovacao == 'aprovado' %}
-                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Link Ativo</span>
-                        {% else %}
-                            <span class="badge bg-warning text-dark"><i class="bi bi-lock me-1"></i>Em Moderação</span>
-                        {% endif %}
-                    </div>
-                    <h4 class="fw-bold mb-1">Ganhe {{ cupom_principal.percentual_comissao }}% de Comissão Recorrente</h4>
-                    <p class="mb-0 text-white-50 small">Seu cliente recebe {{ cupom_principal.percentual_desconto }}% de desconto no plano e você ganha repasse recorrente por até {{ cupom_principal.meses_comissao_limite or 3 }} meses.</p>
-                </div>
-                <div class="col-lg-4 text-lg-end">
-                    {% if current_user.status_aprovacao == 'aprovado' and cupom_principal.is_valido %}
-                    <button class="btn btn-light fw-bold text-primary px-4 py-2 shadow-sm" onclick="navigator.clipboard.writeText('{{ link_principal }}'); alert('Link do cupom {{ cupom_principal.codigo }} copiado!');">
-                        <i class="bi bi-clipboard me-1"></i> Copiar Meu Link
-                    </button>
-                    {% else %}
-                    <button class="btn btn-light fw-bold text-muted px-4 py-2 shadow-sm" disabled>
-                        <i class="bi bi-lock me-1"></i> Link Indisponível
-                    </button>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
         <!-- MÉTRICAS GERAIS -->
         <div class="row g-3 mb-4">
             <div class="col-md-4">
                 <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                    <span class="small text-muted fw-bold">TOTAL DE INDICADOS</span>
+                    <span class="small text-muted fw-bold">TOTAL DE CADASTROS</span>
                     <h3 class="fw-bold text-dark my-1">{{ total_cadastros }}</h3>
-                    <small class="text-muted">Empresas que usaram seus cupons</small>
+                    <small class="text-muted">Empresas indicadas</small>
                 </div>
             </div>
             <div class="col-md-4">
@@ -110,20 +84,25 @@
             </div>
         </div>
 
-        <!-- TABELA DE TODOS OS CUPONS DO PARCEIRO -->
+        <!-- TABELA DE CUPONS & LINKS DE DIVULGAÇÃO -->
         <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
-            <h5 class="fw-bold text-dark mb-3"><i class="bi bi-tags-fill text-primary me-2"></i>Seus Cupons & Campanhas Promocionais</h5>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h5 class="fw-bold text-dark mb-0"><i class="bi bi-tags-fill text-danger me-2"></i>Seus Cupons & Links de Divulgação</h5>
+                    <p class="text-muted small mb-0">Utilize o botão de copiar para compartilhar o link direto de cada campanha com seus clientes.</p>
+                </div>
+            </div>
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0 small">
                     <thead class="table-light">
                         <tr>
-                            <th>CÓDIGO</th>
+                            <th>CÓDIGO DO CUPOM</th>
                             <th>DESCONTO CLIENTE</th>
                             <th>SUA COMISSÃO</th>
                             <th>DURAÇÃO DO REPASSE</th>
                             <th>USOS / LIMITE</th>
                             <th>STATUS</th>
-                            <th class="text-end pe-3">AÇÃO</th>
+                            <th class="text-end pe-3">LINK DE DIVULGAÇÃO</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -131,9 +110,6 @@
                         <tr>
                             <td class="fw-bold fs-6 text-primary">
                                 {{ c.codigo }}
-                                {% if loop.first %}
-                                    <span class="badge bg-primary-subtle text-primary ms-1" style="font-size: 0.7rem;">Principal</span>
-                                {% endif %}
                             </td>
                             <td><span class="badge bg-success">{{ c.percentual_desconto }}% OFF</span></td>
                             <td><span class="badge bg-info text-dark">{{ c.percentual_comissao }}% Comissão</span></td>
@@ -150,7 +126,7 @@
                                 {% set link_cupom = url_for('auth.registro', ref=c.codigo, _external=True) %}
                                 {% if current_user.status_aprovacao == 'aprovado' and c.is_valido %}
                                 <button class="btn btn-sm btn-outline-primary fw-bold" onclick="navigator.clipboard.writeText('{{ link_cupom }}'); alert('Link do cupom {{ c.codigo }} copiado com sucesso!');">
-                                    <i class="bi bi-link-45deg me-1"></i>Copiar Link
+                                    <i class="bi bi-link-45deg me-1"></i>Copiar Link do Cupom
                                 </button>
                                 {% else %}
                                 <button class="btn btn-sm btn-outline-secondary" disabled>Bloqueado</button>
@@ -159,7 +135,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="7" class="text-center py-3 text-muted">Nenhum cupom cadastrado.</td>
+                            <td colspan="7" class="text-center py-3 text-muted">Nenhum cupom ativo no momento.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
