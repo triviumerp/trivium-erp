@@ -105,7 +105,9 @@ def registro():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
 
-    cupom_url = request.args.get('ref', '').strip().upper()
+    # Captura tanto ?ref=CUPOM quanto ?afiliado=ID
+    cupom_url = (request.args.get('ref') or '').strip().upper()
+    afiliado_id_url = request.args.get('afiliado', type=int)
 
     if request.method == 'POST':
         tipo_pessoa = request.form.get('tipo_pessoa', 'PJ')
@@ -120,46 +122,58 @@ def registro():
         confirma_senha = request.form.get('confirma_senha', '')
         
         cupom_indicacao = (request.form.get('cupom_indicacao') or cupom_url).strip().upper()
+        afiliado_form_id = request.form.get('afiliado_id', type=int) or afiliado_id_url
 
-        # 1. Validação de CPF para Pessoa Física
+        # 1. Validação de CPF
         if tipo_pessoa == 'PF' and not is_cpf_valido(doc_identificacao):
             flash('O CPF informado é inválido. Por favor, revise os dígitos.', 'danger')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
 
-        # 2. BLINDAGEM ANTIFRAUDE PRIMEIRO: Impede autoindicação por e-mail ou documento
+        # 2. Identificação e Validação Antifraude do Parceiro
         cupom_obj = None
+        parceiro_obj = None
+
         if cupom_indicacao:
             cupom_obj = CupomDesconto.query.filter_by(codigo=cupom_indicacao).first()
-            if not cupom_obj or not cupom_obj.is_valido:
-                flash('O cupom ou link de indicação informado é inválido ou está expirado.', 'warning')
+            if cupom_obj and cupom_obj.is_valido:
+                parceiro_obj = cupom_obj.parceiro
+            else:
+                flash('O cupom informado é inválido ou está expirado.', 'warning')
                 cupom_indicacao = None
-            elif cupom_obj.parceiro:
-                doc_afiliado = re.sub(r'\D', '', cupom_obj.parceiro.cpf_cnpj or '')
-                if cupom_obj.parceiro.email.lower() == email or (doc_identificacao and doc_identificacao == doc_afiliado):
-                    flash('Não é permitido utilizar seu próprio cupom de afiliado para autoindicação.', 'danger')
-                    return render_template('auth/registro.html', cupom_ref='')
+
+        if not parceiro_obj and afiliado_form_id:
+            parceiro_obj = Usuario.query.filter_by(id=afiliado_form_id, nivel_acesso='afiliado').first()
+
+        # Blindagem Antifraude: impede autoindicação
+        if parceiro_obj:
+            doc_afiliado = re.sub(r'\D', '', parceiro_obj.cpf_cnpj or '')
+            if parceiro_obj.email.lower() == email or (doc_identificacao and doc_identificacao == doc_afiliado):
+                flash('Não é permitido utilizar seu próprio vínculo ou cupom de afiliado.', 'danger')
+                return render_template('auth/registro.html', cupom_ref='', afiliado_id=None)
 
         # 3. Validação de Senha Forte
         senha_valida, msg_erro = validar_senha_forte(senha)
         if not senha_valida:
             flash(msg_erro, 'warning')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
 
-        # 4. Confirmação de Senha
         if senha != confirma_senha:
             flash('A senha e a confirmação de senha não conferem.', 'warning')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
 
-        # 5. Validação de Duplicidade de Usuário / Empresa
         if Usuario.query.filter_by(email=email).first():
             flash('Este e-mail já está cadastrado no sistema. Faça login.', 'warning')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
 
         if doc_identificacao and Empresa.query.filter_by(cnpj=doc_identificacao).first():
             flash('Este CNPJ/CPF já possui uma conta cadastrada.', 'warning')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
 
         try:
+            # Captura parâmetros da campanha ou define os padrões
+            comissao_pct = cupom_obj.percentual_comissao if cupom_obj else 20.0
+            meses_limite = getattr(cupom_obj, 'meses_comissao_limite', 3) if cupom_obj else 3
+
             nova_empresa = Empresa(
                 razao_social=razao_social if razao_social else (nome_usuario if tipo_pessoa == 'PF' else 'Minha Empresa'),
                 nome_fantasia="Profissional Autônomo" if tipo_pessoa == 'PF' else None,
@@ -170,8 +184,16 @@ def registro():
                 status_assinatura="trial",
                 valor_mensalidade=0.0,
                 data_vencimento=date.today() + relativedelta(days=14),
-                cupom_utilizado=cupom_indicacao if cupom_indicacao else None
+                cupom_utilizado=cupom_obj.codigo if cupom_obj else None,
+                afiliado_id=cupom_obj.id if cupom_obj else None
             )
+            
+            # Atribui dinamicamente as colunas extras de campanha
+            if hasattr(nova_empresa, 'percentual_comissao_parceiro'):
+                nova_empresa.percentual_comissao_parceiro = comissao_pct
+            if hasattr(nova_empresa, 'meses_comissao_limite'):
+                nova_empresa.meses_comissao_limite = meses_limite
+
             db.session.add(nova_empresa)
             db.session.flush()
 
@@ -199,9 +221,9 @@ def registro():
         except Exception as e:
             db.session.rollback()
             flash(f'Erro ao processar o cadastro: {str(e)}', 'danger')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao)
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
 
-    return render_template('auth/registro.html', cupom_ref=cupom_url)
+    return render_template('auth/registro.html', cupom_ref=cupom_url, afiliado_id=afiliado_id_url)
 
 
 @auth_bp.route('/esqueci-senha', methods=['GET', 'POST'])

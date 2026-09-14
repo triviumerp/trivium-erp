@@ -392,35 +392,27 @@ def painel_afiliado():
         flash('Acesso restrito a parceiros afiliados.', 'danger')
         return redirect(url_for('index'))
 
-    # Pega o primeiro cupom ativo ou principal do parceiro
-    cupom = CupomDesconto.query.filter_by(usuario_id=current_user.id).first()
-    if not cupom:
-        # Cria um cupom inicial caso não exista
+    # Garante ao menos um cupom base para o parceiro
+    cupons = CupomDesconto.query.filter_by(usuario_id=current_user.id).order_by(CupomDesconto.id.asc()).all()
+    if not cupons:
         codigo_sugerido = re.sub(r'[^A-Z0-9]', '', current_user.nome.split()[0].upper()) + "10"
-        cupom = CupomDesconto(
+        cupom_padrao = CupomDesconto(
             usuario_id=current_user.id,
             codigo=codigo_sugerido,
             percentual_desconto=10.0,
             percentual_comissao=20.0,
-            ativo=False
+            meses_comissao_limite=3,
+            ativo=True if current_user.status_aprovacao == 'aprovado' else False
         )
-        db.session.add(cupom)
+        db.session.add(cupom_padrao)
         db.session.commit()
+        cupons = [cupom_padrao]
 
     if request.method == 'POST':
-        novo_codigo = request.form.get('codigo', '').strip().upper()
         chave_pix = request.form.get('chave_pix', '').strip()
         whatsapp = request.form.get('whatsapp', '').strip()
         rede_social = request.form.get('rede_social_principal', '').strip()
         aceitou_termos = bool(request.form.get('aceitou_termos'))
-
-        # Validação de código duplicado se for alterado
-        if novo_codigo != cupom.codigo:
-            existente = CupomDesconto.query.filter_by(codigo=novo_codigo).first()
-            if existente:
-                flash('Este código de cupom já está em uso por outro parceiro.', 'danger')
-                return redirect(url_for('painel_afiliado'))
-            cupom.codigo = novo_codigo
 
         current_user.chave_pix = chave_pix
         current_user.whatsapp = whatsapp
@@ -429,31 +421,36 @@ def painel_afiliado():
         if aceitou_termos:
             current_user.aceitou_termos_afiliado = True
             current_user.data_aceite_termos_afiliado = datetime.utcnow()
-            # Só ativa se o Master já tiver aprovado o cadastro
             if current_user.status_aprovacao == 'aprovado':
-                cupom.ativo = True
+                for c in cupons:
+                    c.ativo = True
 
         db.session.commit()
         flash('Informações e dados de repasse atualizados com sucesso!', 'success')
         return redirect(url_for('painel_afiliado'))
 
-    link_indicacao = url_for('auth.registro', ref=cupom.codigo, _external=True)
+    # Link permanente do afiliado (não muda ao criar/alterar cupons)
+    link_permanente = url_for('auth.registro', afiliado=current_user.id, _external=True)
 
-    # Empresas indicadas que usaram o cupom do parceiro
-    empresas_indicadas = Empresa.query.filter_by(cupom_utilizado=cupom.codigo).all()
+    # Busca empresas vinculadas a qualquer cupom do parceiro
+    codigos_cupons = [c.codigo for c in cupons]
+    empresas_indicadas = Empresa.query.filter(Empresa.cupom_utilizado.in_(codigos_cupons)).all() if codigos_cupons else []
+    
+    total_cadastros = sum(c.usos_atuais or 0 for c in cupons)
     total_assinantes_ativos = sum(1 for e in empresas_indicadas if e.status_assinatura == 'ativo')
     
-    # Cálculo de comissão estimada recorrente (20% sobre faturamento ativo)
+    # Comissão estimada baseada nos parâmetros individuais de cada empresa/cupom
     comissao_recorrente_estimada = sum(
-        (e.valor_mensalidade or 39.90) * (cupom.percentual_comissao / 100.0)
+        (e.valor_mensalidade or 39.90) * (getattr(e, 'percentual_comissao_parceiro', 20.0) / 100.0)
         for e in empresas_indicadas if e.status_assinatura == 'ativo'
     )
 
     return render_template(
         'afiliados/painel.html',
-        cupom=cupom,
-        link_indicacao=link_indicacao,
+        cupons=cupons,
+        link_permanente=link_permanente,
         empresas_indicadas=empresas_indicadas,
+        total_cadastros=total_cadastros,
         total_assinantes_ativos=total_assinantes_ativos,
         comissao_recorrente_estimada=comissao_recorrente_estimada
     )
