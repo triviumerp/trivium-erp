@@ -1714,6 +1714,12 @@ def perfil_empresa():
     empresa = current_user.empresa
     usuario = current_user
     
+    if empresa and empresa.status_assinatura == 'trial':
+        if empresa.valor_mensalidade != 0.0:
+            empresa.valor_mensalidade = 0.0
+            empresa.plano = "Período de Testes (Trial)"
+            db.session.commit()
+
     if request.method == 'POST':
         form_type = request.form.get('form_type')
 

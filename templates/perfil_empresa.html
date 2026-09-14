@@ -262,9 +262,20 @@
                         </div>
 
                         <div class="col-md-3">
+                            <small class="text-muted d-block">Plano Atual:</small>
+                            <strong class="text-dark fs-6">
+                                {% if perfil.status_assinatura == 'trial' or current_user.empresa.status_assinatura == 'trial' %}
+                                    Período de Testes (Trial)
+                                {% else %}
+                                    {{ perfil.plano or 'Plano Flex' }}
+                                {% endif %}
+                            </strong>
+                        </div>
+
+                        <div class="col-md-3">
                             <small class="text-muted d-block">Valor Contratado:</small>
                             <strong class="text-success fs-6">
-                                {% if perfil.status_assinatura == 'trial' %}
+                                {% if perfil.status_assinatura == 'trial' or current_user.empresa.status_assinatura == 'trial' %}
                                     R$ 0,00 (Gratuito)
                                 {% else %}
                                     R$ {{ "%.2f"|format(perfil.valor_mensalidade or 0.0) }}/mês
