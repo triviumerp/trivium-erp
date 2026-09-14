@@ -39,7 +39,7 @@
                 <div>
                     <h5 class="fw-bold text-dark mb-1">Cadastro em Análise de Segurança</h5>
                     <p class="mb-0 small text-muted">
-                        Seu perfil de parceiro foi submetido e está sendo avaliado. Seus links e cupons serão ativados automaticamente após a liberação.
+                        Seu perfil de parceiro está sendo avaliado. Seus cupons e links de divulgação serão liberados automaticamente após aprovação.
                     </p>
                 </div>
             </div>
@@ -56,17 +56,24 @@
         </div>
         {% endif %}
 
-        <!-- BANNER DO LINK GLOBAL DE AFILIADO -->
+        <!-- BANNER DE DIVULGAÇÃO: CUPOM PRINCIPAL -->
         <div class="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-primary text-white">
             <div class="row align-items-center g-3">
                 <div class="col-lg-8">
-                    <span class="badge bg-white text-primary fw-bold mb-2">Seu Link Permanente de Indicação</span>
-                    <h4 class="fw-bold mb-1">Divulgue seu Link e Campanhas</h4>
-                    <p class="mb-0 text-white-50 small">Cadastros iniciados pelo seu link ou utilizando seus cupons pontuam diretamente na sua conta.</p>
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="badge bg-white text-primary fw-bold fs-6">Cupom Principal: {{ cupom_principal.codigo }}</span>
+                        {% if cupom_principal.is_valido and current_user.status_aprovacao == 'aprovado' %}
+                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Link Ativo</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark"><i class="bi bi-lock me-1"></i>Em Moderação</span>
+                        {% endif %}
+                    </div>
+                    <h4 class="fw-bold mb-1">Ganhe {{ cupom_principal.percentual_comissao }}% de Comissão Recorrente</h4>
+                    <p class="mb-0 text-white-50 small">Seu cliente recebe {{ cupom_principal.percentual_desconto }}% de desconto no plano e você ganha repasse recorrente por até {{ cupom_principal.meses_comissao_limite or 3 }} meses.</p>
                 </div>
                 <div class="col-lg-4 text-lg-end">
-                    {% if current_user.status_aprovacao == 'aprovado' %}
-                    <button class="btn btn-light fw-bold text-primary px-4 py-2 shadow-sm" onclick="navigator.clipboard.writeText('{{ link_permanente }}'); alert('Link permanente copiado com sucesso!');">
+                    {% if current_user.status_aprovacao == 'aprovado' and cupom_principal.is_valido %}
+                    <button class="btn btn-light fw-bold text-primary px-4 py-2 shadow-sm" onclick="navigator.clipboard.writeText('{{ link_principal }}'); alert('Link do cupom {{ cupom_principal.codigo }} copiado!');">
                         <i class="bi bi-clipboard me-1"></i> Copiar Meu Link
                     </button>
                     {% else %}
@@ -82,9 +89,9 @@
         <div class="row g-3 mb-4">
             <div class="col-md-4">
                 <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                    <span class="small text-muted fw-bold">TOTAL DE CADASTROS</span>
+                    <span class="small text-muted fw-bold">TOTAL DE INDICADOS</span>
                     <h3 class="fw-bold text-dark my-1">{{ total_cadastros }}</h3>
-                    <small class="text-muted">Empresas indicadas</small>
+                    <small class="text-muted">Empresas que usaram seus cupons</small>
                 </div>
             </div>
             <div class="col-md-4">
@@ -103,9 +110,9 @@
             </div>
         </div>
 
-        <!-- TABELA DE CUPONS DO PARCEIRO -->
+        <!-- TABELA DE TODOS OS CUPONS DO PARCEIRO -->
         <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
-            <h5 class="fw-bold text-dark mb-3"><i class="bi bi-tags-fill text-danger me-2"></i>Seus Cupons & Campanhas Promocionais</h5>
+            <h5 class="fw-bold text-dark mb-3"><i class="bi bi-tags-fill text-primary me-2"></i>Seus Cupons & Campanhas Promocionais</h5>
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0 small">
                     <thead class="table-light">
@@ -116,13 +123,18 @@
                             <th>DURAÇÃO DO REPASSE</th>
                             <th>USOS / LIMITE</th>
                             <th>STATUS</th>
-                            <th class="text-end pe-3">LINK DO CUPOM</th>
+                            <th class="text-end pe-3">AÇÃO</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for c in cupons %}
                         <tr>
-                            <td class="fw-bold fs-6 text-primary">{{ c.codigo }}</td>
+                            <td class="fw-bold fs-6 text-primary">
+                                {{ c.codigo }}
+                                {% if loop.first %}
+                                    <span class="badge bg-primary-subtle text-primary ms-1" style="font-size: 0.7rem;">Principal</span>
+                                {% endif %}
+                            </td>
                             <td><span class="badge bg-success">{{ c.percentual_desconto }}% OFF</span></td>
                             <td><span class="badge bg-info text-dark">{{ c.percentual_comissao }}% Comissão</span></td>
                             <td><strong>{{ c.meses_comissao_limite or 3 }} meses</strong></td>
@@ -136,14 +148,18 @@
                             </td>
                             <td class="text-end pe-3">
                                 {% set link_cupom = url_for('auth.registro', ref=c.codigo, _external=True) %}
-                                <button class="btn btn-sm btn-outline-primary fw-bold" onclick="navigator.clipboard.writeText('{{ link_cupom }}'); alert('Link do cupom {{ c.codigo }} copiado!');">
-                                    <i class="bi bi-link-45deg me-1"></i>Copiar Link do Cupom
+                                {% if current_user.status_aprovacao == 'aprovado' and c.is_valido %}
+                                <button class="btn btn-sm btn-outline-primary fw-bold" onclick="navigator.clipboard.writeText('{{ link_cupom }}'); alert('Link do cupom {{ c.codigo }} copiado com sucesso!');">
+                                    <i class="bi bi-link-45deg me-1"></i>Copiar Link
                                 </button>
+                                {% else %}
+                                <button class="btn btn-sm btn-outline-secondary" disabled>Bloqueado</button>
+                                {% endif %}
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="7" class="text-center py-3 text-muted">Nenhum cupom ativo no momento.</td>
+                            <td colspan="7" class="text-center py-3 text-muted">Nenhum cupom cadastrado.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -171,7 +187,7 @@
                 </div>
                 <div class="text-end">
                     <button type="button" class="btn btn-primary fw-bold px-4" onclick="abrirModalRegras()">
-                        <i class="bi bi-check2-circle me-1"></i> Salvar e Revisar Termos
+                        <i class="bi bi-check2-circle me-1"></i> Salvar Dados de Repasse
                     </button>
                 </div>
 
@@ -185,10 +201,10 @@
                             </div>
                             <div class="modal-body p-4 small text-muted">
                                 <h6 class="fw-bold text-dark">1. Comissionamento por Campanha</h6>
-                                <p>As comissões são apuradas mensalmente conforme a alíquota e o número de meses definidos para o cupom ou link utilizado no cadastro da empresa.</p>
+                                <p>As comissões são apuradas mensalmente conforme a alíquota e a duração estabelecidas para cada cupom utilizado na contratação.</p>
 
                                 <h6 class="fw-bold text-dark">2. Regra de Pagamento</h6>
-                                <p>Os repasses são consolidados no fechamento do mês e pagos via <b>PIX</b> na chave cadastrada até o dia 10 do mês subsequente.</p>
+                                <p>Os repasses são consolidados no fechamento de cada mês e pagos via <b>PIX</b> na chave cadastrada até o dia 10 do mês subsequente.</p>
 
                                 <div class="form-check p-3 bg-light rounded-3 border mt-3">
                                     <input class="form-check-input" type="checkbox" name="aceitou_termos" id="chkTermos" {% if current_user.aceitou_termos_afiliado %}checked{% endif %} required>
@@ -200,7 +216,7 @@
                             <div class="modal-footer bg-light">
                                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Voltar</button>
                                 <button type="button" class="btn btn-success fw-bold px-4" onclick="submeterFormulario()">
-                                    Confirmar e Gravar Cadastro
+                                    Confirmar e Salvar
                                 </button>
                             </div>
                         </div>
@@ -211,7 +227,7 @@
 
         <!-- TABELA DE EMPRESAS INDICADAS (LGPD) -->
         <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
-            <h5 class="fw-bold text-dark mb-3"><i class="bi bi-buildings text-primary me-2"></i>Empresas Cadastradas com Seu Vínculo</h5>
+            <h5 class="fw-bold text-dark mb-3"><i class="bi bi-buildings text-primary me-2"></i>Empresas Cadastradas com Seus Cupons</h5>
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0 small">
                     <thead class="table-light">
@@ -256,7 +272,7 @@
                                 {% endif %}
                             </td>
                             <td>{{ 'Período de Testes (Trial)' if emp.status_assinatura == 'trial' else (emp.plano or 'Plano Flex') }}</td>
-                            <td><span class="badge bg-light text-dark border">{{ emp.cupom_utilizado or 'Link Direto' }}</span></td>
+                            <td><span class="badge bg-light text-dark border">{{ emp.cupom_utilizado or '--' }}</span></td>
                             <td class="text-end pe-3">
                                 {% if emp.status_assinatura == 'ativo' %}
                                     {% set val_comissao = (emp.valor_mensalidade or 39.90) * ((emp.percentual_comissao_parceiro or 20.0) / 100.0) %}
@@ -268,7 +284,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="6" class="text-center py-4 text-muted">Nenhuma empresa cadastrada pelo seu link até o momento.</td>
+                            <td colspan="6" class="text-center py-4 text-muted">Nenhuma empresa cadastrada pelos seus cupons até o momento.</td>
                         </tr>
                         {% endfor %}
                     </tbody>

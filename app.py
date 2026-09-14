@@ -392,7 +392,7 @@ def painel_afiliado():
         flash('Acesso restrito a parceiros afiliados.', 'danger')
         return redirect(url_for('index'))
 
-    # Garante ao menos um cupom base para o parceiro
+    # Coleta todos os cupons vinculados ao parceiro
     cupons = CupomDesconto.query.filter_by(usuario_id=current_user.id).order_by(CupomDesconto.id.asc()).all()
     if not cupons:
         codigo_sugerido = re.sub(r'[^A-Z0-9]', '', current_user.nome.split()[0].upper()) + "10"
@@ -407,6 +407,9 @@ def painel_afiliado():
         db.session.add(cupom_padrao)
         db.session.commit()
         cupons = [cupom_padrao]
+
+    cupom_principal = cupons[0]
+    link_principal = url_for('auth.registro', ref=cupom_principal.codigo, _external=True)
 
     if request.method == 'POST':
         chave_pix = request.form.get('chave_pix', '').strip()
@@ -429,17 +432,25 @@ def painel_afiliado():
         flash('Informações e dados de repasse atualizados com sucesso!', 'success')
         return redirect(url_for('painel_afiliado'))
 
-    # Link permanente do afiliado (não muda ao criar/alterar cupons)
-    link_permanente = url_for('auth.registro', afiliado=current_user.id, _external=True)
-
-    # Busca empresas vinculadas a qualquer cupom do parceiro
+    # Busca todas as empresas vinculadas aos cupons deste parceiro
     codigos_cupons = [c.codigo for c in cupons]
-    empresas_indicadas = Empresa.query.filter(Empresa.cupom_utilizado.in_(codigos_cupons)).all() if codigos_cupons else []
+    cupons_ids = [c.id for c in cupons]
+
+    condicoes = []
+    if codigos_cupons:
+        condicoes.append(Empresa.cupom_utilizado.in_(codigos_cupons))
+    if cupons_ids:
+        condicoes.append(Empresa.afiliado_id.in_(cupons_ids))
+
+    if condicoes:
+        from sqlalchemy import or_
+        empresas_indicadas = Empresa.query.filter(or_(*condicoes)).order_by(Empresa.data_criacao.desc()).all()
+    else:
+        empresas_indicadas = []
     
-    total_cadastros = sum(c.usos_atuais or 0 for c in cupons)
+    total_cadastros = len(empresas_indicadas)
     total_assinantes_ativos = sum(1 for e in empresas_indicadas if e.status_assinatura == 'ativo')
     
-    # Comissão estimada baseada nos parâmetros individuais de cada empresa/cupom
     comissao_recorrente_estimada = sum(
         (e.valor_mensalidade or 39.90) * (getattr(e, 'percentual_comissao_parceiro', 20.0) / 100.0)
         for e in empresas_indicadas if e.status_assinatura == 'ativo'
@@ -448,7 +459,8 @@ def painel_afiliado():
     return render_template(
         'afiliados/painel.html',
         cupons=cupons,
-        link_permanente=link_permanente,
+        cupom_principal=cupom_principal,
+        link_principal=link_principal,
         empresas_indicadas=empresas_indicadas,
         total_cadastros=total_cadastros,
         total_assinantes_ativos=total_assinantes_ativos,
