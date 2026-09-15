@@ -9,7 +9,6 @@
 </head>
 <body class="bg-light">
 
-    <!-- Topbar Afiliado -->
     <nav class="navbar navbar-expand-lg bg-white border-bottom px-4 py-3">
         <div class="container-fluid">
             <span class="navbar-brand fw-bold text-primary mb-0"><i class="bi bi-award-fill me-2"></i>Trivium Parceiros</span>
@@ -22,7 +21,6 @@
 
     <div class="container py-4">
 
-        <!-- Mensagens Flash -->
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
@@ -34,38 +32,13 @@
         {% endif %}
         {% endwith %}
 
-        <!-- Avisos de Moderação -->
-        {% if current_user.status_aprovacao == 'pendente' %}
-        <div class="alert alert-warning border-0 shadow-sm rounded-4 p-4 mb-4">
-            <div class="d-flex align-items-center gap-3">
-                <i class="bi bi-clock-history fs-1 text-warning"></i>
-                <div>
-                    <h5 class="fw-bold text-dark mb-1">Cadastro em Análise de Segurança</h5>
-                    <p class="mb-0 small text-muted">
-                        Seu perfil de parceiro está sendo avaliado. Seus cupons e links de divulgação serão liberados automaticamente após aprovação.
-                    </p>
-                </div>
-            </div>
-        </div>
-        {% elif current_user.status_aprovacao == 'rejeitado' %}
-        <div class="alert alert-danger border-0 shadow-sm rounded-4 p-4 mb-4">
-            <div class="d-flex align-items-center gap-3">
-                <i class="bi bi-exclamation-triangle-fill fs-1 text-danger"></i>
-                <div>
-                    <h5 class="fw-bold mb-1">Cadastro de Parceiro Não Aprovado</h5>
-                    <p class="mb-0 small"><b>Motivo informado:</b> {{ current_user.motivo_rejeicao or 'Inconformidade cadastral.' }}</p>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- MÉTRICAS GERAIS -->
+        <!-- MÉTRICAS -->
         <div class="row g-3 mb-4">
             <div class="col-md-4">
                 <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                    <span class="small text-muted fw-bold">TOTAL DE CADASTROS</span>
+                    <span class="small text-muted fw-bold">TOTAL DE INDICADOS</span>
                     <h3 class="fw-bold text-dark my-1">{{ total_cadastros }}</h3>
-                    <small class="text-muted">Empresas indicadas</small>
+                    <small class="text-muted">Cadastros iniciados</small>
                 </div>
             </div>
             <div class="col-md-4">
@@ -84,58 +57,37 @@
             </div>
         </div>
 
-        <!-- TABELA DE CUPONS & LINKS DE DIVULGAÇÃO -->
+        <!-- CUPONS E LINKS -->
         <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                    <h5 class="fw-bold text-dark mb-0"><i class="bi bi-tags-fill text-danger me-2"></i>Seus Cupons & Links de Divulgação</h5>
-                    <p class="text-muted small mb-0">Utilize o botão de copiar para compartilhar o link direto de cada campanha com seus clientes.</p>
-                </div>
-            </div>
+            <h5 class="fw-bold text-dark mb-3"><i class="bi bi-tags-fill text-danger me-2"></i>Seus Cupons & Links de Divulgação</h5>
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0 small">
                     <thead class="table-light">
                         <tr>
-                            <th>CÓDIGO DO CUPOM</th>
+                            <th>CÓDIGO</th>
                             <th>DESCONTO CLIENTE</th>
                             <th>SUA COMISSÃO</th>
-                            <th>DURAÇÃO DO REPASSE</th>
+                            <th>DURAÇÃO</th>
                             <th>USOS / LIMITE</th>
                             <th>STATUS</th>
-                            <th class="text-end pe-3">LINK DE DIVULGAÇÃO</th>
+                            <th class="text-end pe-3">LINK</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for c in cupons %}
                         <tr>
-                            <td class="fw-bold fs-6 text-primary">
-                                {{ c.codigo }}
-                            </td>
+                            <td class="fw-bold fs-6 text-primary">{{ c.codigo }}</td>
                             <td><span class="badge bg-success">{{ c.percentual_desconto }}% OFF</span></td>
                             <td><span class="badge bg-info text-dark">{{ c.percentual_comissao }}% Comissão</span></td>
                             <td><strong>{{ c.meses_comissao_limite or 3 }} meses</strong></td>
                             <td><strong>{{ c.usos_atuais }}</strong> / {{ c.limite_usos }}</td>
-                            <td>
-                                {% if c.is_valido and current_user.status_aprovacao == 'aprovado' %}
-                                    <span class="badge bg-success">Ativo</span>
-                                {% else %}
-                                    <span class="badge bg-warning text-dark">Em Moderação</span>
-                                {% endif %}
-                            </td>
+                            <td><span class="badge {{ 'bg-success' if c.is_valido and current_user.status_aprovacao == 'aprovado' else 'bg-warning text-dark' }}">{{ 'Ativo' if c.is_valido and current_user.status_aprovacao == 'aprovado' else 'Em Análise' }}</span></td>
                             <td class="text-end pe-3">
                                 {% set link_cupom = url_for('auth.registro', ref=c.codigo, _external=True) %}
-                                {% if current_user.status_aprovacao == 'aprovado' and c.is_valido %}
-                                <button class="btn btn-sm btn-outline-primary fw-bold" onclick="navigator.clipboard.writeText('{{ link_cupom }}'); alert('Link do cupom {{ c.codigo }} copiado com sucesso!');">
-                                    <i class="bi bi-link-45deg me-1"></i>Copiar Link do Cupom
+                                <button class="btn btn-sm btn-outline-primary fw-bold" onclick="navigator.clipboard.writeText('{{ link_cupom }}'); alert('Link copiado!');">
+                                    <i class="bi bi-link-45deg me-1"></i>Copiar Link
                                 </button>
-                                {% else %}
-                                <button class="btn btn-sm btn-outline-secondary" disabled>Bloqueado</button>
-                                {% endif %}
                             </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="7" class="text-center py-3 text-muted">Nenhum cupom ativo no momento.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -143,65 +95,55 @@
             </div>
         </div>
 
-        <!-- DADOS DE RECEBIMENTO PIX -->
-        <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
-            <h5 class="fw-bold text-dark mb-3"><i class="bi bi-cash-coin text-success me-2"></i>Dados Cadastrais & Repasse PIX</h5>
-            <form id="formAfiliado" method="POST">
-                <div class="row g-3 mb-3">
-                    <div class="col-md-4">
-                        <label class="form-label small fw-bold">Chave PIX para Recebimento *</label>
-                        <input type="text" name="chave_pix" class="form-control" placeholder="CPF, E-mail, Celular..." value="{{ current_user.chave_pix or '' }}" required>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-bold">WhatsApp de Contato *</label>
-                        <input type="text" name="whatsapp" class="form-control" placeholder="(11) 99999-9999" value="{{ current_user.whatsapp or '' }}" required>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-bold">Rede Social / Canal Principal *</label>
-                        <input type="text" name="rede_social_principal" class="form-control" placeholder="Instagram, YouTube, Site..." value="{{ current_user.rede_social_principal or '' }}" required>
-                    </div>
-                </div>
-                <div class="text-end">
-                    <button type="button" class="btn btn-primary fw-bold px-4" onclick="abrirModalRegras()">
-                        <i class="bi bi-check2-circle me-1"></i> Salvar Dados de Repasse
-                    </button>
-                </div>
-
-                <!-- MODAL DE TERMOS -->
-                <div class="modal fade" id="modalRegrasAfiliado" tabindex="-1">
-                    <div class="modal-dialog modal-dialog-centered modal-lg">
-                        <div class="modal-content border-0 shadow rounded-4">
-                            <div class="modal-header bg-light">
-                                <h5 class="modal-title fw-bold text-dark"><i class="bi bi-file-text text-primary me-2"></i>Regras do Programa de Parceiros</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <!-- DADOS CADASTRAIS, REPASSE PIX E ALTERAÇÃO DE SENHA -->
+        <div class="row g-4 mb-4">
+            <div class="col-lg-7">
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white h-100">
+                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-cash-coin text-success me-2"></i>Dados Cadastrais & Chave PIX</h5>
+                    <form method="POST">
+                        <input type="hidden" name="form_tipo" value="dados_pix">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Chave PIX de Recebimento *</label>
+                                <input type="text" name="chave_pix" class="form-control form-control-sm" value="{{ current_user.chave_pix or '' }}" required>
                             </div>
-                            <div class="modal-body p-4 small text-muted">
-                                <h6 class="fw-bold text-dark">1. Comissionamento por Campanha</h6>
-                                <p>As comissões são apuradas mensalmente conforme a alíquota e a duração estabelecidas para cada cupom utilizado na contratação.</p>
-
-                                <h6 class="fw-bold text-dark">2. Regra de Pagamento</h6>
-                                <p>Os repasses são consolidados no fechamento de cada mês e pagos via <b>PIX</b> na chave cadastrada até o dia 10 do mês subsequente.</p>
-
-                                <div class="form-check p-3 bg-light rounded-3 border mt-3">
-                                    <input class="form-check-input" type="checkbox" name="aceitou_termos" id="chkTermos" {% if current_user.aceitou_termos_afiliado %}checked{% endif %} required>
-                                    <label class="form-check-label fw-bold text-dark" for="chkTermos">
-                                        Li e concordo com os termos e regras de comissionamento do Trivium ERP.
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="modal-footer bg-light">
-                                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Voltar</button>
-                                <button type="button" class="btn btn-success fw-bold px-4" onclick="submeterFormulario()">
-                                    Confirmar e Salvar
-                                </button>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">WhatsApp de Contato *</label>
+                                <input type="text" name="whatsapp" class="form-control form-control-sm" value="{{ current_user.whatsapp or '' }}" required>
                             </div>
                         </div>
-                    </div>
+                        <button type="submit" class="btn btn-sm btn-primary fw-bold">Salvar Dados de Repasse</button>
+                    </form>
                 </div>
-            </form>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white h-100">
+                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-key text-primary me-2"></i>Alterar Minha Senha</h5>
+                    <form method="POST">
+                        <input type="hidden" name="form_tipo" value="alterar_senha">
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Senha Atual</label>
+                            <input type="password" name="senha_atual" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Nova Senha</label>
+                            <input type="password" name="nova_senha" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Confirmar Nova Senha</label>
+                            <input type="password" name="confirma_nova_senha" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <button type="submit" class="btn btn-sm btn-dark fw-bold">Atualizar Senha</button>
+                            <a href="{{ url_for('auth.esqueci_senha') }}" class="small text-muted text-decoration-none">Esqueceu a senha?</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
 
-        <!-- TABELA DE EMPRESAS INDICADAS (LGPD) -->
+        <!-- TABELA DE CLIENTES INDICADOS (LGPD) -->
         <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
             <h5 class="fw-bold text-dark mb-3"><i class="bi bi-buildings text-primary me-2"></i>Empresas Cadastradas com Seus Cupons</h5>
             <div class="table-responsive">
@@ -209,11 +151,10 @@
                     <thead class="table-light">
                         <tr>
                             <th>EMPRESA INDICADA (LGPD)</th>
-                            <th>DATA DE CADASTRO</th>
+                            <th>DATA CADASTRO</th>
                             <th>STATUS DO PLANO</th>
-                            <th>PLANO</th>
-                            <th>CUPOM USADO</th>
-                            <th class="text-end pe-3">COMISSÃO ESTIMADA</th>
+                            <th>CUPOM</th>
+                            <th class="text-end pe-3">COMISSÃO MENSAL</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -221,46 +162,24 @@
                         <tr>
                             <td>
                                 <strong class="text-dark d-block">
-                                    {% set nome_emp = emp.razao_social or emp.nome_fantasia or 'Empresa' %}
-                                    {% if nome_emp|length > 6 %}
-                                        {{ nome_emp[:2] }}**********{{ nome_emp[-2:] }}
-                                    {% else %}
-                                        {{ nome_emp[:2] }}****
-                                    {% endif %}
+                                    {% set nome_emp = emp.razao_social or 'Empresa' %}
+                                    {{ nome_emp[:2] }}**********{{ nome_emp[-2:] }}
                                 </strong>
-                                <span class="text-muted" style="font-size: 0.78rem;">
-                                    {% if emp.email and '@' in emp.email %}
-                                        {% set partes = emp.email.split('@') %}
-                                        {{ partes[0][:2] }}*****@{{ partes[1][:2] }}*****.com
-                                    {% else %}
-                                        cli*****@email.com
-                                    {% endif %}
-                                </span>
                             </td>
                             <td>{{ emp.data_criacao.strftime('%d/%m/%Y') if emp.data_criacao else '--' }}</td>
-                            <td>
-                                {% if emp.status_assinatura == 'ativo' %}
-                                    <span class="badge bg-success">Assinatura Ativa</span>
-                                {% elif emp.status_assinatura == 'trial' %}
-                                    <span class="badge bg-warning text-dark">Período de Testes</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">Inadimplente / Bloqueado</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ 'Período de Testes (Trial)' if emp.status_assinatura == 'trial' else (emp.plano or 'Plano Flex') }}</td>
+                            <td><span class="badge {{ 'bg-success' if emp.status_assinatura == 'ativo' else 'bg-warning text-dark' }}">{{ 'Assinatura Ativa' if emp.status_assinatura == 'ativo' else 'Período Trial' }}</span></td>
                             <td><span class="badge bg-light text-dark border">{{ emp.cupom_utilizado or '--' }}</span></td>
-                            <td class="text-end pe-3">
+                            <td class="text-end pe-3 fw-bold text-success">
                                 {% if emp.status_assinatura == 'ativo' %}
-                                    {% set val_comissao = (emp.valor_mensalidade or 39.90) * ((emp.percentual_comissao_parceiro or 20.0) / 100.0) %}
-                                    <span class="fw-bold text-success">R$ {{ "%.2f"|format(val_comissao) }}/mês</span>
+                                    R$ {{ "%.2f"|format((emp.valor_mensalidade or 39.90) * 0.20) }}/mês
                                 {% else %}
-                                    <span class="text-muted">R$ 0,00 (Trial)</span>
+                                    R$ 0,00 (Trial)
                                 {% endif %}
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="6" class="text-center py-4 text-muted">Nenhuma empresa cadastrada pelos seus cupons até o momento.</td>
+                            <td colspan="5" class="text-center py-4 text-muted">Nenhuma empresa indicada cadastrada no momento.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -269,21 +188,6 @@
         </div>
 
     </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-    function abrirModalRegras() {
-        const modal = new bootstrap.Modal(document.getElementById('modalRegrasAfiliado'));
-        modal.show();
-    }
-    function submeterFormulario() {
-        const chk = document.getElementById('chkTermos');
-        if (!chk.checked) {
-            alert('Você precisa aceitar os termos do programa de parceiros.');
-            return;
-        }
-        document.getElementById('formAfiliado').submit();
-    }
-    </script>
 </body>
 </html>

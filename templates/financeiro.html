@@ -1,65 +1,54 @@
 {% extends 'base.html' %}
 
+{% block title %}Financeiro & Contas a Receber - Trivium ERP{% endblock %}
+
 {% block content %}
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
     <div>
         <h2 class="fw-bold text-dark mb-0"><i class="bi bi-cash-stack text-success me-2"></i>Contas a Receber & Faturamento</h2>
-        <p class="text-muted mb-0">Controle de faturas, boletos, emissão de NF e fluxo de recebimentos</p>
+        <p class="text-muted mb-0">Controle analítico de faturas, boletos, emissão de NF e fluxo de recebimentos</p>
     </div>
-    <div class="d-flex gap-2">
-        <form action="{{ url_for('faturar_mes_contratos') }}" method="POST">
-            <button type="submit" class="btn btn-success fw-bold shadow-sm" onclick="return confirm('Deseja faturar os contratos mensalistas ativos?')">
-                <i class="bi bi-arrow-repeat me-1"></i>Faturar Mensalidades do Mês
-            </button>
-        </form>
-    </div>
+    <form action="{{ url_for('faturar_mes_contratos') }}" method="POST">
+        <button type="submit" class="btn btn-success fw-bold shadow-sm" onclick="return confirm('Deseja faturar os contratos mensalistas ativos?')">
+            <i class="bi bi-arrow-repeat me-1"></i>Faturar Mensalidades do Mês
+        </button>
+    </form>
 </div>
 
 <!-- CARDS DE MÉTRICAS -->
 <div class="row g-3 mb-4">
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3 bg-secondary text-white rounded-3">
-            <div class="card-body p-0">
-                <span class="small text-white-50">A Faturar (Sem Boleto)</span>
-                <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_a_faturar) }}</h3>
-                <small><i class="bi bi-receipt me-1"></i>Prontas para faturamento</small>
-            </div>
+        <div class="card border-0 shadow-sm p-3 bg-secondary text-white rounded-4">
+            <span class="small text-white-50 fw-bold">A FATURAR</span>
+            <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_a_faturar) }}</h3>
+            <small>Prontas para emissão</small>
         </div>
     </div>
-
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3 bg-warning text-dark rounded-3">
-            <div class="card-body p-0">
-                <span class="small text-dark-50">Aguardando Pagamento</span>
-                <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_aguardando) }}</h3>
-                <small><i class="bi bi-hourglass-split me-1"></i>Boletos/PIX no prazo</small>
-            </div>
+        <div class="card border-0 shadow-sm p-3 bg-warning text-dark rounded-4">
+            <span class="small text-dark-50 fw-bold">AGUARDANDO PAGAMENTO</span>
+            <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_aguardando) }}</h3>
+            <small>No prazo de vencimento</small>
         </div>
     </div>
-
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3 bg-danger text-white rounded-3">
-            <div class="card-body p-0">
-                <span class="small text-white-50">Em Atraso (Vencidos)</span>
-                <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_atrasado) }}</h3>
-                <small><i class="bi bi-exclamation-triangle me-1"></i>{{ qtd_atrasados }} título(s) vencido(s)</small>
-            </div>
+        <div class="card border-0 shadow-sm p-3 bg-danger text-white rounded-4">
+            <span class="small text-white-50 fw-bold">EM ATRASO</span>
+            <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_atrasado) }}</h3>
+            <small>{{ qtd_atrasados }} título(s) vencido(s)</small>
         </div>
     </div>
-
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3 bg-success text-white rounded-3">
-            <div class="card-body p-0">
-                <span class="small text-white-50">Total Recebido (Pago)</span>
-                <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_recebido) }}</h3>
-                <small><i class="bi bi-check2-circle me-1"></i>Liquidado em caixa</small>
-            </div>
+        <div class="card border-0 shadow-sm p-3 bg-success text-white rounded-4">
+            <span class="small text-white-50 fw-bold">TOTAL RECEBIDO</span>
+            <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_recebido) }}</h3>
+            <small>Liquidado em caixa</small>
         </div>
     </div>
 </div>
 
 <!-- FILTROS POR STATUS -->
-<div class="card border-0 shadow-sm mb-4">
+<div class="card border-0 shadow-sm mb-4 rounded-4">
     <div class="card-body py-2 d-flex justify-content-between align-items-center">
         <div class="btn-group">
             <a href="{{ url_for('financeiro', status='todos') }}" class="btn btn-sm {% if filtro_atual == 'todos' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
@@ -81,17 +70,17 @@
     </div>
 </div>
 
-<!-- TABELA PRINCIPAL DE FATURAMENTO E COBRANÇA -->
-<div class="card border-0 shadow-sm">
+<!-- TABELA PRINCIPAL DE FATURAMENTO -->
+<div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr class="small text-muted">
-                        <th>CLIENTE / EMPRESA</th>
+            <table class="table table-hover align-middle mb-0 small">
+                <thead class="table-light text-muted">
+                    <tr>
+                        <th>CLIENTE</th>
                         <th>DESCRIÇÃO DA FATURA</th>
                         <th>SERVIÇOS COBERTOS</th>
-                        <th>VALOR TOTAL</th>
+                        <th>TOTAL / RECEBIDO</th>
                         <th>VENCIMENTO</th>
                         <th>STATUS</th>
                         <th>ANEXOS</th>
@@ -102,21 +91,26 @@
                     {% for item in itens %}
                     {% set f = item.fatura %}
                     {% set qtd_itens = f.proposta.itens|length if f.proposta and f.proposta.itens else (f.servicos|length) %}
+                    {% set valor_pago_fatura = f.parcelas | selectattr('status', 'equalto', 'Pago') | map(attribute='valor') | sum %}
+                    {% set total_parc = f.parcelas | length %}
+                    {% set pagas_parc = f.parcelas | selectattr('status', 'equalto', 'Pago') | list | length %}
+                    
+                    {% if pagas_parc == total_parc and total_parc > 0 %}
+                        {% set cor_status = 'border-success bg-success-subtle text-success' %}
+                    {% elif pagas_parc > 0 %}
+                        {% set cor_status = 'border-warning bg-warning-subtle text-dark' %}
+                    {% else %}
+                        {% set cor_status = 'border-danger bg-danger-subtle text-danger' %}
+                    {% endif %}
+
                     <tr class="{% if item.esta_vencido %}table-danger{% endif %}">
-                        <!-- CLIENTE -->
                         <td>
-                            <a href="{{ url_for('detalhe_cliente', id=f.cliente_id) }}" class="fw-bold text-dark text-decoration-none d-block">
-                                {{ f.cliente.nome }}
-                            </a>
-                            <small class="text-muted"><i class="bi bi-telephone me-1"></i>{{ f.cliente.telefone }}</small>
+                            <strong class="text-dark d-block">{{ f.cliente.nome }}</strong>
+                            <span class="text-muted">{{ f.cliente.telefone }}</span>
                         </td>
 
-                        <!-- DESCRIÇÃO -->
                         <td>
                             <span class="fw-semibold text-dark">{{ f.descricao }}</span>
-                            {% if f.contrato_id %}
-                                <span class="badge bg-info text-dark d-block mt-1" style="max-width: 100px;"><i class="bi bi-arrow-repeat me-1"></i>Mensal</span>
-                            {% endif %}
                             {% if f.total_parcelas > 1 %}
                                 <small class="text-primary fw-bold d-block mt-1">
                                     <i class="bi bi-layers me-1"></i>{{ f.total_pagas }}/{{ f.total_parcelas }} parcelas pagas
@@ -124,78 +118,63 @@
                             {% endif %}
                         </td>
 
-                        <!-- SERVIÇOS COBERTOS (COM BOTÃO VER ITENS) -->
                         <td>
-                            <div class="d-flex align-items-center gap-1">
-                                <button type="button" class="btn btn-sm btn-light border py-0 px-2 fw-semibold text-dark" data-bs-toggle="modal" data-bs-target="#modalDetalhes{{ f.id }}" title="Ver detalhamento dos serviços">
-                                    <i class="bi bi-eye text-primary me-1"></i>{{ qtd_itens if qtd_itens > 0 else 1 }} serviço(s)
-                                </button>
-                            </div>
-                            <small class="text-muted d-block text-truncate mt-1" style="max-width: 200px;">
-                                {% if f.proposta and f.proposta.itens %}
-                                    {% for it in f.proposta.itens %}{{ it.tipo_servico.nome }}{% if not loop.last %}, {% endif %}{% endfor %}
-                                {% elif f.servicos %}
-                                    {% for s in f.servicos %}{{ s.tipo_servico.nome }}{% if not loop.last %}, {% endif %}{% endfor %}
-                                {% else %}
-                                    {{ f.descricao }}
-                                {% endif %}
-                            </small>
+                            <button type="button" class="btn btn-sm btn-light border py-0 px-2 fw-semibold text-dark" data-bs-toggle="modal" data-bs-target="#modalDetalhes{{ f.id }}">
+                                <i class="bi bi-eye text-primary me-1"></i>{{ qtd_itens if qtd_itens > 0 else 1 }} serviço(s)
+                            </button>
                         </td>
 
-                        <!-- VALOR TOTAL -->
-                        <td class="fw-bold text-success fs-6">R$ {{ "%.2f"|format(f.valor_total) }}</td>
+                        <!-- VALOR TOTAL E PAGO COM DISTINÇÃO DE CORES -->
+                        <td>
+                            <div class="p-2 border rounded-3 {{ cor_status }}" style="max-width: 180px;">
+                                <div class="d-flex justify-content-between">
+                                    <span>Total:</span>
+                                    <strong>R$ {{ "%.2f"|format(f.valor_total) }}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between pt-1 border-top" style="font-size: 0.75rem;">
+                                    <span>Recebido:</span>
+                                    <strong>R$ {{ "%.2f"|format(valor_pago_fatura) }}</strong>
+                                </div>
+                            </div>
+                        </td>
 
-                        <!-- VENCIMENTO -->
                         <td>
                             {% if item.data_vencimento %}
                                 <span class="fw-bold {% if item.esta_vencido %}text-danger{% else %}text-dark{% endif %}">
                                     {{ item.data_vencimento.strftime('%d/%m/%Y') }}
                                 </span>
-                                {% if item.esta_vencido %}
-                                    <span class="badge bg-danger ms-1">Vencida!</span>
-                                {% endif %}
                             {% else %}
-                                <span class="text-muted small">Sem data</span>
+                                <span class="text-muted">--</span>
                             {% endif %}
                         </td>
 
-                        <!-- STATUS -->
                         <td>
                             {% if item.status_calculado == 'Pago' %}
-                                <span class="badge bg-success p-2"><i class="bi bi-check-circle me-1"></i>Pago</span>
+                                <span class="badge bg-success p-2">Pago</span>
                             {% elif item.status_calculado == 'Em Atraso' %}
-                                <span class="badge bg-danger p-2"><i class="bi bi-exclamation-triangle me-1"></i>Em Atraso</span>
+                                <span class="badge bg-danger p-2">Em Atraso</span>
                             {% elif item.status_calculado == 'Aguardando Pagamento' %}
-                                <span class="badge bg-warning text-dark p-2"><i class="bi bi-hourglass-split me-1"></i>Aguardando</span>
+                                <span class="badge bg-warning text-dark p-2">Aguardando</span>
                             {% else %}
-                                <span class="badge bg-secondary p-2"><i class="bi bi-file-earmark-plus me-1"></i>A Faturar</span>
+                                <span class="badge bg-secondary p-2">A Faturar</span>
                             {% endif %}
                         </td>
 
-                        <!-- ANEXOS -->
                         <td>
                             {% if item.arquivo_boleto %}
-                                <a href="{{ url_for('download_file', filename=item.arquivo_boleto) }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2 me-1" title="Baixar Boleto">
-                                    <i class="bi bi-file-earmark-pdf"></i>
-                                </a>
+                                <a href="{{ url_for('download_file', filename=item.arquivo_boleto) }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2 me-1" title="Boleto"><i class="bi bi-file-earmark-pdf"></i></a>
                             {% endif %}
                             {% if item.arquivo_nf %}
-                                <a href="{{ url_for('download_file', filename=item.arquivo_nf) }}" target="_blank" class="btn btn-sm btn-outline-success py-0 px-2" title="Baixar NF">
-                                    <i class="bi bi-file-earmark-spreadsheet"></i>
-                                </a>
-                            {% endif %}
-                            {% if not item.arquivo_boleto and not item.arquivo_nf %}
-                                <span class="text-muted small">--</span>
+                                <a href="{{ url_for('download_file', filename=item.arquivo_nf) }}" target="_blank" class="btn btn-sm btn-outline-success py-0 px-2" title="NF"><i class="bi bi-file-earmark-spreadsheet"></i></a>
                             {% endif %}
                         </td>
 
-                        <!-- AÇÕES -->
                         <td class="text-end pe-3">
                             <div class="d-flex gap-1 justify-content-end">
-                                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalDetalhes{{ f.id }}" title="Consultar Itens da Fatura">
+                                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalDetalhes{{ f.id }}" title="Ver Serviços">
                                     <i class="bi bi-eye"></i>
                                 </button>
-                                <button class="btn btn-sm btn-dark fw-bold px-3" data-bs-toggle="modal" data-bs-target="#modalGerenciar{{ f.id }}" title="Alterar Status / Gerenciar">
+                                <button class="btn btn-sm btn-dark fw-bold px-3" data-bs-toggle="modal" data-bs-target="#modalGerenciar{{ f.id }}">
                                     <i class="bi bi-pencil-square me-1"></i>Gerenciar
                                 </button>
                             </div>
@@ -203,10 +182,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="8" class="text-center py-4 text-muted">
-                            <i class="bi bi-inbox fs-3 d-block mb-1"></i>
-                            Nenhuma fatura encontrada para este filtro.
-                        </td>
+                        <td colspan="8" class="text-center py-5 text-muted">Nenhuma fatura encontrada.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -216,114 +192,71 @@
 </div>
 
 <!-- ==================================================================== -->
-<!-- 1. MODAL DE CONSULTA / DETALHES DOS SERVIÇOS (1 POR FATURA) -->
+<!-- MODAIS DE CONSULTA DOS SERVIÇOS DA FATURA -->
 <!-- ==================================================================== -->
 {% for item in itens %}
 {% set f = item.fatura %}
 <div class="modal fade" id="modalDetalhes{{ f.id }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
+        <div class="modal-content border-0 shadow rounded-4">
             <div class="modal-header bg-light">
-                <div>
-                    <h5 class="modal-title fw-bold text-dark mb-0"><i class="bi bi-receipt text-primary me-2"></i>Detalhamento dos Serviços Faturados</h5>
-                    <small class="text-muted">{{ f.descricao }} • Cliente: <b>{{ f.cliente.nome }}</b></small>
-                </div>
+                <h5 class="modal-title fw-bold text-dark"><i class="bi bi-receipt text-primary me-2"></i>Serviços da Fatura</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-4">
-                <div class="row g-3 p-3 bg-light rounded-3 border mb-4">
-                    <div class="col-md-4">
-                        <small class="text-muted d-block">Valor Total Consolidado:</small>
-                        <h4 class="fw-bold text-success mb-0">R$ {{ "%.2f"|format(f.valor_total) }}</h4>
-                    </div>
-                    <div class="col-md-4">
-                        <small class="text-muted d-block">Data de Vencimento:</small>
-                        <span class="fw-bold text-dark">{{ item.data_vencimento.strftime('%d/%m/%Y') if item.data_vencimento else 'A Definir' }}</span>
-                    </div>
-                    <div class="col-md-4">
-                        <small class="text-muted d-block">Status Geral:</small>
-                        <span class="badge {% if item.status_calculado == 'Pago' %}bg-success{% elif item.esta_vencido %}bg-danger{% elif item.status_calculado == 'Aguardando Pagamento' %}bg-warning text-dark{% else %}bg-secondary{% endif %} p-2">
-                            {{ item.status_calculado }}
-                        </span>
-                    </div>
-                </div>
-
-                <h6 class="fw-bold text-dark mb-2"><i class="bi bi-list-check text-primary me-1"></i>Serviços Inclusos nesta Cobrança:</h6>
+            <div class="modal-body p-4 small">
                 <div class="table-responsive">
                     <table class="table table-bordered table-sm align-middle mb-0">
-                        <thead class="table-light small">
+                        <thead class="table-light">
                             <tr>
-                                <th style="width: 35%;">Serviço / Atividade</th>
-                                <th style="width: 45%;">Detalhamento / Escopo Técnico</th>
-                                <th class="text-end" style="width: 20%;">Valor Individual</th>
+                                <th>Serviço</th>
+                                <th>Escopo</th>
+                                <th class="text-end">Valor</th>
                             </tr>
                         </thead>
-                        <tbody class="small">
+                        <tbody>
                             {% if f.proposta and f.proposta.itens %}
                                 {% for it in f.proposta.itens %}
                                 <tr>
-                                    <td class="fw-bold text-dark">{{ it.tipo_servico.nome }}</td>
-                                    <td class="text-muted">{{ it.descricao_personalizada or it.tipo_servico.descricao_padrao or 'Conforme alinhamento técnico.' }}</td>
-                                    <td class="text-end fw-bold text-dark">R$ {{ "%.2f"|format(it.valor_unitario) }}</td>
-                                </tr>
-                                {% endfor %}
-                            {% elif f.servicos %}
-                                {% for s in f.servicos %}
-                                <tr>
-                                    <td class="fw-bold text-dark">{{ s.tipo_servico.nome }}</td>
-                                    <td class="text-muted">{{ s.observacoes or s.tipo_servico.descricao_padrao or 'Atividade de campo.' }}</td>
-                                    <td class="text-end fw-bold text-dark">R$ {{ "%.2f"|format(s.valor_cobrado) }}</td>
+                                    <td class="fw-bold">{{ it.tipo_servico.nome }}</td>
+                                    <td class="text-muted">{{ it.descricao_personalizada or it.tipo_servico.descricao_padrao or '--' }}</td>
+                                    <td class="text-end fw-bold">R$ {{ "%.2f"|format(it.valor_unitario) }}</td>
                                 </tr>
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td class="fw-bold text-dark">{{ f.descricao }}</td>
-                                    <td class="text-muted">Serviço/Assessoria sob demanda.</td>
-                                    <td class="text-end fw-bold text-dark">R$ {{ "%.2f"|format(f.valor_total) }}</td>
+                                    <td class="fw-bold">{{ f.descricao }}</td>
+                                    <td class="text-muted">Serviço/Assessoria técnica.</td>
+                                    <td class="text-end fw-bold">R$ {{ "%.2f"|format(f.valor_total) }}</td>
                                 </tr>
                             {% endif %}
                         </tbody>
-                        <tfoot class="table-light">
-                            <tr>
-                                <td colspan="2" class="text-end fw-bold">TOTAL:</td>
-                                <td class="text-end fw-bold text-success fs-6">R$ {{ "%.2f"|format(f.valor_total) }}</td>
-                            </tr>
-                        </tfoot>
                     </table>
                 </div>
             </div>
             <div class="modal-footer bg-light">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
-                <button type="button" class="btn btn-primary btn-sm fw-bold" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#modalGerenciar{{ f.id }}">
-                    <i class="bi bi-pencil-square me-1"></i>Gerenciar Cobrança
-                </button>
             </div>
         </div>
     </div>
 </div>
-{% endfor %}
 
 <!-- ==================================================================== -->
-<!-- 2. MODAL DE GERENCIAMENTO GERAL + CONTROLE INDIVIDUAL DE PARCELAS -->
+<!-- MODAIS DE GERENCIAMENTO GERAL E BAIXA INDIVIDUAL DE PARCELAS -->
 <!-- ==================================================================== -->
-{% for item in itens %}
-{% set f = item.fatura %}
 <div class="modal fade" id="modalGerenciar{{ f.id }}" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            
+        <div class="modal-content border-0 shadow rounded-4">
             <div class="modal-header bg-light">
                 <div>
                     <h5 class="modal-title fw-bold text-dark mb-0">{{ f.descricao }}</h5>
-                    <small class="text-muted">{{ f.cliente.nome }} • Total: <b class="text-success">R$ {{ "%.2f"|format(f.valor_total) }}</b> • <b>{{ f.total_pagas }}/{{ f.total_parcelas }} recebidos</b></small>
+                    <small class="text-muted">{{ f.cliente.nome }} • Total: <b class="text-success">R$ {{ "%.2f"|format(f.valor_total) }}</b></small>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
 
-            <div class="modal-body p-4">
-
-                <!-- TABELA INTERATIVA DE PARCELAS / TÍTULOS -->
-                <h6 class="fw-bold text-dark mb-2"><i class="bi bi-layers me-1 text-primary"></i>Controle Individual de Títulos (Entrada & Parcelas)</h6>
+            <div class="modal-body p-4 small">
+                <!-- TABELA DE PARCELAS -->
+                <h6 class="fw-bold text-dark mb-2"><i class="bi bi-layers me-1 text-primary"></i>Controle Individual de Títulos</h6>
                 <div class="table-responsive mb-4">
                     <table class="table table-bordered align-middle mb-0 small">
                         <thead class="table-light">
@@ -332,100 +265,54 @@
                                 <th>Forma</th>
                                 <th>Valor</th>
                                 <th>Vencimento</th>
-                                <th>Status Atual</th>
-                                <th>Comprovante / Boleto</th>
-                                <th class="text-center" style="width: 140px;">Ação Individual</th>
+                                <th>Status</th>
+                                <th class="text-center" style="width: 140px;">Ação</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for p in f.parcelas %}
                             {% set vencida = p.status != 'Pago' and p.data_vencimento and p.data_vencimento < hoje %}
                             <tr class="{% if vencida %}table-danger{% elif p.status == 'Pago' %}table-success bg-opacity-25{% endif %}">
-                                <td class="fw-bold text-dark">
-                                    {{ p.descricao_parcela }}
-                                    {% if p.is_entrada %}
-                                        <span class="badge bg-primary ms-1">Sinal</span>
-                                    {% endif %}
-                                </td>
-                                <td><span class="badge bg-secondary">{{ p.forma_pagamento }}</span></td>
+                                <td class="fw-bold text-dark">{{ p.descricao_parcela }} {% if p.is_entrada %}<span class="badge bg-primary">Sinal</span>{% endif %}</td>
+                                <td>{{ p.forma_pagamento }}</td>
                                 <td class="fw-bold text-dark">R$ {{ "%.2f"|format(p.valor) }}</td>
-                                <td>
-                                    <span class="fw-semibold {% if vencida %}text-danger{% else %}text-dark{% endif %}">
-                                        {{ p.data_vencimento.strftime('%d/%m/%Y') }}
-                                    </span>
-                                    {% if vencida %}<span class="badge bg-danger ms-1">Vencido</span>{% endif %}
-                                </td>
-                                <td>
-                                    {% if p.status == 'Pago' %}
-                                        <span class="badge bg-success">✔ Quitado</span>
-                                    {% elif vencida %}
-                                        <span class="badge bg-danger">Em Atraso</span>
-                                    {% elif p.status == 'Boleto Emitido' %}
-                                        <span class="badge bg-warning text-dark">Aguardando</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">A Faturar</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if p.arquivo_comprovante_boleto %}
-                                        <a href="{{ url_for('download_file', filename=p.arquivo_comprovante_boleto) }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2">
-                                            <i class="bi bi-file-earmark-arrow-down me-1"></i>Ver Anexo
-                                        </a>
-                                    {% else %}
-                                        <span class="text-muted">Sem anexo</span>
-                                    {% endif %}
-                                </td>
+                                <td>{{ p.data_vencimento.strftime('%d/%m/%Y') if p.data_vencimento else '--' }}</td>
+                                <td><span class="badge {{ 'bg-success' if p.status == 'Pago' else ('bg-danger' if vencida else 'bg-warning text-dark') }}">{{ p.status }}</span></td>
                                 <td class="text-center">
                                     <button type="button" class="btn btn-sm btn-dark fw-bold" data-bs-toggle="collapse" data-bs-target="#boxEditParc{{ p.id }}">
-                                        <i class="bi bi-pencil-square me-1"></i>Baixar / Editar
+                                        <i class="bi bi-pencil-square me-1"></i>Baixar
                                     </button>
                                 </td>
                             </tr>
                             
-                            <!-- FORMULÁRIO DE BAIXA INDIVIDUAL DA PARCELA -->
+                            <!-- FORMULÁRIO DE BAIXA DA PARCELA -->
                             <tr class="collapse bg-light" id="boxEditParc{{ p.id }}">
-                                <td colspan="7" class="p-3">
+                                <td colspan="6" class="p-3">
                                     <form action="{{ url_for('atualizar_cobranca_parcela', id=p.id) }}" method="POST" enctype="multipart/form-data" class="row g-2 align-items-end">
                                         <input type="hidden" name="filtro_retorno" value="{{ filtro_atual }}">
-                                        
                                         <div class="col-md-3">
-                                            <label class="form-label small fw-bold">Alterar Status *</label>
-                                            <select name="status_pagamento" class="form-select form-select-sm fw-bold border-primary">
-                                                <option value="A Faturar" {% if p.status == 'A Faturar' %}selected{% endif %}>A Faturar (Pendente)</option>
-                                                <option value="Boleto Emitido" {% if p.status == 'Boleto Emitido' %}selected{% endif %}>Boleto/Cobrança Enviada</option>
-                                                <option value="Pago" {% if p.status == 'Pago' %}selected{% endif %} class="text-success fw-bold">✔ Pago (Confirmar Quitação)</option>
+                                            <label class="form-label small fw-bold">Alterar Status</label>
+                                            <select name="status_pagamento" class="form-select form-select-sm fw-bold">
+                                                <option value="A Faturar" {% if p.status == 'A Faturar' %}selected{% endif %}>A Faturar</option>
+                                                <option value="Boleto Emitido" {% if p.status == 'Boleto Emitido' %}selected{% endif %}>Boleto Emitido</option>
+                                                <option value="Pago" {% if p.status == 'Pago' %}selected{% endif %} class="text-success fw-bold">✔ Quitado / Pago</option>
                                                 <option value="Em Atraso" {% if p.status == 'Em Atraso' %}selected{% endif %} class="text-danger">Em Atraso</option>
                                             </select>
                                         </div>
-
-                                        <div class="col-md-2">
-                                            <label class="form-label small fw-bold">Vencimento</label>
-                                            <input type="date" name="data_vencimento" class="form-control form-control-sm" value="{{ p.data_vencimento.strftime('%Y-%m-%d') }}">
-                                        </div>
-
                                         <div class="col-md-3">
                                             <label class="form-label small fw-bold">Forma de Pagamento</label>
                                             <select name="forma_pagamento" class="form-select form-select-sm">
                                                 <option value="PIX" {% if p.forma_pagamento == 'PIX' %}selected{% endif %}>PIX</option>
-                                                <option value="Boleto Bancário" {% if p.forma_pagamento == 'Boleto Bancário' %}selected{% endif %}>Boleto Bancário</option>
-                                                <option value="Transferência Bancária" {% if p.forma_pagamento == 'Transferência Bancária' %}selected{% endif %}>Transferência / TED</option>
-                                                <option value="Cartão de Crédito" {% if p.forma_pagamento == 'Cartão de Crédito' %}selected{% endif %}>Cartão de Crédito</option>
+                                                <option value="Boleto Bancário" {% if p.forma_pagamento == 'Boleto Bancário' %}selected{% endif %}>Boleto</option>
+                                                <option value="Cartão de Crédito" {% if p.forma_pagamento == 'Cartão de Crédito' %}selected{% endif %}>Cartão</option>
                                             </select>
                                         </div>
-
                                         <div class="col-md-4">
-                                            <label class="form-label small fw-bold">Anexar Comprovante PIX ou Boleto</label>
+                                            <label class="form-label small fw-bold">Anexar Comprovante</label>
                                             <input type="file" name="arquivo_comprovante_boleto" class="form-control form-control-sm">
                                         </div>
-
-                                        <div class="col-12 mt-2">
-                                            <input type="text" name="nova_ocorrencia" class="form-control form-control-sm" placeholder="Ocorrência (ex: Comprovante PIX recebido)...">
-                                        </div>
-
-                                        <div class="col-12 text-end mt-2">
-                                            <button type="submit" class="btn btn-sm btn-success fw-bold px-3">
-                                                <i class="bi bi-check-lg me-1"></i>Salvar Baixa Desta Parcela
-                                            </button>
+                                        <div class="col-md-2 text-end">
+                                            <button type="submit" class="btn btn-sm btn-success fw-bold w-100">Salvar Baixa</button>
                                         </div>
                                     </form>
                                 </td>
@@ -435,44 +322,32 @@
                     </table>
                 </div>
 
-                <!-- GESTÃO GERAL DA FATURA (NOTA FISCAL & QUITAÇÃO TOTAL) -->
+                <!-- AJUSTES GERAIS DA FATURA -->
                 <div class="p-3 bg-light rounded border">
-                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-file-earmark-text me-1 text-primary"></i>Ajustes Gerais da Fatura</h6>
-                    <form action="{{ url_for('atualizar_cobranca_fatura', id=f.id) }}" method="POST" enctype="multipart/form-data">
+                    <h6 class="fw-bold text-dark mb-2"><i class="bi bi-file-earmark-text me-1 text-primary"></i>Ajuste Global da Fatura</h6>
+                    <form action="{{ url_for('atualizar_cobranca_fatura', id=f.id) }}" method="POST" enctype="multipart/form-data" class="row g-3">
                         <input type="hidden" name="filtro_retorno" value="{{ filtro_atual }}">
-                        
-                        <div class="row g-3 mb-2">
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold">Status Global (Quitar Tudo de Uma Vez)</label>
-                                <select name="status_pagamento" class="form-select form-select-sm">
-                                    <option value="">Manter status individual das parcelas</option>
-                                    <option value="Pago" class="text-success fw-bold">✔ Marcar TODAS como Pagas</option>
-                                    <option value="Boleto Emitido">Marcar TODAS como Boleto Enviado</option>
-                                    <option value="A Faturar">Marcar TODAS como A Faturar</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold">Anexar Nota Fiscal Global (NF-e)</label>
-                                <input type="file" name="arquivo_nf" class="form-control form-control-sm">
-                                {% if f.arquivo_nf %}
-                                    <small class="text-success d-block mt-1"><i class="bi bi-check-circle me-1"></i>NF anexada: {{ f.arquivo_nf }}</small>
-                                {% endif %}
-                            </div>
-                            <div class="col-md-4 d-flex align-items-end">
-                                <button type="submit" class="btn btn-sm btn-primary fw-bold w-100">
-                                    Salvar Ajuste Geral
-                                </button>
-                            </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Quitar Todas as Parcelas</label>
+                            <select name="status_pagamento" class="form-select form-select-sm">
+                                <option value="">Manter status individuais</option>
+                                <option value="Pago" class="text-success fw-bold">✔ Marcar TODAS como Pagas</option>
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Anexar Nota Fiscal (NF-e)</label>
+                            <input type="file" name="arquivo_nf" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="submit" class="btn btn-sm btn-primary fw-bold w-100">Salvar Ajuste</button>
                         </div>
                     </form>
                 </div>
 
             </div>
-            
             <div class="modal-footer bg-light">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
             </div>
-
         </div>
     </div>
 </div>

@@ -34,14 +34,16 @@ from extensions import db, login_manager, limiter
 from models import (
     Empresa, Usuario, Cliente, Documento, TipoServico, 
     ServicoCliente, Proposta, ItemProposta, ContratoRecorrente, 
-    Fatura, ParcelaFatura, ChamadoSuporte, MensagemChamado, CupomDesconto, ServicoCustoPadrao, ItemPropostaCusto, ContratoGerado, ServicoEtapaRastreio, ComissaoAfiliado, RepasseAfiliado
+    Fatura, ParcelaFatura, ChamadoSuporte, MensagemChamado, CupomDesconto, 
+    ServicoCustoPadrao, ItemPropostaCusto, ContratoGerado, ServicoEtapaRastreio, 
+    ComissaoAfiliado, RepasseAfiliado
 )
 from auth.routes import auth_bp
 
-# Serviços Externos (Asaas)
-from services.asaas_service import (
-    criar_assinatura_transparente, 
-    gerar_link_pagamento_plano, 
+# Serviços Externos (Mercado Pago)
+import mercadopago
+from services.mercadopago_service import (
+    criar_cobranca_mercadopago, 
     PLANOS_CONFIG
 )
 
@@ -350,12 +352,11 @@ def utility_processor():
 
 @app.before_request
 def interceptar_bloqueio_assinatura():
-    # 1. Rotas públicas/estáticas/auth que nunca devem ser interceptadas
     rotas_livres = [
         'auth.',
         'static',
         'download_file',
-        'webhook_asaas',
+        'webhook_mercadopago',
         'regularizar_assinatura',
         'api_checkout_transparente'
     ]
@@ -364,18 +365,16 @@ def interceptar_bloqueio_assinatura():
     
     if current_user.is_authenticated and current_user.nivel_acesso == 'afiliado':
         return None
-    # 2. Se estiver autenticado e não for Master, verifica a assinatura
+
     if current_user.is_authenticated:
         if current_user.nivel_acesso == 'master':
             return None
 
         if current_user.empresa:
-            # Se a empresa estiver bloqueada ou cancelada
             if current_user.empresa.status_assinatura in ['bloqueado', 'cancelado']:
                 if request.endpoint != 'regularizar_assinatura':
                     return redirect(url_for('regularizar_assinatura'))
 
-            # Se o período de teste expirou
             if current_user.empresa.status_assinatura == 'trial' and current_user.empresa.data_vencimento:
                 if current_user.empresa.data_vencimento < date.today():
                     current_user.empresa.status_assinatura = 'bloqueado'
@@ -383,8 +382,6 @@ def interceptar_bloqueio_assinatura():
                     if request.endpoint != 'regularizar_assinatura':
                         return redirect(url_for('regularizar_assinatura'))
 
-# 1. Redirecionamento automático no Login (Atualize a rota /auth/login ou index):
-# Se o usuário logado for afiliado, envie direto para o painel dele
 @app.route('/painel-afiliado', methods=['GET', 'POST'])
 @login_required
 def painel_afiliado():
@@ -392,7 +389,6 @@ def painel_afiliado():
         flash('Acesso restrito a parceiros afiliados.', 'danger')
         return redirect(url_for('index'))
 
-    # Coleta todos os cupons vinculados ao parceiro
     cupons = CupomDesconto.query.filter_by(usuario_id=current_user.id).order_by(CupomDesconto.id.asc()).all()
     if not cupons:
         codigo_sugerido = re.sub(r'[^A-Z0-9]', '', current_user.nome.split()[0].upper()) + "10"
@@ -432,7 +428,6 @@ def painel_afiliado():
         flash('Informações e dados de repasse atualizados com sucesso!', 'success')
         return redirect(url_for('painel_afiliado'))
 
-    # Busca todas as empresas vinculadas aos cupons deste parceiro
     codigos_cupons = [c.codigo for c in cupons]
     cupons_ids = [c.id for c in cupons]
 
@@ -797,7 +792,6 @@ def criar_proposta():
                 db.session.add(item)
                 db.session.flush()
 
-                # Clona os custos padrão do Catálogo para o Item
                 tipo_serv = TipoServico.query.get(int(s_id))
                 if tipo_serv and hasattr(tipo_serv, 'custos_padrao') and tipo_serv.custos_padrao:
                     for cp in tipo_serv.custos_padrao:
@@ -865,7 +859,6 @@ def atualizar_status_proposta(id):
                 hoje = date.today()
                 prefixo = f"Termo Aditivo #{proposta.numero_aditivo} ({proposta.numero_proposta})" if proposta.tipo_documento == 'aditivo' else f"Proposta {proposta.numero_proposta}"
                 
-                # 1. Cria a Fatura Global vinculada
                 fatura = Fatura(
                     empresa_id=current_user.empresa_id,
                     cliente_id=proposta.cliente_id,
@@ -877,7 +870,6 @@ def atualizar_status_proposta(id):
                 db.session.add(fatura)
                 db.session.flush()
 
-                # 2. Cria Contrato Recorrente (se aplicável)
                 if proposta.tipo_cobranca == 'recorrente' and proposta.tipo_documento != 'aditivo':
                     contrato = ContratoRecorrente(
                         empresa_id=current_user.empresa_id,
@@ -896,7 +888,6 @@ def atualizar_status_proposta(id):
                     db.session.flush()
                     fatura.contrato_id = contrato.id
 
-                # 3. Geração de Parcelas e Títulos Financeiros
                 exige_entrada = bool(proposta.exige_entrada and (proposta.valor_entrada or 0) > 0)
                 valor_entrada = float(proposta.valor_entrada or 0.0) if exige_entrada else 0.0
                 saldo_parcelar = max(0.0, float(proposta.valor_total or 0.0) - valor_entrada)
@@ -942,7 +933,6 @@ def atualizar_status_proposta(id):
                         db.session.add(p_normal)
                         num_seq += 1
 
-                # 4. Criação dos Lançamentos na Agenda de Serviços / O.S.
                 status_inicial_os = 'Bloqueado' if exige_entrada else ('Em Andamento' if proposta.tipo_cobranca != 'recorrente' else 'Pendente')
                 dias_validade = int(proposta.validade_dias or 30)
                 data_prev_os = hoje + timedelta(days=dias_validade)
@@ -986,7 +976,6 @@ def editar_proposta(id):
     proposta.condicoes_pagamento = request.form.get('condicoes_pagamento') or 'Conforme alinhamento comercial'
     proposta.observacoes = request.form.get('observacoes')
     
-    # Remove itens antigos e recria com a nova estrutura analítica
     ItemProposta.query.filter_by(proposta_id=proposta.id).delete()
     
     servicos_ids = request.form.getlist('tipo_servico_id[]')
@@ -1029,7 +1018,6 @@ def excluir_proposta(id):
 @app.route('/relatorios/lucratividade')
 @login_required
 def relatorio_lucratividade():
-    # Coleta todas as propostas aprovadas da empresa
     propostas_aprovadas = Proposta.query.filter_by(
         empresa_id=current_user.empresa_id, 
         status='Aprovado'
@@ -1040,7 +1028,6 @@ def relatorio_lucratividade():
     lucro_total = receita_total - custo_total
     margem_media = round((lucro_total / receita_total * 100.0), 1) if receita_total > 0 else 0.0
 
-    # Agrupamento de custos por categoria
     custos_por_categoria = {'mao_de_obra': 0.0, 'material': 0.0, 'logistica': 0.0, 'taxa': 0.0}
     for p in propostas_aprovadas:
         for it in p.itens:
@@ -1287,7 +1274,7 @@ def gerar_pdf_proposta(id):
     )
 
 # -----------------------------------------------------------------------------
-# 6. ROTAS DE OPERAÇÃO & AGENDA DE SERVIÇOS
+# 6. ROTAS DE OPERAÇÃO & AGENDA DE SERVIÇOS (O.S. / ATENDIMENTOS)
 # -----------------------------------------------------------------------------
 
 @app.route('/servicos')
@@ -1381,7 +1368,6 @@ def novo_tipo_servico():
     db.session.add(novo_item)
     db.session.flush()
 
-    # Custos modulares padrão da Ficha Técnica
     tipos_custo = request.form.getlist('custo_tipo[]')
     descricoes_custo = request.form.getlist('custo_desc[]')
     quantidades_custo = request.form.getlist('custo_qtd[]')
@@ -1417,6 +1403,14 @@ def excluir_tipo_servico(id):
     flash(f'Serviço "{item.nome}" removido do catálogo com sucesso.', 'info')
     return redirect(url_for('listar_catalogo'))
 
+@app.route('/servicos/definir-responsavel/<int:id>', methods=['POST'])
+@login_required
+def definir_responsavel_servico(id):
+    servico = ServicoCliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    servico.responsavel_tecnico = request.form.get('responsavel_tecnico', '').strip()
+    db.session.commit()
+    flash('Responsável pelo atendimento atualizado!', 'success')
+    return redirect(url_for('consultar_servicos'))
 
 @app.route('/servicos/atualizar-operacao/<int:id>', methods=['POST'])
 @login_required
@@ -1438,6 +1432,30 @@ def atualizar_operacao_servico(id):
     servico.orientacoes_cliente = request.form.get('orientacoes_cliente')
     servico.observacoes = request.form.get('observacoes')
 
+    # Trata Endereço Específico do Atendimento / Local
+    usar_end_custom = bool(request.form.get('usar_endereco_personalizado'))
+    servico.usar_endereco_personalizado = usar_end_custom
+
+    if usar_end_custom:
+        servico.cep_execucao = re.sub(r'\D', '', request.form.get('cep_execucao', ''))
+        servico.logradouro_execucao = request.form.get('logradouro_execucao', '').strip()
+        servico.numero_execucao = request.form.get('numero_execucao', '').strip()
+        servico.complemento_execucao = request.form.get('complemento_execucao', '').strip()
+        servico.bairro_execucao = request.form.get('bairro_execucao', '').strip()
+        servico.cidade_execucao = request.form.get('cidade_execucao', '').strip()
+        servico.estado_execucao = request.form.get('estado_execucao', '').strip().upper()
+        
+        servico.endereco_execucao_completo = f"{servico.logradouro_execucao or ''}, {servico.numero_execucao or 'S/N'} {servico.complemento_execucao or ''} - {servico.bairro_execucao or ''}, {servico.cidade_execucao or ''}/{servico.estado_execucao or ''}".strip(" ,-/")
+    else:
+        servico.cep_execucao = None
+        servico.logradouro_execucao = None
+        servico.numero_execucao = None
+        servico.complemento_execucao = None
+        servico.bairro_execucao = None
+        servico.cidade_execucao = None
+        servico.estado_execucao = None
+        servico.endereco_execucao_completo = None
+
     # Upload de evidência técnica
     if 'arquivo_evidencia' in request.files:
         arq = request.files['arquivo_evidencia']
@@ -1447,14 +1465,13 @@ def atualizar_operacao_servico(id):
             arq.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_salvo))
             servico.arquivo_evidencia = nome_salvo
 
-    # Captura das fases de cronograma e rastreio com datas e materiais
+    # Fases de cronograma e rastreio
     titulos_fase = request.form.getlist('fase_titulo[]')
     descricoes_fase = request.form.getlist('fase_descricao[]')
     status_fase_list = request.form.getlist('fase_status[]')
     datas_inicio = request.form.getlist('fase_data_inicio[]')
     datas_fim = request.form.getlist('fase_data_fim[]')
     
-    # Remove as etapas anteriores para sincronizar a lista atualizada
     ServicoEtapaRastreio.query.filter_by(servico_cliente_id=servico.id).delete()
 
     if titulos_fase:
@@ -1475,8 +1492,152 @@ def atualizar_operacao_servico(id):
                 db.session.add(nova_etapa)
 
     db.session.commit()
-    flash('Acompanhamento e cronograma atualizados com sucesso!', 'success')
+    flash('Operação, local de atendimento e cronograma atualizados com sucesso!', 'success')
     return redirect(url_for('consultar_servicos', status=request.form.get('filtro_retorno', 'agenda')))
+
+@app.route('/servicos/<int:id>/pdf', methods=['GET', 'POST'])
+@login_required
+def gerar_pdf_ordem_servico(id):
+    servico = ServicoCliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    cliente = servico.cliente
+    empresa = current_user.empresa
+    buffer = io.BytesIO()
+
+    # Leitura das preferências de exibição vindas do modal
+    exibir_doc_cliente = request.form.get('exibir_doc_cliente') == '1' if request.method == 'POST' else True
+    exibir_datas = request.form.get('exibir_datas') == '1' if request.method == 'POST' else True
+    exibir_endereco = request.form.get('exibir_endereco') == '1' if request.method == 'POST' else True
+    exibir_responsavel = request.form.get('exibir_responsavel') == '1' if request.method == 'POST' else True
+    exibir_descricao = request.form.get('exibir_descricao') == '1' if request.method == 'POST' else True
+    exibir_detalhamento = request.form.get('exibir_detalhamento') == '1' if request.method == 'POST' else True
+    exibir_orientacoes = request.form.get('exibir_orientacoes') == '1' if request.method == 'POST' else True
+    exibir_assinaturas = request.form.get('exibir_assinaturas') == '1' if request.method == 'POST' else True
+
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=letter, 
+        rightMargin=36, 
+        leftMargin=36, 
+        topMargin=36, 
+        bottomMargin=36
+    )
+    elementos = []
+    styles = getSampleStyleSheet()
+
+    cor_primaria_hex = empresa.cor_primaria if empresa.cor_primaria and empresa.cor_primaria.startswith('#') else "#1e3a8a"
+    cor_marca = colors.HexColor(cor_primaria_hex)
+
+    estilo_empresa_nome = ParagraphStyle('PDF_EmpNome', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=cor_marca)
+    estilo_sub = ParagraphStyle('PDF_Sub', parent=styles['Normal'], fontName='Helvetica', fontSize=7.5, leading=10, textColor=colors.HexColor("#475569"), alignment=2)
+    estilo_secao = ParagraphStyle('PDF_Sec', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=cor_marca)
+    estilo_corpo = ParagraphStyle('PDF_Corpo', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=12, textColor=colors.HexColor("#1e293b"))
+    estilo_corpo_bold = ParagraphStyle('PDF_CorpoB', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, leading=12, textColor=colors.HexColor("#0f172a"))
+
+    logo_elemento = None
+    if empresa.logo_filename:
+        caminho_logo = os.path.join(app.config['UPLOAD_FOLDER'], empresa.logo_filename)
+        if os.path.exists(caminho_logo):
+            try:
+                logo_elemento = RLImage(caminho_logo, width=1.5*inch, height=0.6*inch)
+                logo_elemento.hAlign = 'LEFT'
+            except Exception:
+                logo_elemento = None
+
+    info_emp = f"<b>{_limpar_texto(empresa.razao_social).upper()}</b><br/>CNPJ: {_limpar_texto(empresa.cnpj or '--')} | Tel: {_limpar_texto(empresa.telefone or '--')}<br/>{_limpar_texto(empresa.endereco_completo or '')}"
+    if logo_elemento:
+        tab_topo = Table([[logo_elemento, Paragraph(info_emp, estilo_sub)]], colWidths=[1.8*inch, 5.7*inch])
+    else:
+        tab_topo = Table([[Paragraph(f"<b>{_limpar_texto(empresa.razao_social).upper()}</b>", estilo_empresa_nome), Paragraph(info_emp, estilo_sub)]], colWidths=[2.8*inch, 4.7*inch])
+
+    tab_topo.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('ALIGN', (1,0), (1,0), 'RIGHT')]))
+    elementos.append(tab_topo)
+    elementos.append(Spacer(1, 4))
+    elementos.append(HRFlowable(width="100%", thickness=1.5, color=cor_marca, spaceAfter=10))
+
+    elementos.append(Paragraph(f"<b>ORDEM DE SERVIÇO Nº OS-{servico.id:04d}</b>", estilo_secao))
+    elementos.append(Spacer(1, 4))
+
+    # Identificação Geral
+    dados_os = []
+    col_dir_1 = Paragraph(f"<b>SOLICITAÇÃO:</b> {servico.data_solicitacao.strftime('%d/%m/%Y') if servico.data_solicitacao else '--'}", estilo_corpo) if exibir_datas else Paragraph("", estilo_corpo)
+    dados_os.append([Paragraph(f"<b>CLIENTE:</b> {_limpar_texto(cliente.nome)}", estilo_corpo_bold), col_dir_1])
+
+    col_esq_2 = Paragraph(f"<b>CNPJ/CPF:</b> {_limpar_texto(cliente.cnpj_cpf or '--')}", estilo_corpo) if exibir_doc_cliente else Paragraph("", estilo_corpo)
+    col_dir_2 = Paragraph(f"<b>PREVISÃO:</b> {servico.data_previsao.strftime('%d/%m/%Y') if servico.data_previsao else '--'}", estilo_corpo) if exibir_datas else Paragraph("", estilo_corpo)
+    if exibir_doc_cliente or exibir_datas:
+        dados_os.append([col_esq_2, col_dir_2])
+
+    if exibir_responsavel:
+        resp_nome = _limpar_texto(servico.responsavel_tecnico or 'Não informado')
+        dados_os.append([
+            Paragraph(f"<b>RESPONSÁVEL PELO ATENDIMENTO:</b> <font color='{cor_primaria_hex}'><b>{resp_nome}</b></font>", estilo_corpo_bold),
+            Paragraph("", estilo_corpo)
+        ])
+
+    tab_dados = Table(dados_os, colWidths=[4.5*inch, 3.0*inch])
+    tab_dados.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f8fafc")), 
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")), 
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor("#f1f5f9")), 
+        ('PADDING', (0,0), (-1,-1), 4.5)
+    ]))
+    elementos.append(tab_dados)
+    elementos.append(Spacer(1, 10))
+
+    # Detalhamento
+    elementos.append(Paragraph("1. ATIVIDADE & DETALHAMENTO DO ATENDIMENTO", estilo_secao))
+    elementos.append(Spacer(1, 4))
+    
+    nome_serv = _limpar_texto(servico.tipo_servico.nome if servico.tipo_servico else 'Atendimento Técnico')
+    detalhes_blocos = [f"<b>Serviço:</b> {nome_serv}"]
+
+    if exibir_descricao and servico.observacoes:
+        detalhes_blocos.append(f"<b>Descrição do Atendimento:</b><br/>{_limpar_texto(servico.observacoes)}")
+
+    if exibir_detalhamento and servico.detalhamento_execucao:
+        detalhes_blocos.append(f"<b>Detalhamento da Execução:</b><br/>{_limpar_texto(servico.detalhamento_execucao)}")
+
+    if exibir_orientacoes and servico.orientacoes_cliente:
+        detalhes_blocos.append(f"<b>Orientações / Recomendações:</b><br/>{_limpar_texto(servico.orientacoes_cliente)}")
+
+    if exibir_endereco:
+        end_texto = _limpar_texto(servico.endereco_exibicao)
+        detalhes_blocos.append(f"<b>Endereço do Atendimento:</b><br/>{end_texto}")
+
+    corpo_texto_html = "<br/><br/>".join(detalhes_blocos)
+    tab_det = Table([[Paragraph(corpo_texto_html, estilo_corpo)]], colWidths=[7.5*inch])
+    tab_det.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#ffffff")), 
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")), 
+        ('PADDING', (0,0), (-1,-1), 6)
+    ]))
+    elementos.append(tab_det)
+
+    # Assinaturas
+    if exibir_assinaturas:
+        elementos.append(Spacer(1, 30))
+        resp_assinatura = _limpar_texto(servico.responsavel_tecnico or 'Responsável pelo Atendimento')
+        assinaturas = [
+            [
+                Paragraph(f"____________________________________________<br/><b>{resp_assinatura}</b><br/>Responsável pelo Atendimento", estilo_corpo),
+                Paragraph(f"____________________________________________<br/><b>{_limpar_texto(cliente.nome).upper()}</b><br/>Aceite do Cliente / Declaração de Atendimento", estilo_corpo)
+            ]
+        ]
+        tab_ass = Table(assinaturas, colWidths=[3.75*inch, 3.75*inch])
+        tab_ass.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'), 
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
+        ]))
+        elementos.append(tab_ass)
+
+    doc.build(elementos)
+    buffer.seek(0)
+    return send_file(
+        buffer, 
+        as_attachment=True, 
+        download_name=f"Ordem_Servico_OS_{servico.id:04d}.pdf", 
+        mimetype='application/pdf'
+    )
 
 # -----------------------------------------------------------------------------
 # 7. ROTAS DO MÓDULO FINANCEIRO
@@ -1582,7 +1743,6 @@ def atualizar_cobranca_fatura(id):
                 registro = f"[{datetime.now().strftime('%d/%m/%Y %H:%M')}] {nova_obs}\n"
                 p.historico_cobranca = (p.historico_cobranca or "") + registro
 
-    # Em atualizar_cobranca_fatura (quando status for 'Pago'):
     if novo_status == 'Pago':
         servicos_bloqueados = ServicoCliente.query.filter_by(
             fatura_id=fatura.id, 
@@ -1622,7 +1782,6 @@ def atualizar_cobranca_parcela(id):
         registro = f"[{datetime.now().strftime('%d/%m/%Y %H:%M')}] {nova_obs}\n"
         parcela.historico_cobranca = (parcela.historico_cobranca or "") + registro
 
-    # Em atualizar_cobranca_parcela (quando parcela de entrada for paga):
     if parcela.is_entrada and novo_status == 'Pago' and status_anterior != 'Pago':
         fatura = parcela.fatura
         servicos_bloqueados = ServicoCliente.query.filter_by(
@@ -1714,7 +1873,7 @@ def faturar_mes_contratos():
     return redirect(url_for('financeiro'))
 
 # -----------------------------------------------------------------------------
-# 8. PERFIL DA EMPRESA, SUPORTE & ASSINATURA ASAAS
+# 8. PERFIL DA EMPRESA, SUPORTE & ASSINATURA MERCADO PAGO
 # -----------------------------------------------------------------------------
 
 @app.route('/configuracoes/perfil', methods=['GET', 'POST'])
@@ -1734,9 +1893,7 @@ def perfil_empresa():
 
         if form_type == 'dados_empresa':
             tipo_pessoa = request.form.get('tipo_pessoa', 'PJ')
-            doc_antigo = empresa.cnpj
             
-            # Limpa pontuações para gravar somente números no PostgreSQL
             def _so_numeros(valor):
                 return re.sub(r'\D', '', valor) if valor else ""
 
@@ -1764,11 +1921,6 @@ def perfil_empresa():
             
             empresa.cor_primaria = request.form.get('cor_primaria', '#1e3a8a')
 
-            # Se trocou de documento, força sincronização no Asaas
-            if doc_antigo != empresa.cnpj:
-                empresa.asaas_customer_id = None
-
-            # Upload seguro do logotipo
             logo_file = request.files.get('logo')
             if logo_file and logo_file.filename != '':
                 ext = logo_file.filename.rsplit('.', 1)[-1].lower()
@@ -1815,23 +1967,14 @@ def perfil_empresa():
 
         return redirect(url_for('perfil_empresa'))
 
-    # Gera links de pagamento dinâmicos caso necessário
-    link_founder = gerar_link_pagamento_plano(empresa, "Founder", 39.90)
-    link_pro = gerar_link_pagamento_plano(empresa, "Pro Enterprise", 209.40)
-
     usuarios_equipe = Usuario.query.filter_by(empresa_id=current_user.empresa_id).all()
 
     return render_template(
         'perfil_empresa.html', 
         perfil=empresa,
-        link_founder=link_founder or '#',
-        link_pro=link_pro or '#',
         usuarios_equipe=usuarios_equipe
     )
 
-from werkzeug.security import generate_password_hash
-
-# ROTA: Criar Novo Usuário Operacional
 @app.route('/configuracoes/usuarios/novo', methods=['POST'])
 @login_required
 def criar_usuario_equipe():
@@ -1853,7 +1996,6 @@ def criar_usuario_equipe():
         flash('Este e-mail já está cadastrado no sistema.', 'danger')
         return redirect(url_for('perfil_empresa'))
 
-    # Se for definido como Administrador Geral, recebe nível admin e todas as permissões
     is_admin = perfil_selecionado == 'admin' or bool(request.form.get('perm_configuracoes'))
 
     novo_user = Usuario(
@@ -1876,7 +2018,6 @@ def criar_usuario_equipe():
     flash(f'Usuário "{email}" ({cargo}) cadastrado com sucesso!', 'success')
     return redirect(url_for('perfil_empresa'))
 
-
 @app.route('/configuracoes/usuarios/resetar-senha/<int:id>', methods=['POST'])
 @login_required
 def resetar_senha_equipe(id):
@@ -1896,7 +2037,6 @@ def resetar_senha_equipe(id):
     flash(f'Senha de "{usuario.email}" redefinida com sucesso!', 'success')
     return redirect(url_for('perfil_empresa'))
 
-# ROTA: Editar Permissões e Cargo do Usuário
 @app.route('/configuracoes/usuarios/editar/<int:id>', methods=['POST'])
 @login_required
 def editar_usuario_equipe(id):
@@ -1914,7 +2054,6 @@ def editar_usuario_equipe(id):
     if cargo:
         usuario.cargo = cargo
 
-    # Se for a conta do próprio admin logado, preserva suas permissões totais
     if usuario.id != current_user.id:
         perm_conf = bool(request.form.get('perm_configuracoes'))
         usuario.perm_clientes = bool(request.form.get('perm_clientes'))
@@ -1944,8 +2083,6 @@ def excluir_usuario_equipe(id):
     db.session.commit()
     flash('Acesso removido com sucesso.', 'info')
     return redirect(url_for('perfil_empresa'))
-
-
 
 @app.route('/faq')
 @login_required
@@ -2047,38 +2184,48 @@ def regularizar_assinatura():
 
     return render_template('bloqueio_pagamento.html')
 
-@app.route('/webhook/asaas', methods=['POST'])
-def webhook_asaas():
+# -----------------------------------------------------------------------------
+# WEBHOOK OFICIAL MERCADO PAGO
+# -----------------------------------------------------------------------------
+@app.route('/webhook/mercadopago', methods=['POST'])
+def webhook_mercadopago():
     dados = request.get_json(silent=True) or {}
-    evento = dados.get('event')
-    payment = dados.get('payment', {})
+    topic = dados.get('type') or request.args.get('topic') or request.args.get('type')
+    payment_id = dados.get('data', {}).get('id') or request.args.get('id') or request.args.get('data.id')
 
-    customer_id = payment.get('customer')
-    forma_pagamento = payment.get('billingType')
-    valor_pago = float(payment.get('value') or 0.0)
+    if topic == 'payment' and payment_id:
+        sdk = mercadopago.SDK(os.getenv("MERCADOPAGO_ACCESS_TOKEN"))
+        payment_info = sdk.payment().get(payment_id).get('response', {})
 
-    if not customer_id:
-        return {"status": "ignored", "reason": "No customer ID"}, 200
+        status = payment_info.get('status')
+        ext_ref = payment_info.get('external_reference', '')
+        valor_pago = float(payment_info.get('transaction_amount') or 0.0)
 
-    empresa = Empresa.query.filter_by(asaas_customer_id=customer_id).first()
+        if ext_ref.startswith('emp_'):
+            try:
+                partes = ext_ref.split('_')
+                empresa_id = int(partes[1])
+                empresa = Empresa.query.get(empresa_id)
 
-    if empresa:
-        if evento in ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED']:
-            empresa.status_assinatura = 'ativo'
-            empresa.data_ultimo_pagamento = date.today()
-            empresa.data_vencimento = date.today() + timedelta(days=30)
-            empresa.forma_pagamento_asaas = forma_pagamento
-            empresa.valor_mensalidade = valor_pago
-            db.session.commit()
-            print(f"[ASAAS WEBHOOK] Pagamento confirmado para: {empresa.razao_social}")
-
-        elif evento in ['PAYMENT_OVERDUE']:
-            empresa.status_assinatura = 'bloqueado'
-            db.session.commit()
-            print(f"[ASAAS WEBHOOK] Pagamento vencido. Acesso suspenso: {empresa.razao_social}")
+                if empresa:
+                    if status == 'approved':
+                        empresa.status_assinatura = 'ativo'
+                        empresa.data_ultimo_pagamento = date.today()
+                        empresa.data_vencimento = date.today() + timedelta(days=30)
+                        empresa.valor_mensalidade = valor_pago
+                        db.session.commit()
+                        print(f"[MERCADO PAGO] Pagamento aprovado para a empresa: {empresa.razao_social}")
+                    elif status in ['cancelled', 'rejected']:
+                        empresa.status_assinatura = 'bloqueado'
+                        db.session.commit()
+            except Exception as e:
+                print(f"[ERRO NO PROCESSAMENTO WEBHOOK MP]: {e}")
 
     return {"status": "success"}, 200
 
+# -----------------------------------------------------------------------------
+# ENDPOINT DE CHECKOUT TRANSPARENTE MERCADO PAGO
+# -----------------------------------------------------------------------------
 @app.route('/api/assinatura/checkout-transparente', methods=['POST'])
 @login_required
 def api_checkout_transparente():
@@ -2089,12 +2236,10 @@ def api_checkout_transparente():
     forma_pagamento = dados.get('forma_pagamento', 'PIX')
     cartao_dados = dados.get('cartao')
 
-    # 1. Obtém e valida a empresa PRIMEIRO
     empresa = getattr(current_user, 'empresa', None)
     if not empresa:
         return jsonify({"status": "error", "mensagem": "Empresa não vinculada ao usuário logado."}), 400
 
-    # 2. Processa e aplica o cupom se informado
     cupom_cod = (dados.get('cupom') or '').strip().upper()
     cupom_obj = None
     if cupom_cod:
@@ -2104,7 +2249,6 @@ def api_checkout_transparente():
             valor_total = max(1.0, round(valor_total * fator, 2))
             cupom_obj.usos_atuais += 1
             
-            # Registra na empresa
             empresa.cupom_utilizado = cupom_obj.codigo
             empresa.afiliado_id = cupom_obj.id
             
@@ -2117,13 +2261,11 @@ def api_checkout_transparente():
         else:
             return jsonify({"status": "error", "mensagem": "Cupom de desconto inválido ou expirado."}), 400
 
-    # 3. Trata IP do cliente
     ip_cliente = request.headers.get('X-Forwarded-For', request.remote_addr)
     if ip_cliente and ',' in ip_cliente:
         ip_cliente = ip_cliente.split(',')[0].strip()
 
-    # 4. Chama a integração com o gateway
-    resultado = criar_assinatura_transparente(
+    resultado = criar_cobranca_mercadopago(
         empresa=empresa,
         nome_plano=plano_nome,
         valor=valor_total,
@@ -2136,7 +2278,6 @@ def api_checkout_transparente():
     if resultado.get('sucesso'):
         cfg = resultado.get('plano_info', {})
         
-        # Se aprovado no Cartão de Crédito, ativa imediatamente
         if forma_pagamento == 'CREDIT_CARD':
             empresa.status_assinatura = 'ativo'
             empresa.data_ultimo_pagamento = datetime.now().date()
@@ -2149,20 +2290,19 @@ def api_checkout_transparente():
             "mensagem": "Cobrança gerada com sucesso!",
             "dados": resultado.get('dados'),
             "pix": resultado.get('pix'),
+            "bankSlipUrl": resultado.get('bankSlipUrl'),
             "invoiceUrl": resultado.get('invoiceUrl')
         })
     else:
         db.session.rollback()
         return jsonify({
             "status": "error",
-            "mensagem": resultado.get('mensagem', 'Erro ao processar cobrança.')
+            "mensagem": resultado.get('mensagem', 'Erro ao processar cobrança no Mercado Pago.')
         }), 400
-
 
 # -----------------------------------------------------------------------------
 # GESTÃO DE CUPONS E AFILIADOS (PAINEL MASTER)
 # -----------------------------------------------------------------------------
-from models import CupomDesconto
 
 @app.route('/admin/master/cupons', methods=['GET', 'POST'])
 @login_required
@@ -2214,13 +2354,12 @@ def admin_moderar_parceiro(user_id):
         return redirect(url_for('index'))
 
     parceiro = Usuario.query.get_or_404(user_id)
-    decisao = request.form.get('status_aprovacao') # 'aprovado' ou 'rejeitado'
+    decisao = request.form.get('status_aprovacao')
     motivo = request.form.get('motivo_rejeicao', '')
 
     parceiro.status_aprovacao = decisao
     parceiro.motivo_rejeicao = motivo if decisao == 'rejeitado' else None
 
-    # Ativa ou desativa os cupons do parceiro
     for c in parceiro.cupons:
         c.ativo = (decisao == 'aprovado' and parceiro.aceitou_termos_afiliado)
 
@@ -2237,6 +2376,7 @@ def admin_toggle_cupom(id):
     db.session.commit()
     flash(f'Status do cupom "{cupom.codigo}" alterado.', 'info')
     return redirect(url_for('admin_master_cupons'))
+
 @app.route('/admin/master/afiliados', methods=['GET'])
 @login_required
 def admin_master_afiliados():
@@ -2254,7 +2394,7 @@ def admin_alterar_status_afiliado(id):
         return redirect(url_for('index'))
     
     cupom = CupomDesconto.query.get_or_404(id)
-    novo_status = request.form.get('status_aprovacao') # 'aprovado' ou 'rejeitado'
+    novo_status = request.form.get('status_aprovacao')
     
     cupom.status_aprovacao = novo_status
     if novo_status == 'aprovado':
@@ -2267,9 +2407,6 @@ def admin_alterar_status_afiliado(id):
     flash(f'Status do afiliado {cupom.afiliado_nome} atualizado para {novo_status}.', 'success')
     return redirect(url_for('admin_master_afiliados'))
 
-# -----------------------------------------------------------------------------
-# AUDITORIA DO PARCEIRO (DETALHE, HISTÓRICO DE CLIENTES E PARCELAS)
-# -----------------------------------------------------------------------------
 @app.route('/admin/master/parceiro/<int:id>/auditoria', methods=['GET'])
 @login_required
 def admin_auditoria_parceiro(id):
@@ -2280,10 +2417,8 @@ def admin_auditoria_parceiro(id):
     cupons = CupomDesconto.query.filter_by(usuario_id=parceiro.id).order_by(CupomDesconto.id.desc()).all()
     codigos = [c.codigo for c in cupons]
 
-    # Empresas indicadas
     empresas = Empresa.query.filter(Empresa.cupom_utilizado.in_(codigos)).all() if codigos else []
 
-    # Histórico financeiro
     comissoes = ComissaoAfiliado.query.filter_by(usuario_id=parceiro.id).order_by(ComissaoAfiliado.id.desc()).all()
     repasses = RepasseAfiliado.query.filter_by(usuario_id=parceiro.id).order_by(RepasseAfiliado.id.desc()).all()
 
@@ -2291,7 +2426,6 @@ def admin_auditoria_parceiro(id):
     total_ja_pago = sum(r.valor_total_pago for r in repasses)
     total_usos_cupons = sum(c.usos_atuais or 0 for c in cupons)
 
-    # Link de indicação primário
     cupom_primario = cupons[0].codigo if cupons else 'PADRAO'
     link_indicacao = url_for('auth.registro', ref=cupom_primario, _external=True)
 
@@ -2308,9 +2442,6 @@ def admin_auditoria_parceiro(id):
         link_indicacao=link_indicacao
     )
 
-# -----------------------------------------------------------------------------
-# LIQUIDAR REPASSE COM ANEXO DE COMPROVANTE PIX
-# -----------------------------------------------------------------------------
 @app.route('/admin/master/parceiro/<int:id>/liquidar-repasse', methods=['POST'])
 @login_required
 def admin_liquidar_repasse(id):
@@ -2322,7 +2453,6 @@ def admin_liquidar_repasse(id):
     valor_pago = float(request.form.get('valor_pago', 0.0))
     observacoes = request.form.get('observacoes', '')
 
-    # Upload do Comprovante PIX
     nome_arquivo_salvo = None
     arquivo = request.files.get('comprovante')
     if arquivo and arquivo.filename:
@@ -2342,7 +2472,6 @@ def admin_liquidar_repasse(id):
     db.session.add(novo_repasse)
     db.session.flush()
 
-    # Atualiza as comissões liberadas que foram pagas neste lote
     comissoes_liberadas = ComissaoAfiliado.query.filter_by(usuario_id=parceiro.id, status='liberado').all()
     for c in comissoes_liberadas:
         c.status = 'pago'
@@ -2355,9 +2484,6 @@ def admin_liquidar_repasse(id):
     flash(f'Repasse de R$ {valor_pago:.2f} liquidado com sucesso para {parceiro.nome}!', 'success')
     return redirect(url_for('admin_auditoria_parceiro', id=parceiro.id))
 
-# -----------------------------------------------------------------------------
-# ENDPOINT DE VALIDAÇÃO DE CUPOM NO CHECKOUT / CADASTRO
-# -----------------------------------------------------------------------------
 @app.route('/api/cupom/validar', methods=['POST'])
 def api_validar_cupom():
     dados = request.get_json() or {}
@@ -2371,7 +2497,6 @@ def api_validar_cupom():
     if cupom.parceiro and cupom.parceiro.status_aprovacao != 'aprovado':
         return jsonify({'valido': False, 'mensagem': 'Este cupom de parceiro ainda está em moderação.'})
 
-    # Valores base dos planos
     precos = {
         'MENSAL': 39.90,
         'SEMESTRAL': 209.40,
@@ -2433,7 +2558,7 @@ def admin_criar_cupom_parceiro(id):
     return redirect(url_for('admin_auditoria_parceiro', id=parceiro.id))
 
 # -----------------------------------------------------------------------------
-# FASE 3: GERADOR DE MINUTAS & CONTRATOS PERSONALIZADOS (app.py)
+# FASE 3: GERADOR DE MINUTAS & CONTRATOS PERSONALIZADOS
 # -----------------------------------------------------------------------------
 
 @app.route('/cliente/<int:cliente_id>/contrato/novo', methods=['POST'])
@@ -2450,7 +2575,6 @@ def gerar_minuta_contrato(cliente_id):
     total_existentes = ContratoGerado.query.filter_by(empresa_id=empresa.id).count() + 1
     num_doc = f"CONT-{date.today().year}-{total_existentes:03d}"
 
-    # Monta a discriminação dos serviços da proposta
     itens_texto = ""
     valor_contrato = "0,00"
     condicoes_pgto = "A combinar entre as partes."
@@ -2465,7 +2589,6 @@ def gerar_minuta_contrato(cliente_id):
     else:
         itens_texto = "<p>Prestação de serviços técnicos especializados sob demanda.</p>"
 
-    # Minuta Contratual Padrão com Cláusulas Editáveis
     conteudo_padrao = f"""
     <h3 style="text-align: center;">INSTRUMENTO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS</h3>
     <p style="text-align: center;"><b>DOCUMENTO Nº {num_doc}</b></p>
@@ -2511,7 +2634,6 @@ def gerar_minuta_contrato(cliente_id):
     flash(f'Minuta {num_doc} criada com sucesso! Você pode revisar o texto abaixo.', 'success')
     return redirect(url_for('detalhe_cliente', id=cliente.id))
 
-
 @app.route('/contrato/<int:id>/salvar-texto', methods=['POST'])
 @login_required
 def salvar_texto_contrato(id):
@@ -2528,7 +2650,6 @@ def salvar_texto_contrato(id):
     flash(f'Contrato "{contrato.numero_documento}" atualizado com sucesso!', 'success')
     return redirect(url_for('detalhe_cliente', id=contrato.cliente_id))
 
-
 @app.route('/contrato/<int:id>/excluir', methods=['POST'])
 @login_required
 def excluir_contrato(id):
@@ -2538,7 +2659,6 @@ def excluir_contrato(id):
     db.session.commit()
     flash('Minuta de contrato removida.', 'info')
     return redirect(url_for('detalhe_cliente', id=cliente_id))
-
 
 @app.route('/contrato/<int:id>/pdf')
 @login_required
@@ -2563,14 +2683,12 @@ def gerar_pdf_contrato(id):
     cor_primaria_hex = empresa.cor_primaria if empresa.cor_primaria and empresa.cor_primaria.startswith('#') else "#1e3a8a"
     cor_marca = colors.HexColor(cor_primaria_hex)
 
-    # Estilos Tipográficos
     estilo_empresa_nome = ParagraphStyle('PDF_EmpresaNome', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=cor_marca)
     estilo_empresa_sub = ParagraphStyle('PDF_EmpresaSub', parent=styles['Normal'], fontName='Helvetica', fontSize=7.5, leading=10, textColor=colors.HexColor("#475569"), alignment=2)
     estilo_titulo_doc = ParagraphStyle('PDF_ContrTit', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, leading=15, textColor=cor_marca, alignment=1)
     estilo_corpo = ParagraphStyle('PDF_ContrCorpo', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=13, textColor=colors.HexColor("#1e293b"), alignment=4)
     estilo_subtit = ParagraphStyle('PDF_ContrSubTit', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=cor_marca)
 
-    # 1. Cabeçalho Timbrado Oficial
     logo_elemento = None
     if empresa.logo_filename:
         caminho_logo = os.path.join(app.config['UPLOAD_FOLDER'], empresa.logo_filename)
@@ -2610,12 +2728,10 @@ def gerar_pdf_contrato(id):
     elementos.append(Spacer(1, 4))
     elementos.append(HRFlowable(width="100%", thickness=1.5, color=cor_marca, spaceAfter=12))
 
-    # 2. Título do Instrumento
     elementos.append(Paragraph(f"<b>{_limpar_texto(contrato.titulo).upper()}</b>", estilo_titulo_doc))
     elementos.append(Paragraph(f"<font color='#64748b' size='8'>DOCUMENTO Nº {_limpar_texto(contrato.numero_documento)}</font>", estilo_titulo_doc))
     elementos.append(Spacer(1, 10))
 
-    # 3. Conteúdo das Cláusulas Formatadas
     texto_raw = contrato.conteudo_html or ""
     blocos = re.split(r'</?(?:p|h\d|div|li|tr)[^>]*>', texto_raw)
 
@@ -2634,7 +2750,6 @@ def gerar_pdf_contrato(id):
             elementos.append(Paragraph(bloco_fmt, estilo_corpo))
             elementos.append(Spacer(1, 4))
 
-    # 4. Assinaturas
     elementos.append(Spacer(1, 20))
     nome_cli = _limpar_texto(cliente.nome or 'CONTRATANTE')
     dados_assinaturas = [

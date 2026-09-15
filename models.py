@@ -13,7 +13,7 @@ class Empresa(db.Model):
     email = db.Column(db.String(120))
     site = db.Column(db.String(120))
     
-    # Endereço Estruturado (Padronizado com a tabela Cliente)
+    # Endereço Estruturado
     cep = db.Column(db.String(10), nullable=True)
     logradouro = db.Column(db.String(150), nullable=True)
     numero = db.Column(db.String(20), nullable=True)
@@ -29,13 +29,13 @@ class Empresa(db.Model):
     cor_secundaria = db.Column(db.String(7), default="#059669")
     cor_sidebar = db.Column(db.String(7), default="#ffffff")
 
-    # Assinatura & Controle Master
+    # Assinatura & Integração Mercado Pago
     plano = db.Column(db.String(30), default="Founder")
     status_assinatura = db.Column(db.String(20), default="trial")
     valor_mensalidade = db.Column(db.Float, default=0.0)
-    forma_pagamento_asaas = db.Column(db.String(30), nullable=True)
-    asaas_customer_id = db.Column(db.String(50), nullable=True)
-    asaas_subscription_id = db.Column(db.String(50), nullable=True)
+    forma_pagamento_mp = db.Column(db.String(30), nullable=True)
+    mp_customer_id = db.Column(db.String(50), nullable=True)
+    mp_payment_id = db.Column(db.String(50), nullable=True)
     data_vencimento = db.Column(db.Date, nullable=True)
     data_ultimo_pagamento = db.Column(db.Date, nullable=True)
     observacoes_master = db.Column(db.Text, nullable=True)
@@ -90,18 +90,17 @@ class Usuario(UserMixin, db.Model):
     aceitou_termos_beta = db.Column(db.Boolean, default=True)
     data_aceite_termos = db.Column(db.DateTime, nullable=True)
 
-    # Dados e Conformidade do Afiliado / Parceiro
+    # Dados do Afiliado / Parceiro
     cpf_cnpj = db.Column(db.String(20), nullable=True)
     chave_pix = db.Column(db.String(150), nullable=True)
     whatsapp = db.Column(db.String(50), nullable=True)
     rede_social_principal = db.Column(db.String(150), nullable=True)
     tipo_parceiro = db.Column(db.String(50), nullable=True)
-    status_aprovacao = db.Column(db.String(30), default='aprovado')  # 'pendente', 'aprovado', 'rejeitado'
+    status_aprovacao = db.Column(db.String(30), default='aprovado')
     motivo_rejeicao = db.Column(db.Text, nullable=True)
     aceitou_termos_afiliado = db.Column(db.Boolean, default=False)
     data_aceite_termos_afiliado = db.Column(db.DateTime, nullable=True)
 
-    # Relacionamento 1 -> N com Cupons
     cupons = db.relationship('CupomDesconto', backref='parceiro', lazy=True)
 
     def set_senha(self, senha):
@@ -134,7 +133,6 @@ class Cliente(db.Model):
     endereco_completo = db.Column(db.String(255), nullable=True)
     observacoes = db.Column(db.Text, nullable=True)
 
-    # Relacionamentos
     documentos = db.relationship('Documento', backref='cliente', lazy=True, cascade="all, delete-orphan")
     servicos = db.relationship('ServicoCliente', backref='cliente', lazy=True, cascade="all, delete-orphan")
     contratos = db.relationship('ContratoRecorrente', backref='cliente', lazy=True, cascade="all, delete-orphan")
@@ -208,16 +206,54 @@ class ServicoCliente(db.Model):
     data_solicitacao = db.Column(db.Date, default=date.today)
     data_previsao = db.Column(db.Date, nullable=True)
     observacoes = db.Column(db.Text, nullable=True)
+    responsavel_tecnico = db.Column(db.String(120), nullable=True)
 
     detalhamento_execucao = db.Column(db.Text, nullable=True)
     orientacoes_cliente = db.Column(db.Text, nullable=True)
     arquivo_evidencia = db.Column(db.String(255), nullable=True)
+
+    # Local de Execução / Atendimento Personalizado
+    usar_endereco_personalizado = db.Column(db.Boolean, default=False)
+    cep_execucao = db.Column(db.String(10), nullable=True)
+    logradouro_execucao = db.Column(db.String(150), nullable=True)
+    numero_execucao = db.Column(db.String(20), nullable=True)
+    complemento_execucao = db.Column(db.String(100), nullable=True)
+    bairro_execucao = db.Column(db.String(100), nullable=True)
+    cidade_execucao = db.Column(db.String(100), nullable=True)
+    estado_execucao = db.Column(db.String(2), nullable=True)
+    endereco_execucao_completo = db.Column(db.String(255), nullable=True)
 
     data_vencimento_boleto = db.Column(db.Date, nullable=True)
     status_pagamento = db.Column(db.String(30), default='A Faturar')
     arquivo_boleto = db.Column(db.String(255), nullable=True)
     arquivo_nf = db.Column(db.String(255), nullable=True)
     historico_cobranca = db.Column(db.Text, nullable=True)
+
+    @property
+    def endereco_exibicao(self):
+        """Retorna o endereço personalizado ou faz fallback para o endereço principal do cliente."""
+        if self.usar_endereco_personalizado and self.endereco_execucao_completo:
+            return self.endereco_execucao_completo
+        if self.cliente and self.cliente.endereco_completo:
+            return self.cliente.endereco_completo
+        if self.cliente:
+            return f"{self.cliente.logradouro or ''}, {self.cliente.numero or 'S/N'} {self.cliente.complemento or ''} - {self.cliente.bairro or ''}, {self.cliente.cidade or ''}/{self.cliente.estado or ''}".strip(" ,-/")
+        return "Endereço não informado"
+
+
+class ServicoEtapaRastreio(db.Model):
+    __tablename__ = 'servicos_etapas_rastreio'
+    id = db.Column(db.Integer, primary_key=True)
+    servico_cliente_id = db.Column(db.Integer, db.ForeignKey('servicos_cliente.id'), nullable=False)
+    
+    titulo_fase = db.Column(db.String(150), nullable=False)
+    descricao_detalhes = db.Column(db.Text, nullable=True)
+    data_inicio = db.Column(db.Date, nullable=True)
+    data_fim = db.Column(db.Date, nullable=True)
+    status_fase = db.Column(db.String(30), default='pendente')
+    ordem = db.Column(db.Integer, default=0)
+
+    servico = db.relationship('ServicoCliente', backref=db.backref('etapas_rastreio', lazy=True, cascade="all, delete-orphan"))
 
 
 class Proposta(db.Model):
@@ -235,12 +271,10 @@ class Proposta(db.Model):
     periodicidade = db.Column(db.String(20), default='mensal')
     dia_vencimento = db.Column(db.Integer, default=10)
 
-    # Gestão de Termos Aditivos
     proposta_origem_id = db.Column(db.Integer, db.ForeignKey('propostas.id'), nullable=True)
     tipo_documento = db.Column(db.String(20), default='proposta')
     numero_aditivo = db.Column(db.Integer, default=0)
 
-    # Condições de Parcelamento e Entrada
     exige_entrada = db.Column(db.Boolean, default=False)
     valor_entrada = db.Column(db.Float, default=0.0)
     forma_pagamento_entrada = db.Column(db.String(50), default='PIX')
@@ -248,7 +282,6 @@ class Proposta(db.Model):
     forma_pagamento_parcelas = db.Column(db.String(50), default='Boleto Bancário')
     intervalo_dias = db.Column(db.Integer, default=30)
 
-    # Relacionamentos
     itens = db.relationship('ItemProposta', backref='proposta', lazy='select', cascade="all, delete-orphan")
     faturas = db.relationship('Fatura', backref='proposta', lazy='select')
     contratos_gerados = db.relationship('ContratoGerado', backref='proposta', lazy='select')
@@ -452,20 +485,6 @@ class MensagemChamado(db.Model):
 
     usuario = db.relationship('Usuario')
 
-class ServicoEtapaRastreio(db.Model):
-    __tablename__ = 'servicos_etapas_rastreio'
-    id = db.Column(db.Integer, primary_key=True)
-    servico_cliente_id = db.Column(db.Integer, db.ForeignKey('servicos_cliente.id'), nullable=False)
-    
-    titulo_fase = db.Column(db.String(150), nullable=False)
-    descricao_detalhes = db.Column(db.Text, nullable=True) # Insumos / Materiais
-    data_inicio = db.Column(db.Date, nullable=True)
-    data_fim = db.Column(db.Date, nullable=True)
-    status_fase = db.Column(db.String(30), default='pendente') # 'pendente', 'em_andamento', 'concluido'
-    ordem = db.Column(db.Integer, default=0)
-
-    servico = db.relationship('ServicoCliente', backref=db.backref('etapas_rastreio', lazy=True, cascade="all, delete-orphan"))
-
 
 class CupomDesconto(db.Model):
     __tablename__ = 'cupons_desconto'
@@ -474,12 +493,11 @@ class CupomDesconto(db.Model):
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     codigo = db.Column(db.String(50), unique=True, nullable=False)
     
-    # Parâmetros Comerciais
     percentual_desconto = db.Column(db.Float, nullable=False, default=10.0)
     percentual_comissao = db.Column(db.Float, default=20.0)
     limite_usos = db.Column(db.Integer, default=100)
     usos_atuais = db.Column(db.Integer, default=0)
-    meses_comissao_limite = db.Column(db.Integer, default=3)  # <--- ADICIONAR ESTA LINHA
+    meses_comissao_limite = db.Column(db.Integer, default=3)
     data_validade = db.Column(db.Date, nullable=True)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
     ativo = db.Column(db.Boolean, default=True)
@@ -494,6 +512,7 @@ class CupomDesconto(db.Model):
             return False
         return True
 
+
 class ComissaoAfiliado(db.Model):
     __tablename__ = 'comissoes_afiliados'
 
@@ -502,20 +521,21 @@ class ComissaoAfiliado(db.Model):
     cupom_id = db.Column(db.Integer, db.ForeignKey('cupons_desconto.id'), nullable=True)
     empresa_id = db.Column(db.Integer, db.ForeignKey('empresas.id'), nullable=False)
     
-    numero_parcela_parceiro = db.Column(db.Integer, nullable=False) # Ex: 2 (de 3)
-    total_parcelas_permitidas = db.Column(db.Integer, default=3)   # Ex: 3
+    numero_parcela_parceiro = db.Column(db.Integer, nullable=False)
+    total_parcelas_permitidas = db.Column(db.Integer, default=3)
     
     valor_mensalidade = db.Column(db.Float, nullable=False)
     percentual_comissao = db.Column(db.Float, nullable=False)
     valor_comissao = db.Column(db.Float, nullable=False)
-    mes_competencia = db.Column(db.String(7), nullable=False) # '2026-09'
-    status = db.Column(db.String(30), default='pendente')     # 'pendente', 'liberado', 'pago'
+    mes_competencia = db.Column(db.String(7), nullable=False)
+    status = db.Column(db.String(30), default='pendente')
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
     data_pagamento = db.Column(db.DateTime, nullable=True)
     repasse_id = db.Column(db.Integer, db.ForeignKey('repasses_afiliados.id'), nullable=True)
 
     empresa = db.relationship('Empresa', lazy=True)
     parceiro = db.relationship('Usuario', foreign_keys=[usuario_id], lazy=True)
+
 
 class RepasseAfiliado(db.Model):
     __tablename__ = 'repasses_afiliados'

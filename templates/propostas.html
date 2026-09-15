@@ -1,42 +1,51 @@
 {% extends 'base.html' %}
 
-{% block title %}Propostas & Termos Aditivos - Trivium ERP{% endblock %}
+{% block title %}Propostas Comerciais - Trivium ERP{% endblock %}
 
 {% block content %}
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
     <div>
-        <h2 class="fw-bold text-dark mb-0"><i class="bi bi-file-earmark-text-fill text-primary me-2"></i>Propostas Comerciais & Aditivos</h2>
-        <p class="text-muted mb-0">Gestão de orçamentos, termos aditivos vinculados e precificação analítica</p>
+        <h2 class="fw-bold text-dark mb-0"><i class="bi bi-file-earmark-text text-primary me-2"></i>Propostas Comerciais & Orçamentos</h2>
+        <p class="text-muted mb-0">Emissão de orçamentos, contratos de prestação de serviços e exportação de PDF</p>
     </div>
-    <div class="d-flex gap-2">
-        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovaProposta">
-            <i class="bi bi-plus-circle me-1"></i> Nova Proposta
-        </button>
+    <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovaProposta">
+        <i class="bi bi-plus-circle me-1"></i>Nova Proposta
+    </button>
+</div>
+
+<!-- CARDS RESUMO -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm p-3 bg-warning text-dark rounded-4">
+            <span class="small text-dark-50 fw-bold">EM NEGOCIAÇÃO</span>
+            <h3 class="fw-bold my-1">{{ qtd_aguardando }}</h3>
+            <small>R$ {{ "%.2f"|format(total_aguardando) }} em aberto</small>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm p-3 bg-success text-white rounded-4">
+            <span class="small text-white-50 fw-bold">TOTAL FECHADO / APROVADO</span>
+            <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_aprovadas) }}</h3>
+            <small>Faturamento garantido</small>
+        </div>
     </div>
 </div>
 
-<!-- CARDS SUPERIORES -->
-<div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-3 bg-warning text-dark rounded-4">
-            <span class="small text-dark-50 fw-bold">EM NEGOCIAÇÃO (AGUARDANDO)</span>
-            <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_aguardando) }}</h3>
-            <small>{{ qtd_aguardando }} proposta(s) em aberto</small>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-3 bg-success text-white rounded-4">
-            <span class="small text-white-50 fw-bold">APROVADAS & FATURADAS</span>
-            <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_aprovadas) }}</h3>
-            <small>Contratos e serviços confirmados</small>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-3 bg-white text-dark rounded-4 border">
-            <span class="small text-muted fw-bold">TOTAL DE PROPOSTAS</span>
-            <h3 class="fw-bold my-1">{{ propostas|length }}</h3>
-            <small>Base comercial ativa</small>
-        </div>
+<!-- BARRA DE FILTROS POR STATUS -->
+<div class="card border-0 shadow-sm mb-4 rounded-4">
+    <div class="card-body p-2 d-flex flex-wrap gap-2">
+        <a href="{{ url_for('listar_propostas', filtro='todas') }}" class="btn btn-sm {% if filtro_atual == 'todas' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
+            Todas as Propostas
+        </a>
+        <a href="{{ url_for('listar_propostas', filtro='ativas') }}" class="btn btn-sm {% if filtro_atual == 'ativas' %}btn-warning text-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
+            <i class="bi bi-hourglass-split me-1"></i>Em Aprovação / Aguardando ({{ qtd_aguardando }})
+        </a>
+        <a href="{{ url_for('listar_propostas', filtro='aprovadas') }}" class="btn btn-sm {% if filtro_atual == 'aprovadas' %}btn-success fw-bold{% else %}btn-outline-secondary{% endif %}">
+            <i class="bi bi-check-circle me-1"></i>Aprovadas / Fechadas
+        </a>
+        <a href="{{ url_for('listar_propostas', filtro='canceladas') }}" class="btn btn-sm {% if filtro_atual == 'canceladas' %}btn-danger fw-bold{% else %}btn-outline-secondary{% endif %}">
+            <i class="bi bi-x-circle me-1"></i>Canceladas
+        </a>
     </div>
 </div>
 
@@ -47,12 +56,11 @@
             <table class="table table-hover align-middle mb-0 small">
                 <thead class="table-light">
                     <tr>
-                        <th>NÚMERO / TIPO</th>
+                        <th>NÚMERO</th>
                         <th>CLIENTE</th>
                         <th>EMISSÃO</th>
-                        <th>SERVIÇOS / ITENS</th>
                         <th>VALOR TOTAL</th>
-                        <th>MARGEM ESTIMADA</th>
+                        <th>TIPO</th>
                         <th>STATUS</th>
                         <th class="text-end pe-3">AÇÕES</th>
                     </tr>
@@ -63,21 +71,18 @@
                         <td>
                             <strong class="text-dark d-block">{{ p.numero_proposta }}</strong>
                             {% if p.tipo_documento == 'aditivo' %}
-                                <span class="badge bg-info text-dark">Aditivo #{{ p.numero_aditivo }} (PROP-{{ p.proposta_origem_id }})</span>
-                            {% else %}
-                                <span class="badge bg-light text-muted border">Proposta Principal</span>
+                                <span class="badge bg-info text-dark" style="font-size: 0.68rem;">Aditivo #{{ p.numero_aditivo }}</span>
                             {% endif %}
                         </td>
                         <td>
-                            <strong class="text-dark">{{ p.cliente.nome }}</strong>
-                            <span class="d-block text-muted">{{ p.cliente.cnpj_cpf }}</span>
+                            <strong class="text-dark d-block">{{ p.cliente.nome }}</strong>
+                            <span class="text-muted">{{ p.cliente.cnpj_cpf }}</span>
                         </td>
-                        <td>{{ p.data_criacao.strftime('%d/%m/%Y') }}</td>
-                        <td>{{ p.itens|length }} serviço(s)</td>
+                        <td>{{ p.data_criacao.strftime('%d/%m/%Y') if p.data_criacao else '--' }}</td>
                         <td class="fw-bold text-success fs-6">R$ {{ "%.2f"|format(p.valor_total) }}</td>
                         <td>
-                            <span class="badge {{ 'bg-success' if p.margem_lucro_real >= 30 else 'bg-warning text-dark' }}">
-                                {{ p.margem_lucro_real }}% (R$ {{ "%.2f"|format(p.lucro_bruto_previsto) }})
+                            <span class="badge {{ 'bg-primary' if p.tipo_cobranca == 'recorrente' else 'bg-secondary' }}">
+                                {{ 'Mensal' if p.tipo_cobranca == 'recorrente' else 'Pontual' }}
                             </span>
                         </td>
                         <td>
@@ -86,35 +91,48 @@
                             {% elif p.status == 'Cancelado' %}
                                 <span class="badge bg-danger">Cancelado</span>
                             {% else %}
-                                <span class="badge bg-warning text-dark">Aguardando</span>
+                                <span class="badge bg-warning text-dark">Aguardando Aprovação</span>
                             {% endif %}
                         </td>
                         <td class="text-end pe-3">
                             <div class="btn-group btn-group-sm">
-                                <a href="{{ url_for('gerar_pdf_proposta', id=p.id) }}" class="btn btn-outline-primary" title="Gerar Carta Proposta PDF">
-                                    <i class="bi bi-file-earmark-pdf"></i>
+                                <a href="{{ url_for('gerar_pdf_proposta', id=p.id) }}" class="btn btn-outline-primary fw-bold" title="Exportar Carta Proposta PDF">
+                                    <i class="bi bi-file-earmark-pdf me-1"></i>PDF
                                 </a>
-                                {% if p.status == 'Aprovado' %}
-                                    <form action="{{ url_for('gerar_aditivo_proposta', id=p.id) }}" method="POST" class="d-inline">
-                                        <button type="submit" class="btn btn-outline-info text-dark fw-bold" title="Gerar Termo Aditivo vinculado">
-                                            <i class="bi bi-plus-square me-1"></i> + Aditivo
-                                        </button>
-                                    </form>
-                                {% endif %}
+
                                 {% if p.status == 'Aguardando Aprovação' %}
-                                    <form action="{{ url_for('atualizar_status_proposta', id=p.id) }}" method="POST" class="d-inline">
-                                        <input type="hidden" name="novo_status" value="Aprovado">
-                                        <button class="btn btn-success fw-bold" title="Aprovar e Faturar">
-                                            <i class="bi bi-check-lg"></i>
-                                        </button>
-                                    </form>
+                                <form action="{{ url_for('atualizar_status_proposta', id=p.id) }}" method="POST" class="d-inline">
+                                    <input type="hidden" name="novo_status" value="Aprovado">
+                                    <button type="submit" class="btn btn-success fw-bold ms-1" onclick="return confirm('Aprovar proposta? Isso gerará fatura e O.S. automaticamente.')">
+                                        <i class="bi bi-check-lg"></i> Aprovar
+                                    </button>
+                                </form>
+                                <form action="{{ url_for('atualizar_status_proposta', id=p.id) }}" method="POST" class="d-inline">
+                                    <input type="hidden" name="novo_status" value="Cancelado">
+                                    <button type="submit" class="btn btn-outline-danger ms-1" title="Cancelar Proposta">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </form>
+                                {% elif p.status == 'Aprovado' and p.tipo_documento != 'aditivo' %}
+                                <form action="{{ url_for('gerar_aditivo_proposta', id=p.id) }}" method="POST" class="d-inline">
+                                    <button type="submit" class="btn btn-outline-info ms-1" title="Gerar Termo Aditivo">
+                                        <i class="bi bi-file-earmark-plus"></i> Aditivo
+                                    </button>
+                                </form>
                                 {% endif %}
+
+                                <form action="{{ url_for('excluir_proposta', id=p.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Excluir esta proposta?');">
+                                    <button type="submit" class="btn btn-outline-danger ms-1" title="Excluir"><i class="bi bi-trash"></i></button>
+                                </form>
                             </div>
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="8" class="text-center py-4 text-muted">Nenhuma proposta registrada.</td>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="bi bi-file-earmark-x fs-2 d-block mb-2 text-secondary"></i>
+                            Nenhuma proposta encontrada para este filtro.
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -123,150 +141,180 @@
     </div>
 </div>
 
-<!-- MODAL: NOVA PROPOSTA COM BLOCOS ANALÍTICOS -->
+<!-- MODAL COMPLETO: NOVA PROPOSTA COM MÚLTIPLOS ITENS E ENTRADA -->
 <div class="modal fade" id="modalNovaProposta" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content border-0 shadow rounded-4">
-            <form action="{{ url_for('criar_proposta') }}" method="POST">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form action="{{ url_for('criar_proposta') }}" method="POST" id="formCriarProposta">
                 <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-file-earmark-plus text-primary me-2"></i>Nova Proposta Comercial</h5>
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-file-earmark-plus text-primary me-2"></i>Emitir Nova Proposta Comercial</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
-                    <div class="row g-3 mb-4">
+                    
+                    <div class="row g-3 mb-3">
                         <div class="col-md-6">
                             <label class="form-label small fw-bold">Cliente Contratante *</label>
                             <select name="cliente_id" class="form-select" required>
-                                <option value="">Selecione o cliente...</option>
-                                {% for cli in clientes %}
-                                <option value="{{ cli.id }}">{{ cli.nome }} ({{ cli.cnpj_cpf }})</option>
+                                <option value="">Selecione um cliente...</option>
+                                {% for c in clientes %}
+                                <option value="{{ c.id }}">{{ c.nome }} ({{ c.cnpj_cpf }})</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small fw-bold">Modelo de Cobrança</label>
-                            <select name="tipo_cobranca" class="form-select">
-                                <option value="pontual">Pontual / Empreitada</option>
-                                <option value="recorrente">Recorrente Mensalista</option>
+                            <label class="form-label small fw-bold">Tipo de Cobrança</label>
+                            <select name="tipo_cobranca" id="prop_tipo_cobranca" class="form-select" onchange="alternarTipoCobrancaProposta()">
+                                <option value="pontual">Serviço Pontual (Avulso)</option>
+                                <option value="recorrente">Contrato Mensalista (Recorrente)</option>
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small fw-bold">Validade da Proposta</label>
-                            <input type="number" name="validade_dias" class="form-control" value="15">
+                            <label class="form-label small fw-bold">Validade da Proposta (Dias)</label>
+                            <input type="number" name="validade_dias" class="form-control" value="15" required>
+                        </div>
+                    </div>
+
+                    <!-- REGRAS DE SINAL / PARCELAMENTO (SERVIÇO PONTUAL) -->
+                    <div id="box-condicoes-pontual" class="p-3 bg-light rounded-3 border mb-4">
+                        <h6 class="fw-bold text-dark mb-2"><i class="bi bi-cash-coin text-success me-1"></i>Regras de Pagamento & Entrada</h6>
+                        <div class="row g-3 align-items-center">
+                            <div class="col-md-3">
+                                <div class="form-check form-switch pt-2">
+                                    <input class="form-check-input" type="checkbox" name="exige_entrada" id="chkExigeEntrada" onchange="alternarEntradaProposta()">
+                                    <label class="form-check-label fw-bold text-dark small" for="chkExigeEntrada">Exigir Sinal de Entrada</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3 d-none" id="box-valor-entrada">
+                                <label class="form-label small fw-bold">Valor do Sinal (R$)</label>
+                                <input type="number" step="0.01" name="valor_entrada" class="form-control form-control-sm" placeholder="0.00">
+                            </div>
+                            <div class="col-md-3 d-none" id="box-forma-entrada">
+                                <label class="form-label small fw-bold">Forma do Sinal</label>
+                                <select name="forma_pagamento_entrada" class="form-select form-select-sm">
+                                    <option value="PIX">PIX (Instantâneo)</option>
+                                    <option value="Boleto Bancário">Boleto Bancário</option>
+                                    <option value="Transferência Bancária">Transferência / TED</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Parcelas do Saldo</label>
+                                <input type="number" name="qtd_parcelas" class="form-control form-control-sm" value="1" min="1" max="12">
+                            </div>
                         </div>
                     </div>
 
                     <!-- ITENS DA PROPOSTA -->
-                    <div class="p-3 bg-light rounded-3 border mb-4">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-briefcase text-primary me-2"></i>Serviços e Composições de Custo</h6>
-                            <button type="button" class="btn btn-sm btn-primary fw-bold" onclick="adicionarServicoProposta()">
-                                <i class="bi bi-plus-lg me-1"></i>Adicionar Serviço
-                            </button>
-                        </div>
-                        <div id="container-itens-proposta" class="d-flex flex-column gap-3"></div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-list-check text-primary me-1"></i>Itens e Serviços Inclusos</h6>
+                        <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="adicionarItemProposta()">
+                            <i class="bi bi-plus-lg me-1"></i>Adicionar Serviço
+                        </button>
                     </div>
 
-                    <!-- CONDIÇÕES DE PAGAMENTO -->
-                    <h6 class="fw-bold text-dark mb-2">Condições Comerciais</h6>
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-3">
-                            <div class="form-check form-switch pt-2">
-                                <input class="form-check-input" type="checkbox" name="exige_entrada" id="chkEntrada">
-                                <label class="form-check-label small fw-bold" for="chkEntrada">Exigir Entrada / Sinal</label>
+                    <div id="container-itens-proposta" class="d-flex flex-column gap-3 mb-4">
+                        <div class="item-proposta-row p-3 bg-white border rounded-3 shadow-sm">
+                            <div class="row g-2 align-items-center">
+                                <div class="col-md-5">
+                                    <label class="form-label small fw-bold">Serviço do Catálogo *</label>
+                                    <select name="tipo_servico_id[]" class="form-select form-select-sm select-servico" onchange="atualizarDadosItem(this)" required>
+                                        <option value="">Selecione um item do catálogo...</option>
+                                        {% for s in tipos_servico %}
+                                        <option value="{{ s.id }}" data-valor="{{ s.valor_sugerido }}" data-desc="{{ s.descricao_padrao or '' }}">{{ s.nome }} (R$ {{ "%.2f"|format(s.valor_sugerido) }})</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-bold">Quantidade</label>
+                                    <input type="number" step="0.1" name="quantidade[]" class="form-control form-control-sm item-qtd" value="1" oninput="calcularTotalPropostaModal()">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-bold">Unidade</label>
+                                    <input type="text" name="unidade[]" class="form-control form-control-sm" value="un">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-bold">Valor Unit. (R$) *</label>
+                                    <input type="number" step="0.01" name="valor_unitario[]" class="form-control form-control-sm item-valor" required oninput="calcularTotalPropostaModal()">
+                                </div>
+                                <div class="col-md-1 text-end pt-3">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removerItemProposta(this)"><i class="bi bi-trash"></i></button>
+                                </div>
+                                <div class="col-12 mt-2">
+                                    <input type="text" name="descricao[]" class="form-control form-control-sm item-desc" placeholder="Escopo personalizado para este orçamento...">
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <input type="number" step="0.01" name="valor_entrada" class="form-control form-control-sm" placeholder="Valor Sinal (R$)">
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Condições Gerais de Fornecimento</label>
+                            <input type="text" name="condicoes_pagamento" class="form-control" value="Faturamento em 30 dias após entrega técnica">
                         </div>
-                        <div class="col-md-3">
-                            <input type="number" name="qtd_parcelas" class="form-control form-control-sm" value="1" placeholder="Qtd Parcelas">
-                        </div>
-                        <div class="col-md-3">
-                            <select name="forma_pagamento_parcelas" class="form-select form-select-sm">
-                                <option value="Boleto Bancário">Boleto Bancário</option>
-                                <option value="PIX">PIX</option>
-                                <option value="Cartão de Crédito">Cartão de Crédito</option>
-                            </select>
+                        <div class="col-md-6 text-end">
+                            <span class="small text-muted fw-bold d-block">VALOR TOTAL DA PROPOSTA:</span>
+                            <h3 class="fw-bold text-success mb-0" id="totalPropostaModal">R$ 0,00</h3>
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Observações / Termos Gerais</label>
-                        <textarea name="condicoes_pagamento" class="form-control" rows="2" placeholder="Descreva garantias, prazos de entrega ou particularidades do serviço..."></textarea>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Observações Internas / Técnicas</label>
+                        <textarea name="observacoes" class="form-control" rows="2" placeholder="Informações de acesso à obra, restrições de horário, etc."></textarea>
                     </div>
+
                 </div>
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success fw-bold px-4">Salvar Proposta</button>
+                    <button type="submit" class="btn btn-success fw-bold px-4">Salvar e Emitir Proposta</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- TEMPLATE INVISÍVEL COM OS DADOS DO CATÁLOGO -->
-<select id="template-select-servicos" class="d-none">
-    <option value="">Selecione um serviço...</option>
-    {% for c in tipos_servico %}
-    <option value="{{ c.id }}" 
-            data-valor="{{ '%.2f'|format(c.valor_sugerido) }}" 
-            data-desc="{{ c.descricao_padrao or '' }}" 
-            data-unidade="{{ c.unidade_medida or 'un' }}">
-        {{ c.nome }}
-    </option>
-    {% endfor %}
-</select>
-
 <script>
-let contadorItens = 0;
-
-function adicionarServicoProposta() {
-    contadorItens++;
-    const container = document.getElementById('container-itens-proposta');
-    const div = document.createElement('div');
-    div.className = 'card border rounded-3 p-3 bg-white shadow-sm';
-    
-    // Pega as opções diretamente do template seguro renderizado no DOM
-    const selectTemplate = document.getElementById('template-select-servicos');
-    const optionsHtml = selectTemplate ? selectTemplate.innerHTML : '<option value="">Selecione um serviço...</option>';
-
-    div.innerHTML = `
-        <div class="row g-2 align-items-center mb-2">
-            <div class="col-md-5">
-                <select name="tipo_servico_id[]" class="form-select form-select-sm fw-bold" onchange="selecionarServicoProposta(this, ${contadorItens})" required>
-                    ${optionsHtml}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <input type="text" name="unidade[]" id="unidade_${contadorItens}" class="form-control form-control-sm" value="un" placeholder="Unidade">
-            </div>
-            <div class="col-md-2">
-                <input type="number" step="0.1" name="quantidade[]" class="form-control form-control-sm" value="1.0" placeholder="Qtd">
-            </div>
-            <div class="col-md-2">
-                <input type="number" step="0.01" name="valor_unitario[]" id="valor_${contadorItens}" class="form-control form-control-sm fw-bold text-success" placeholder="Valor (R$)" required>
-            </div>
-            <div class="col-md-1 text-end">
-                <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.card').remove();">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </div>
-        </div>
-        <div>
-            <input type="text" name="descricao[]" id="desc_${contadorItens}" class="form-control form-control-sm" placeholder="Detalhamento técnico para a proposta...">
-        </div>
-    `;
-    container.appendChild(div);
+function alternarEntradaProposta() {
+    const chk = document.getElementById('chkExigeEntrada').checked;
+    document.getElementById('box-valor-entrada').classList.toggle('d-none', !chk);
+    document.getElementById('box-forma-entrada').classList.toggle('d-none', !chk);
 }
-
-function selecionarServicoProposta(select, id) {
-    const opt = select.options[select.selectedIndex];
-    if (opt && opt.value) {
-        document.getElementById(`valor_${id}`).value = opt.getAttribute('data-valor') || '0.00';
-        document.getElementById(`desc_${id}`).value = opt.getAttribute('data-desc') || '';
-        document.getElementById(`unidade_${id}`).value = opt.getAttribute('data-unidade') || 'un';
+function alternarTipoCobrancaProposta() {
+    const tipo = document.getElementById('prop_tipo_cobranca').value;
+    document.getElementById('box-condicoes-pontual').classList.toggle('d-none', tipo === 'recorrente');
+}
+function atualizarDadosItem(selectEl) {
+    const opt = selectEl.options[selectEl.selectedIndex];
+    const row = selectEl.closest('.item-proposta-row');
+    if (opt.value) {
+        row.querySelector('.item-valor').value = opt.getAttribute('data-valor') || '0.00';
+        row.querySelector('.item-desc').value = opt.getAttribute('data-desc') || '';
     }
+    calcularTotalPropostaModal();
+}
+function adicionarItemProposta() {
+    const container = document.getElementById('container-itens-proposta');
+    const template = container.querySelector('.item-proposta-row').cloneNode(true);
+    template.querySelector('.item-valor').value = '';
+    template.querySelector('.item-desc').value = '';
+    template.querySelector('.select-servico').selectedIndex = 0;
+    container.appendChild(template);
+}
+function removerItemProposta(btn) {
+    const rows = document.querySelectorAll('.item-proposta-row');
+    if (rows.length > 1) {
+        btn.closest('.item-proposta-row').remove();
+        calcularTotalPropostaModal();
+    }
+}
+function calcularTotalPropostaModal() {
+    let total = 0.0;
+    const rows = document.querySelectorAll('.item-proposta-row');
+    rows.forEach(r => {
+        const q = parseFloat(r.querySelector('.item-qtd').value) || 0.0;
+        const v = parseFloat(r.querySelector('.item-valor').value) || 0.0;
+        total += (q * v);
+    });
+    document.getElementById('totalPropostaModal').innerText = 'R$ ' + total.toFixed(2);
 }
 </script>
 {% endblock %}
