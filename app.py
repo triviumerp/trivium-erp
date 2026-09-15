@@ -971,34 +971,79 @@ def atualizar_status_proposta(id):
 def editar_proposta(id):
     proposta = Proposta.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     
-    proposta.cliente_id = int(request.form.get('cliente_id'))
-    proposta.validade_dias = int(request.form.get('validade_dias') or 15)
-    proposta.condicoes_pagamento = request.form.get('condicoes_pagamento') or 'Conforme alinhamento comercial'
-    proposta.observacoes = request.form.get('observacoes')
-    
-    ItemProposta.query.filter_by(proposta_id=proposta.id).delete()
-    
-    servicos_ids = request.form.getlist('tipo_servico_id[]')
-    valores = request.form.getlist('valor_unitario[]')
-    quantidades = request.form.getlist('quantidade[]')
-    unidades = request.form.getlist('unidade[]')
-    descricoes = request.form.getlist('descricao[]')
+    if proposta.status == 'Aprovado':
+        flash('Propostas já aprovadas que geraram faturas não podem ser editadas diretamente.', 'warning')
+        return redirect(url_for('listar_propostas'))
 
-    for s_id, val, qtd, und, desc in zip(servicos_ids, valores, quantidades, unidades, descricoes):
-        if s_id and val:
-            item = ItemProposta(
-                proposta_id=proposta.id,
-                tipo_servico_id=int(s_id),
-                quantidade=float(qtd or 1.0),
-                unidade=und or 'un',
-                valor_unitario=float(val),
-                descricao_personalizada=desc
-            )
-            db.session.add(item)
+    try:
+        proposta.cliente_id = int(request.form.get('cliente_id'))
+        proposta.validade_dias = int(request.form.get('validade_dias') or 15)
+        proposta.condicoes_pagamento = request.form.get('condicoes_pagamento') or 'Conforme alinhamento comercial'
+        proposta.observacoes = request.form.get('observacoes')
+        
+        proposta.tipo_cobranca = request.form.get('tipo_cobranca', 'pontual')
+        proposta.periodicidade = request.form.get('periodicidade', 'mensal')
+        proposta.dia_vencimento = int(request.form.get('dia_vencimento') or 10)
 
-    db.session.commit()
-    flash(f'Proposta {proposta.numero_proposta} atualizada com sucesso!', 'success')
+        proposta.exige_entrada = request.form.get('exige_entrada') in ['on', 'true']
+        proposta.valor_entrada = float(request.form.get('valor_entrada') or 0.0)
+        proposta.forma_pagamento_entrada = request.form.get('forma_pagamento_entrada', 'PIX')
+        proposta.qtd_parcelas = int(request.form.get('qtd_parcelas') or 1)
+        proposta.forma_pagamento_parcelas = request.form.get('forma_pagamento_parcelas', 'Boleto Bancário')
+        proposta.intervalo_dias = int(request.form.get('intervalo_dias') or 30)
+
+        # Remove itens anteriores e recadastra atualizados
+        ItemProposta.query.filter_by(proposta_id=proposta.id).delete()
+        
+        servicos_ids = request.form.getlist('tipo_servico_id[]')
+        valores = request.form.getlist('valor_unitario[]')
+        quantidades = request.form.getlist('quantidade[]')
+        unidades = request.form.getlist('unidade[]')
+        descricoes = request.form.getlist('descricao[]')
+
+        for i in range(len(servicos_ids)):
+            s_id = servicos_ids[i] if i < len(servicos_ids) else None
+            val = valores[i] if i < len(valores) else None
+            qtd = quantidades[i] if i < len(quantidades) else '1.0'
+            und = unidades[i] if i < len(unidades) else 'un'
+            desc = descricoes[i] if i < len(descricoes) else ''
+
+            if s_id and str(s_id).strip() and val and str(val).strip():
+                qtd_num = float(qtd or 1.0)
+                item = ItemProposta(
+                    proposta_id=proposta.id,
+                    tipo_servico_id=int(s_id),
+                    quantidade=qtd_num,
+                    unidade=und or 'un',
+                    valor_unitario=float(val),
+                    descricao_personalizada=desc
+                )
+                db.session.add(item)
+                db.session.flush()
+
+                tipo_serv = TipoServico.query.get(int(s_id))
+                if tipo_serv and hasattr(tipo_serv, 'custos_padrao') and tipo_serv.custos_padrao:
+                    for cp in tipo_serv.custos_padrao:
+                        custo_analitico = ItemPropostaCusto(
+                            item_proposta_id=item.id,
+                            tipo_custo=cp.tipo_custo,
+                            descricao=cp.descricao,
+                            unidade=cp.unidade,
+                            quantidade=round((cp.quantidade or 1.0) * qtd_num, 2),
+                            custo_unitario=cp.custo_unitario or 0.0,
+                            visivel_proposta=False
+                        )
+                        db.session.add(custo_analitico)
+
+        db.session.commit()
+        flash(f'Proposta {proposta.numero_proposta} atualizada com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao atualizar proposta: {str(e)}', 'danger')
+
     return redirect(url_for('listar_propostas'))
+
+
 
 @app.route('/proposta/excluir/<int:id>', methods=['POST'])
 @login_required
@@ -1126,6 +1171,7 @@ def gerar_pdf_proposta(id):
         f"{cliente.logradouro or ''}, {cliente.numero or 'S/N'} {cliente.complemento or ''} - {cliente.bairro or ''}, {cliente.cidade or ''}/{cliente.estado or ''}".strip(" ,-/")
     ) or "Endereço não informado"
 
+    # Item 7: "RESPONSÁVEL PELA PROPOSTA" no lugar de "RESPONSÁVEL TÉCNICO"
     dados_painel = [
         [
             Paragraph(f"<b>PROPOSTA COMERCIAL:</b> {num_prop}", estilo_corpo_bold),
@@ -1137,7 +1183,7 @@ def gerar_pdf_proposta(id):
         ],
         [
             Paragraph(f"<b>CNPJ / CPF:</b> {doc_cli}", estilo_corpo),
-            Paragraph(f"<b>RESPONSÁVEL TÉCNICO:</b> {_limpar_texto(current_user.nome)}", estilo_corpo)
+            Paragraph(f"<b>RESPONSÁVEL PELA PROPOSTA:</b> {_limpar_texto(current_user.nome)}", estilo_corpo)
         ],
         [
             Paragraph(f"<b>LOCAL / ENDEREÇO:</b> {end_cli_fmt}", estilo_corpo),
@@ -1155,7 +1201,8 @@ def gerar_pdf_proposta(id):
     elementos.append(tab_painel)
     elementos.append(Spacer(1, 10))
 
-    elementos.append(Paragraph("1. ESCOPO TÉCNICO & INVESTIMENTO", estilo_secao))
+    # Item 9: 1. ESCOPO TÉCNICO E SERVIÇOS INCLUSOS PRIMEIRO
+    elementos.append(Paragraph("1. ESCOPO TÉCNICO & SERVIÇOS INCLUSOS", estilo_secao))
     elementos.append(Spacer(1, 4))
 
     dados_servicos = [
@@ -1201,7 +1248,8 @@ def gerar_pdf_proposta(id):
     elementos.append(tab_servicos)
     elementos.append(Spacer(1, 10))
 
-    elementos.append(Paragraph("2. CONDIÇÕES COMERCIAIS & MOBILIZAÇÃO", estilo_secao))
+    # Item 9: 2. CONDIÇÕES COMERCIAIS E FORMA DE PAGAMENTO SEGUNDO
+    elementos.append(Paragraph("2. CONDIÇÕES COMERCIAIS & FORMA DE PAGAMENTO", estilo_secao))
     elementos.append(Spacer(1, 4))
 
     linhas_condicoes = []
@@ -1209,12 +1257,12 @@ def gerar_pdf_proposta(id):
     if proposta.tipo_cobranca == 'recorrente':
         periodo_txt = _limpar_texto(proposta.periodicidade or 'mensal').capitalize()
         dia_venc_txt = proposta.dia_vencimento or 10
-        linhas_condicoes.append(f"• <b>Modelo Contratual:</b> Contrato de Prestação de Serviços Contínuos ({periodo_txt}).")
+        linhas_condicoes.append(f"• <b>Modelo Contratual:</b> Prestação de Serviços Contínuos ({periodo_txt}).")
         linhas_condicoes.append(f"• <b>Vencimento das Mensalidades:</b> Todo dia <b>{dia_venc_txt}</b> de cada mês via Boleto Bancário.")
     else:
         if proposta.exige_entrada and (proposta.valor_entrada or 0) > 0:
             forma_ent = _limpar_texto(proposta.forma_pagamento_entrada or 'PIX')
-            linhas_condicoes.append(f"• <b>Sinal de Entrada:</b> <font color='#b91c1c'><b>R$ {proposta.valor_entrada:,.2f}</b></font> ({forma_ent}) para confirmação e liberação da agenda técnica.")
+            linhas_condicoes.append(f"• <b>Sinal de Entrada:</b> <font color='#b91c1c'><b>R$ {proposta.valor_entrada:,.2f}</b></font> ({forma_ent}) para confirmação e liberação de agenda.")
             
             saldo = max(0.0, proposta.valor_total - (proposta.valor_entrada or 0))
             if saldo > 0:
@@ -1222,7 +1270,7 @@ def gerar_pdf_proposta(id):
                 v_p = saldo / qtd_p
                 forma_parc = _limpar_texto(proposta.forma_pagamento_parcelas or 'Boleto Bancário')
                 inter_dias = proposta.intervalo_dias or 30
-                linhas_condicoes.append(f"• <b>Saldo Restante:</b> R$ {saldo:,.2f} parcelado em <b>{qtd_p}x de R$ {v_p:,.2f}</b> no {forma_parc} (intervalo de {inter_dias} dias).")
+                linhas_condicoes.append(f"• <b>Saldo Restante:</b> R$ {saldo:,.2f} parcelado em <b>{qtd_p}x de R$ {v_p:,.2f}</b> no {forma_parc} (a cada {inter_dias} dias).")
         elif (proposta.qtd_parcelas or 1) > 1:
             qtd_p = proposta.qtd_parcelas
             v_p = proposta.valor_total / qtd_p
@@ -1230,12 +1278,12 @@ def gerar_pdf_proposta(id):
             inter_dias = proposta.intervalo_dias or 30
             linhas_condicoes.append(f"• <b>Condição Parcelada:</b> Dividido em <b>{qtd_p}x de R$ {v_p:,.2f}</b> no {forma_parc} a cada {inter_dias} dias (Sem entrada).")
         else:
-            linhas_condicoes.append("• <b>Condição de Pagamento:</b> À Vista / Faturamento em parcela única.")
+            linhas_condicoes.append("• <b>Condição de Pagamento:</b> Faturamento à Vista em parcela única.")
 
     if proposta.condicoes_pagamento:
         linhas_condicoes.append(f"• <b>Termos Gerais:</b> {_limpar_texto(proposta.condicoes_pagamento)}")
     if proposta.observacoes:
-        linhas_condicoes.append(f"• <b>Observações Técnicas:</b> {_limpar_texto(proposta.observacoes)}")
+        linhas_condicoes.append(f"• <b>Observações Gerais:</b> {_limpar_texto(proposta.observacoes)}")
 
     tab_cond = Table([[Paragraph("<br/>".join(linhas_condicoes), estilo_corpo)]], colWidths=[7.5*inch])
     tab_cond.setStyle(TableStyle([
@@ -1246,7 +1294,7 @@ def gerar_pdf_proposta(id):
     elementos.append(tab_cond)
     elementos.append(Spacer(1, 24))
 
-    cargo_resp = _limpar_texto(current_user.cargo or 'Responsável Técnico')
+    cargo_resp = _limpar_texto(current_user.cargo or 'Responsável pela Proposta')
     nome_usuario = _limpar_texto(current_user.nome)
 
     dados_assinaturas = [
@@ -1286,6 +1334,7 @@ def consultar_servicos():
 
     query_base = ServicoCliente.query.filter_by(empresa_id=current_user.empresa_id)
 
+    # Item 10: Filtros por status de execução
     if filtro_atual == 'agenda':
         query = query_base.filter(ServicoCliente.status.in_(['Em Andamento', 'Pendente', 'Bloqueado']))
     elif filtro_atual == 'recorrentes':
@@ -1294,29 +1343,21 @@ def consultar_servicos():
         query = query_base.filter(ServicoCliente.contrato_id.is_(None))
     elif filtro_atual == 'concluidos':
         query = query_base.filter_by(status='Concluido')
+    elif filtro_atual == 'pendentes':
+        query = query_base.filter(ServicoCliente.status.in_(['Pendente', 'Bloqueado']))
     else:
         query = query_base
 
+    # Item 10: Filtros de período (Semana, Mês, Ano)
     if periodo_atual == 'semana':
         fim_periodo = hoje + timedelta(days=7)
-        if filtro_atual in ['agenda', 'recorrentes', 'avulsos']:
-            query = query.filter(ServicoCliente.data_previsao <= fim_periodo)
-        else:
-            query = query.filter(ServicoCliente.data_previsao.between(hoje, fim_periodo))
-
+        query = query.filter(ServicoCliente.data_previsao.between(hoje - timedelta(days=1), fim_periodo))
     elif periodo_atual == 'mes':
         fim_periodo = hoje + relativedelta(months=1)
-        if filtro_atual in ['agenda', 'recorrentes', 'avulsos']:
-            query = query.filter(ServicoCliente.data_previsao <= fim_periodo)
-        else:
-            query = query.filter(ServicoCliente.data_previsao.between(hoje, fim_periodo))
-
+        query = query.filter(ServicoCliente.data_previsao.between(hoje - timedelta(days=1), fim_periodo))
     elif periodo_atual == 'ano':
         fim_periodo = hoje + relativedelta(years=1)
-        if filtro_atual in ['agenda', 'recorrentes', 'avulsos']:
-            query = query.filter(ServicoCliente.data_previsao <= fim_periodo)
-        else:
-            query = query.filter(ServicoCliente.data_previsao.between(hoje, fim_periodo))
+        query = query.filter(ServicoCliente.data_previsao.between(hoje - timedelta(days=1), fim_periodo))
 
     servicos_operacionais = query.order_by(ServicoCliente.data_previsao.asc().nullslast()).all()
 
@@ -1388,6 +1429,41 @@ def novo_tipo_servico():
     flash(f'Serviço "{nome}" cadastrado com sucesso no catálogo!', 'success')
     return redirect(url_for('listar_catalogo'))
 
+@app.route('/catalogo/editar/<int:id>', methods=['POST'])
+@login_required
+def editar_tipo_servico(id):
+    item = TipoServico.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    
+    item.nome = request.form.get('nome', item.nome).strip()
+    item.modelo_cobranca = request.form.get('modelo_cobranca', item.modelo_cobranca)
+    item.unidade_medida = request.form.get('unidade_medida', item.unidade_medida).strip()
+    item.margem_lucro_alvo = float(request.form.get('margem_lucro_alvo') or 30.0)
+    item.valor_sugerido = float(request.form.get('valor_sugerido') or 0.0)
+    item.descricao_padrao = request.form.get('descricao', '').strip()
+
+    # Atualiza composição de custos padrão (Ficha Técnica)
+    ServicoCustoPadrao.query.filter_by(tipo_servico_id=item.id).delete()
+
+    tipos_custo = request.form.getlist('custo_tipo[]')
+    descricoes_custo = request.form.getlist('custo_desc[]')
+    quantidades_custo = request.form.getlist('custo_qtd[]')
+    valores_custo = request.form.getlist('custo_unit[]')
+
+    for t, d, q, v in zip(tipos_custo, descricoes_custo, quantidades_custo, valores_custo):
+        if d and v:
+            c = ServicoCustoPadrao(
+                tipo_servico_id=item.id,
+                tipo_custo=t,
+                descricao=d,
+                quantidade=float(q or 1.0),
+                custo_unitario=float(v or 0.0)
+            )
+            db.session.add(c)
+
+    db.session.commit()
+    flash(f'Serviço "{item.nome}" atualizado com sucesso!', 'success')
+    return redirect(url_for('listar_catalogo'))
+
 @app.route('/catalogo/excluir/<int:id>', methods=['POST'])
 @login_required
 def excluir_tipo_servico(id):
@@ -1417,7 +1493,7 @@ def definir_responsavel_servico(id):
 def atualizar_operacao_servico(id):
     servico = ServicoCliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     
-    if servico.status == 'Bloqueado':
+    if servico.status == 'Bloqueado' and request.form.get('status') != 'Bloqueado':
         flash('Esta atividade está bloqueada pelo Financeiro aguardando o pagamento do sinal.', 'danger')
         return redirect(url_for('consultar_servicos', status=request.form.get('filtro_retorno', 'agenda')))
 
@@ -1428,6 +1504,10 @@ def atualizar_operacao_servico(id):
     if data_prev_str:
         servico.data_previsao = datetime.strptime(data_prev_str, '%Y-%m-%d').date()
         
+    servico.responsavel_tecnico = request.form.get('responsavel_tecnico', '').strip()
+    servico.documento_responsavel = request.form.get('documento_responsavel', '').strip() # Item 3
+    servico.titulo_documento_custom = request.form.get('titulo_documento_custom', 'Ordem de Serviço').strip() # Item 8
+
     servico.detalhamento_execucao = request.form.get('detalhamento_execucao')
     servico.orientacoes_cliente = request.form.get('orientacoes_cliente')
     servico.observacoes = request.form.get('observacoes')
@@ -1456,7 +1536,6 @@ def atualizar_operacao_servico(id):
         servico.estado_execucao = None
         servico.endereco_execucao_completo = None
 
-    # Upload de evidência técnica
     if 'arquivo_evidencia' in request.files:
         arq = request.files['arquivo_evidencia']
         if arq and arq.filename:
@@ -1465,34 +1544,8 @@ def atualizar_operacao_servico(id):
             arq.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_salvo))
             servico.arquivo_evidencia = nome_salvo
 
-    # Fases de cronograma e rastreio
-    titulos_fase = request.form.getlist('fase_titulo[]')
-    descricoes_fase = request.form.getlist('fase_descricao[]')
-    status_fase_list = request.form.getlist('fase_status[]')
-    datas_inicio = request.form.getlist('fase_data_inicio[]')
-    datas_fim = request.form.getlist('fase_data_fim[]')
-    
-    ServicoEtapaRastreio.query.filter_by(servico_cliente_id=servico.id).delete()
-
-    if titulos_fase:
-        for idx, (tit, desc, stat, d_ini, d_fim) in enumerate(zip(titulos_fase, descricoes_fase, status_fase_list, datas_inicio, datas_fim)):
-            if tit.strip():
-                dt_inicio = datetime.strptime(d_ini, '%Y-%m-%d').date() if d_ini else None
-                dt_fim = datetime.strptime(d_fim, '%Y-%m-%d').date() if d_fim else None
-                
-                nova_etapa = ServicoEtapaRastreio(
-                    servico_cliente_id=servico.id,
-                    titulo_fase=tit.strip(),
-                    descricao_detalhes=desc.strip(),
-                    data_inicio=dt_inicio,
-                    data_fim=dt_fim,
-                    status_fase=stat or 'pendente',
-                    ordem=idx + 1
-                )
-                db.session.add(nova_etapa)
-
     db.session.commit()
-    flash('Operação, local de atendimento e cronograma atualizados com sucesso!', 'success')
+    flash('Operação, responsáveis e dados do atendimento atualizados com sucesso!', 'success')
     return redirect(url_for('consultar_servicos', status=request.form.get('filtro_retorno', 'agenda')))
 
 @app.route('/servicos/<int:id>/pdf', methods=['GET', 'POST'])
@@ -1503,7 +1556,6 @@ def gerar_pdf_ordem_servico(id):
     empresa = current_user.empresa
     buffer = io.BytesIO()
 
-    # Leitura das preferências de exibição vindas do modal
     exibir_doc_cliente = request.form.get('exibir_doc_cliente') == '1' if request.method == 'POST' else True
     exibir_datas = request.form.get('exibir_datas') == '1' if request.method == 'POST' else True
     exibir_endereco = request.form.get('exibir_endereco') == '1' if request.method == 'POST' else True
@@ -1554,10 +1606,11 @@ def gerar_pdf_ordem_servico(id):
     elementos.append(Spacer(1, 4))
     elementos.append(HRFlowable(width="100%", thickness=1.5, color=cor_marca, spaceAfter=10))
 
-    elementos.append(Paragraph(f"<b>ORDEM DE SERVIÇO Nº OS-{servico.id:04d}</b>", estilo_secao))
+    # Item 8: Título customizado com contador sequencial da empresa
+    tit_doc = _limpar_texto(servico.titulo_documento_custom or 'ORDEM DE SERVIÇO').upper()
+    elementos.append(Paragraph(f"<b>{tit_doc} Nº OS-{servico.numero_sequencial_empresa:04d}</b>", estilo_secao))
     elementos.append(Spacer(1, 4))
 
-    # Identificação Geral
     dados_os = []
     col_dir_1 = Paragraph(f"<b>SOLICITAÇÃO:</b> {servico.data_solicitacao.strftime('%d/%m/%Y') if servico.data_solicitacao else '--'}", estilo_corpo) if exibir_datas else Paragraph("", estilo_corpo)
     dados_os.append([Paragraph(f"<b>CLIENTE:</b> {_limpar_texto(cliente.nome)}", estilo_corpo_bold), col_dir_1])
@@ -1567,10 +1620,12 @@ def gerar_pdf_ordem_servico(id):
     if exibir_doc_cliente or exibir_datas:
         dados_os.append([col_esq_2, col_dir_2])
 
+    # Item 3: Responsável + Registro / Documento
     if exibir_responsavel:
         resp_nome = _limpar_texto(servico.responsavel_tecnico or 'Não informado')
+        doc_resp = f" (Doc/Registro: {_limpar_texto(servico.documento_responsavel)})" if servico.documento_responsavel else ""
         dados_os.append([
-            Paragraph(f"<b>RESPONSÁVEL PELO ATENDIMENTO:</b> <font color='{cor_primaria_hex}'><b>{resp_nome}</b></font>", estilo_corpo_bold),
+            Paragraph(f"<b>RESPONSÁVEL PELO ATENDIMENTO:</b> <font color='{cor_primaria_hex}'><b>{resp_nome}{doc_resp}</b></font>", estilo_corpo_bold),
             Paragraph("", estilo_corpo)
         ])
 
@@ -1584,21 +1639,24 @@ def gerar_pdf_ordem_servico(id):
     elementos.append(tab_dados)
     elementos.append(Spacer(1, 10))
 
-    # Detalhamento
     elementos.append(Paragraph("1. ATIVIDADE & DETALHAMENTO DO ATENDIMENTO", estilo_secao))
     elementos.append(Spacer(1, 4))
     
     nome_serv = _limpar_texto(servico.tipo_servico.nome if servico.tipo_servico else 'Atendimento Técnico')
     detalhes_blocos = [f"<b>Serviço:</b> {nome_serv}"]
 
+    # Item 15: Substituição de quebras de linha por <br/>
     if exibir_descricao and servico.observacoes:
-        detalhes_blocos.append(f"<b>Descrição do Atendimento:</b><br/>{_limpar_texto(servico.observacoes)}")
+        obs_fmt = _limpar_texto(servico.observacoes).replace('\n', '<br/>')
+        detalhes_blocos.append(f"<b>Descrição do Atendimento:</b><br/>{obs_fmt}")
 
     if exibir_detalhamento and servico.detalhamento_execucao:
-        detalhes_blocos.append(f"<b>Detalhamento da Execução:</b><br/>{_limpar_texto(servico.detalhamento_execucao)}")
+        det_fmt = _limpar_texto(servico.detalhamento_execucao).replace('\n', '<br/>')
+        detalhes_blocos.append(f"<b>Detalhamento da Execução:</b><br/>{det_fmt}")
 
     if exibir_orientacoes and servico.orientacoes_cliente:
-        detalhes_blocos.append(f"<b>Orientações / Recomendações:</b><br/>{_limpar_texto(servico.orientacoes_cliente)}")
+        ori_fmt = _limpar_texto(servico.orientacoes_cliente).replace('\n', '<br/>')
+        detalhes_blocos.append(f"<b>Orientações / Recomendações:</b><br/>{ori_fmt}")
 
     if exibir_endereco:
         end_texto = _limpar_texto(servico.endereco_exibicao)
@@ -1613,14 +1671,14 @@ def gerar_pdf_ordem_servico(id):
     ]))
     elementos.append(tab_det)
 
-    # Assinaturas
     if exibir_assinaturas:
         elementos.append(Spacer(1, 30))
         resp_assinatura = _limpar_texto(servico.responsavel_tecnico or 'Responsável pelo Atendimento')
+        doc_resp_ass = f"<br/><font size='7.5' color='#64748b'>Reg/Doc: {_limpar_texto(servico.documento_responsavel)}</font>" if servico.documento_responsavel else ""
         assinaturas = [
             [
-                Paragraph(f"____________________________________________<br/><b>{resp_assinatura}</b><br/>Responsável pelo Atendimento", estilo_corpo),
-                Paragraph(f"____________________________________________<br/><b>{_limpar_texto(cliente.nome).upper()}</b><br/>Aceite do Cliente / Declaração de Atendimento", estilo_corpo)
+                Paragraph(f"____________________________________________<br/><b>{resp_assinatura}</b>{doc_resp_ass}<br/>Responsável pelo Atendimento", estilo_corpo),
+                Paragraph(f"____________________________________________<br/><b>{_limpar_texto(cliente.nome).upper()}</b><br/>Aceite do Cliente / Declaração de Execução", estilo_corpo)
             ]
         ]
         tab_ass = Table(assinaturas, colWidths=[3.75*inch, 3.75*inch])
@@ -1632,10 +1690,11 @@ def gerar_pdf_ordem_servico(id):
 
     doc.build(elementos)
     buffer.seek(0)
+    nome_pdf = f"{tit_doc.replace(' ', '_')}_OS_{servico.numero_sequencial_empresa:04d}.pdf"
     return send_file(
         buffer, 
         as_attachment=True, 
-        download_name=f"Ordem_Servico_OS_{servico.id:04d}.pdf", 
+        download_name=nome_pdf, 
         mimetype='application/pdf'
     )
 
@@ -1982,6 +2041,12 @@ def criar_usuario_equipe():
         flash('Acesso restrito ao administrador.', 'danger')
         return redirect(url_for('perfil_empresa'))
 
+    # Limite de 4 usuários por empresa cadastrada
+    total_usuarios_empresa = Usuario.query.filter_by(empresa_id=current_user.empresa_id).count()
+    if total_usuarios_empresa >= 4 and current_user.nivel_acesso != 'master':
+        flash('Limite atingido: Cada empresa pode cadastrar no máximo 4 colaboradores na equipe.', 'warning')
+        return redirect(url_for('perfil_empresa'))
+
     nome = request.form.get('nome', '').strip()
     email = request.form.get('email', '').strip().lower()
     senha_padrao = request.form.get('senha_padrao')
@@ -2209,19 +2274,57 @@ def webhook_mercadopago():
 
                 if empresa:
                     if status == 'approved':
+                        status_anterior = empresa.status_assinatura
                         empresa.status_assinatura = 'ativo'
                         empresa.data_ultimo_pagamento = date.today()
                         empresa.data_vencimento = date.today() + timedelta(days=30)
                         empresa.valor_mensalidade = valor_pago
+                        empresa.mp_payment_id = str(payment_id)
+
+                        # Item 6: Contabiliza o cupom e gera a comissão apenas após aprovação real
+                        if empresa.cupom_utilizado and status_anterior != 'ativo':
+                            cupom_obj = CupomDesconto.query.filter_by(codigo=empresa.cupom_utilizado).first()
+                            if cupom_obj:
+                                cupom_obj.usos_atuais = (cupom_obj.usos_atuais or 0) + 1
+                                
+                                # Se o cupom pertence a um parceiro cadastrado, cria a comissão
+                                if cupom_obj.usuario_id:
+                                    mes_ref = date.today().strftime('%Y-%m')
+                                    ja_tem_comissao = ComissaoAfiliado.query.filter_by(
+                                        empresa_id=empresa.id,
+                                        usuario_id=cupom_obj.usuario_id,
+                                        mes_competencia=mes_ref
+                                    ).first()
+
+                                    if not ja_tem_comissao:
+                                        pct_comissao = cupom_obj.percentual_comissao or 20.0
+                                        v_comissao = round(valor_pago * (pct_comissao / 100.0), 2)
+
+                                        nova_comissao = ComissaoAfiliado(
+                                            usuario_id=cupom_obj.usuario_id,
+                                            cupom_id=cupom_obj.id,
+                                            empresa_id=empresa.id,
+                                            numero_parcela_parceiro=1,
+                                            total_parcelas_permitidas=cupom_obj.meses_comissao_limite or 3,
+                                            valor_mensalidade=valor_pago,
+                                            percentual_comissao=pct_comissao,
+                                            valor_comissao=v_comissao,
+                                            mes_competencia=mes_ref,
+                                            status='liberado'
+                                        )
+                                        db.session.add(nova_comissao)
+
                         db.session.commit()
-                        print(f"[MERCADO PAGO] Pagamento aprovado para a empresa: {empresa.razao_social}")
+                        print(f"[MERCADO PAGO] Assinatura aprovada e ativada para: {empresa.razao_social}")
                     elif status in ['cancelled', 'rejected']:
                         empresa.status_assinatura = 'bloqueado'
                         db.session.commit()
             except Exception as e:
+                db.session.rollback()
                 print(f"[ERRO NO PROCESSAMENTO WEBHOOK MP]: {e}")
 
     return {"status": "success"}, 200
+
 
 # -----------------------------------------------------------------------------
 # ENDPOINT DE CHECKOUT TRANSPARENTE MERCADO PAGO
@@ -2416,8 +2519,17 @@ def admin_auditoria_parceiro(id):
     parceiro = Usuario.query.get_or_404(id)
     cupons = CupomDesconto.query.filter_by(usuario_id=parceiro.id).order_by(CupomDesconto.id.desc()).all()
     codigos = [c.codigo for c in cupons]
+    cupons_ids = [c.id for c in cupons]
 
-    empresas = Empresa.query.filter(Empresa.cupom_utilizado.in_(codigos)).all() if codigos else []
+    # Busca todas as empresas vinculadas por código de cupom ou afiliado_id
+    from sqlalchemy import or_
+    condicoes = []
+    if codigos:
+        condicoes.append(Empresa.cupom_utilizado.in_(codigos))
+    if cupons_ids:
+        condicoes.append(Empresa.afiliado_id.in_(cupons_ids))
+
+    empresas = Empresa.query.filter(or_(*condicoes)).order_by(Empresa.data_criacao.desc()).all() if condicoes else []
 
     comissoes = ComissaoAfiliado.query.filter_by(usuario_id=parceiro.id).order_by(ComissaoAfiliado.id.desc()).all()
     repasses = RepasseAfiliado.query.filter_by(usuario_id=parceiro.id).order_by(RepasseAfiliado.id.desc()).all()
@@ -2486,7 +2598,7 @@ def admin_liquidar_repasse(id):
 
 @app.route('/api/cupom/validar', methods=['POST'])
 def api_validar_cupom():
-    dados = request.get_json() or {}
+    dados = request.get_json(silent=True) or {}
     codigo = str(dados.get('codigo', '')).strip().upper()
     nome_plano = str(dados.get('plano', 'MENSAL')).upper()
 

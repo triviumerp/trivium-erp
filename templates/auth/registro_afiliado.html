@@ -3,180 +3,201 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cadastro de Afiliado Parceiro - Trivium ERP</title>
+    <title>Seja um Parceiro Afiliado - Trivium ERP</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
     <style>
-        body { background-color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
-        .card-afiliado { max-width: 850px; margin: 2rem auto; border-radius: 16px; }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2.5rem 1rem;
+        }
+        .card-afiliado {
+            max-width: 680px;
+            width: 100%;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+            padding: 2.5rem;
+        }
     </style>
 </head>
 <body>
 
-<div class="container py-4">
+<div class="card-afiliado">
     <div class="text-center mb-4">
-        <h2 class="fw-bold text-primary"><i class="bi bi-award-fill me-2"></i>Programa de Parceiros Trivium</h2>
-        <p class="text-muted">Cadastre-se para gerar cupons exclusivos e receber comissões recorrentes</p>
+        <h3 class="fw-extrabold text-primary mb-1">Programa de Parceiros & Afiliados</h3>
+        <p class="text-muted small mb-0">Indique o Trivium ERP e receba comissões recorrentes por cada nova assinatura.</p>
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-        {% for category, message in messages %}
-        <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show max-w-lg mx-auto" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-        {% endfor %}
-    {% endif %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show small" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
     {% endwith %}
 
-    <div class="card card-afiliado border-0 shadow-sm p-4 p-md-5 bg-white">
-        <form method="POST">
-            <!-- 1. IDENTIFICAÇÃO -->
-            <h6 class="fw-bold text-dark mb-3"><i class="bi bi-person-vcard text-primary me-2"></i>1. Dados do Parceiro</h6>
-            <div class="row g-3 mb-4">
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">Nome Completo / Razão Social *</label>
-                    <input type="text" name="nome" class="form-control" required placeholder="Ex: Carlos Eduardo Silveira">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">CPF ou CNPJ *</label>
-                    <input type="text" name="cpf_cnpj" class="form-control" required placeholder="000.000.000-00">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">Data de Nascimento</label>
-                    <input type="date" name="data_nascimento" class="form-control">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small fw-bold">E-mail Comercial (Login) *</label>
-                    <input type="email" name="email" class="form-control" required placeholder="seu@email.com">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small fw-bold">WhatsApp Principal *</label>
-                    <input type="text" name="whatsapp" class="form-control" required placeholder="(11) 99999-9999">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small fw-bold">Telefone Secundário / Fixo</label>
-                    <input type="text" name="telefone_contato" class="form-control" placeholder="(11) 4000-0000">
-                </div>
+    <form method="POST" action="{{ url_for('auth.registro_afiliado') }}">
+        <!-- 1. Identificação -->
+        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-person-badge me-2"></i>1. Dados Pessoais / Profissionais</h6>
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">Nome Completo *</label>
+                <input type="text" name="nome" class="form-control" placeholder="Seu nome ou razão social" required>
             </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">CPF ou CNPJ *</label>
+                <input type="text" name="cpf_cnpj" class="form-control" placeholder="000.000.000-00" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">E-mail Principal *</label>
+                <input type="email" name="email" class="form-control" placeholder="seuemail@exemplo.com" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">WhatsApp / Telefone *</label>
+                <input type="text" name="whatsapp" class="form-control" placeholder="(00) 00000-0000" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">Rede Social Principal / Site</label>
+                <input type="text" name="rede_social_principal" class="form-control" placeholder="@seuperfil ou link">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">Perfil / Área de Atuação</label>
+                <select name="tipo_parceiro" class="form-select">
+                    <option value="Consultor / Prestador">Consultor / Prestador Técnico</option>
+                    <option value="Criador de Conteudo">Criador de Conteúdo / Influenciador</option>
+                    <option value="Agencia / Contabilidade">Agência / Escritório Contábil</option>
+                    <option value="Outros">Outros</option>
+                </select>
+            </div>
+        </div>
 
-            <!-- 2. ENDEREÇO COMPLETO -->
-            <h6 class="fw-bold text-dark mb-3"><i class="bi bi-geo-alt text-primary me-2"></i>2. Endereço</h6>
-            <div class="row g-3 mb-4">
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">CEP</label>
-                    <div class="input-group">
-                        <input type="text" name="cep" id="cep" class="form-control" placeholder="00000-000" maxlength="9">
-                        <button type="button" class="btn btn-outline-secondary" onclick="buscarCepAfiliado()"><i class="bi bi-search"></i></button>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">Logradouro (Rua, Av)</label>
-                    <input type="text" name="logradouro" id="logradouro" class="form-control">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">Número</label>
-                    <input type="text" name="numero" class="form-control">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small fw-bold">Bairro</label>
-                    <input type="text" name="bairro" id="bairro" class="form-control">
-                </div>
-                <div class="col-md-5">
-                    <label class="form-label small fw-bold">Cidade</label>
-                    <input type="text" name="cidade" id="cidade" class="form-control">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">UF</label>
-                    <input type="text" name="estado" id="estado" class="form-control text-uppercase" maxlength="2">
-                </div>
-            </div>
+        <hr class="my-4 text-muted">
 
-            <!-- 3. REDES SOCIAIS DINÂMICAS -->
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="fw-bold text-dark mb-0"><i class="bi bi-share text-primary me-2"></i>3. Redes Sociais & Canais de Divulgação</h6>
-                <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="adicionarRedeSocial()">
-                    <i class="bi bi-plus-lg me-1"></i>Adicionar Outra Rede
-                </button>
-            </div>
-            <div id="container-redes-sociais" class="mb-4 d-flex flex-column gap-2">
-                <div class="row g-2 align-items-center">
-                    <div class="col-md-4">
-                        <select name="tipo_rede[]" class="form-select form-select-sm">
-                            <option value="Instagram">Instagram</option>
-                            <option value="YouTube">YouTube</option>
-                            <option value="LinkedIn">LinkedIn</option>
-                            <option value="Site">Site / Blog</option>
-                        </select>
-                    </div>
-                    <div class="col-md-8">
-                        <input type="text" name="url_rede[]" class="form-control form-control-sm" placeholder="https://instagram.com/seuperfil" required>
-                    </div>
+        <!-- 2. Endereço com Busca Automática de CEP -->
+        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-geo-alt me-2"></i>2. Localização & Endereço</h6>
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <label class="form-label small fw-bold">CEP</label>
+                <div class="input-group">
+                    <input type="text" name="cep" id="cep" class="form-control" placeholder="00000-000" maxlength="9">
+                    <button class="btn btn-outline-secondary" type="button" id="btn-busca-cep" onclick="buscarCEPAfiliado()" title="Buscar CEP">
+                        <i class="bi bi-search" id="icone-busca-cep"></i>
+                    </button>
                 </div>
+                <small id="cep-status" class="text-muted d-block mt-1" style="font-size: 0.75rem;"></small>
             </div>
+            <div class="col-md-8">
+                <label class="form-label small fw-bold">Logradouro (Rua, Av.)</label>
+                <input type="text" name="logradouro" id="logradouro" class="form-control" placeholder="Rua, Avenida...">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-bold">Bairro</label>
+                <input type="text" name="bairro" id="bairro" class="form-control" placeholder="Bairro">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">Cidade</label>
+                <input type="text" name="cidade" id="cidade" class="form-control" placeholder="Cidade">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">UF</label>
+                <input type="text" name="estado" id="estado" class="form-control text-uppercase" maxlength="2" placeholder="UF">
+            </div>
+        </div>
 
-            <!-- 4. SEGURANÇA E SENHA -->
-            <h6 class="fw-bold text-dark mb-3"><i class="bi bi-shield-lock text-primary me-2"></i>4. Senha de Acesso</h6>
-            <div class="row g-3 mb-4">
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">Senha (Mínimo 8 caracteres) *</label>
-                    <input type="password" name="senha" class="form-control" required>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">Confirmar Senha *</label>
-                    <input type="password" name="confirma_senha" class="form-control" required>
-                </div>
-            </div>
+        <hr class="my-4 text-muted">
 
-            <div class="d-grid mt-4">
-                <button type="submit" class="btn btn-primary btn-lg fw-bold shadow-sm">
-                    <i class="bi bi-check2-circle me-1"></i> Finalizar Cadastro de Parceiro
-                </button>
+        <!-- 3. Senha de Acesso -->
+        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-shield-lock me-2"></i>3. Senha de Acesso</h6>
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">Senha de Acesso *</label>
+                <input type="password" name="senha" class="form-control" placeholder="Mínimo 8 caracteres" required>
             </div>
-        </form>
-    </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">Confirmar Senha *</label>
+                <input type="password" name="confirma_senha" class="form-control" placeholder="Repita a senha" required>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary fw-bold w-100 py-2 rounded-3 shadow-sm mb-3">
+            <i class="bi bi-check2-circle me-1"></i> Concluir Cadastro de Parceiro
+        </button>
+
+        <div class="text-center">
+            <a href="{{ url_for('auth.login') }}" class="small text-decoration-none text-muted">
+                Já possui cadastro? <b>Faça login</b>
+            </a>
+        </div>
+    </form>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-function buscarCepAfiliado() {
-    const cep = document.getElementById('cep').value.replace(/\D/g, '');
-    if (cep.length === 8) {
-        fetch(`https://viacep.com.br/ws/${cep}/json/`)
-            .then(r => r.json())
-            .then(d => {
-                if (!d.erro) {
-                    document.getElementById('logradouro').value = d.logradouro || '';
-                    document.getElementById('bairro').value = d.bairro || '';
-                    document.getElementById('cidade').value = d.localidade || '';
-                    document.getElementById('estado').value = d.uf || '';
-                }
-            });
+function buscarCEPAfiliado() {
+    const cepInput = document.getElementById('cep');
+    const statusText = document.getElementById('cep-status');
+    const iconeBusca = document.getElementById('icone-busca-cep');
+    const cep = cepInput.value.replace(/\D/g, '');
+
+    if (cep.length !== 8) {
+        statusText.innerText = 'Digite um CEP válido com 8 dígitos.';
+        statusText.className = 'text-danger d-block mt-1';
+        return;
     }
+
+    iconeBusca.className = 'spinner-border spinner-border-sm text-primary';
+    statusText.innerText = 'Consultando endereço...';
+    statusText.className = 'text-muted d-block mt-1';
+
+    fetch(`https://viacep.com.br/ws/${cep}/json/`)
+        .then(response => response.json())
+        .then(dados => {
+            iconeBusca.className = 'bi bi-search';
+            if (dados.erro) {
+                statusText.innerText = 'CEP não encontrado.';
+                statusText.className = 'text-danger d-block mt-1';
+            } else {
+                document.getElementById('logradouro').value = dados.logradouro || '';
+                document.getElementById('bairro').value = dados.bairro || '';
+                document.getElementById('cidade').value = dados.localidade || '';
+                document.getElementById('estado').value = dados.uf || '';
+                statusText.innerText = 'Endereço preenchido com sucesso!';
+                statusText.className = 'text-success d-block mt-1';
+            }
+        })
+        .catch(() => {
+            iconeBusca.className = 'bi bi-search';
+            statusText.innerText = 'Erro ao consultar o serviço de CEP.';
+            statusText.className = 'text-danger d-block mt-1';
+        });
 }
-function adicionarRedeSocial() {
-    const container = document.getElementById('container-redes-sociais');
-    const div = document.createElement('div');
-    div.className = 'row g-2 align-items-center';
-    div.innerHTML = `
-        <div class="col-md-4">
-            <select name="tipo_rede[]" class="form-select form-select-sm">
-                <option value="Instagram">Instagram</option>
-                <option value="YouTube">YouTube</option>
-                <option value="LinkedIn">LinkedIn</option>
-                <option value="TikTok">TikTok</option>
-                <option value="Site">Site / Blog</option>
-            </select>
-        </div>
-        <div class="col-md-7">
-            <input type="text" name="url_rede[]" class="form-control form-control-sm" placeholder="URL ou link do perfil" required>
-        </div>
-        <div class="col-md-1 text-end">
-            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.row').remove()"><i class="bi bi-trash"></i></button>
-        </div>
-    `;
-    container.appendChild(div);
-}
+
+document.getElementById('cep').addEventListener('blur', function() {
+    if (this.value.replace(/\D/g, '').length === 8) buscarCEPAfiliado();
+});
+
+document.getElementById('cep').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        buscarCEPAfiliado();
+    }
+});
 </script>
 </body>
 </html>

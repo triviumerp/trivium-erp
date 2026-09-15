@@ -207,6 +207,8 @@ class ServicoCliente(db.Model):
     data_previsao = db.Column(db.Date, nullable=True)
     observacoes = db.Column(db.Text, nullable=True)
     responsavel_tecnico = db.Column(db.String(120), nullable=True)
+    documento_responsavel = db.Column(db.String(60), nullable=True) # Item 3: Registro profissional / CPF / Matrícula
+    titulo_documento_custom = db.Column(db.String(100), default='Ordem de Serviço') # Item 8: Personalização da Ficha
 
     detalhamento_execucao = db.Column(db.Text, nullable=True)
     orientacoes_cliente = db.Column(db.Text, nullable=True)
@@ -230,8 +232,15 @@ class ServicoCliente(db.Model):
     historico_cobranca = db.Column(db.Text, nullable=True)
 
     @property
+    def numero_sequencial_empresa(self):
+        """Item 8: Retorna o contador sequencial restrito aos registros da empresa atual."""
+        return ServicoCliente.query.filter(
+            ServicoCliente.empresa_id == self.empresa_id,
+            ServicoCliente.id <= self.id
+        ).count()
+
+    @property
     def endereco_exibicao(self):
-        """Retorna o endereço personalizado ou faz fallback para o endereço principal do cliente."""
         if self.usar_endereco_personalizado and self.endereco_execucao_completo:
             return self.endereco_execucao_completo
         if self.cliente and self.cliente.endereco_completo:

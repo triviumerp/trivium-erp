@@ -1,36 +1,76 @@
 {% extends 'base.html' %}
 
-{% block title %}Serviços & Ordens de Serviço (OS) - Trivium ERP{% endblock %}
+{% block title %}Agenda & Ordens de Serviço - Trivium ERP{% endblock %}
 
 {% block content %}
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
     <div>
-        <h2 class="fw-bold text-dark mb-0"><i class="bi bi-briefcase text-primary me-2"></i>Agenda & Ordens de Serviço (OS)</h2>
-        <p class="text-muted mb-0">Controle operacional de execuções, atendimentos e relatórios técnicos</p>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-briefcase-fill text-primary me-2"></i>Agenda Técnica & Ordens de Serviço
+        </h2>
+        <p class="text-muted mb-0">Controle operacional de vistorias, laudos, execução em campo e emissão de relatórios</p>
     </div>
 </div>
 
-<!-- CARDS RESUMO -->
+<!-- CARDS DE MÉTRICAS -->
 <div class="row g-3 mb-4">
     <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-3 bg-primary text-white rounded-4">
-            <span class="small text-white-50 fw-bold">EM ANDAMENTO / EXECUÇÃO</span>
-            <h3 class="fw-bold my-1">{{ qtd_em_andamento }}</h3>
-            <small>Atividades liberadas</small>
+        <div class="card border-0 shadow-sm p-3 bg-primary bg-opacity-10 border-start border-primary border-4 rounded-4">
+            <span class="small text-muted fw-bold">EM ANDAMENTO</span>
+            <h3 class="fw-bold text-primary my-1">{{ qtd_em_andamento }}</h3>
+            <small class="text-muted">Atividades em execução</small>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-3 bg-warning text-dark rounded-4">
-            <span class="small text-dark-50 fw-bold">PENDENTES / AGUARDANDO</span>
-            <h3 class="fw-bold my-1">{{ qtd_pendentes }}</h3>
-            <small>A iniciar na agenda</small>
+        <div class="card border-0 shadow-sm p-3 bg-warning bg-opacity-10 border-start border-warning border-4 rounded-4">
+            <span class="small text-muted fw-bold">PENDENTES / AGUARDANDO SINAL</span>
+            <h3 class="fw-bold text-dark my-1">{{ qtd_pendentes }}</h3>
+            <small class="text-muted">Aguardando liberação ou agendamento</small>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-3 bg-success text-white rounded-4">
-            <span class="small text-white-50 fw-bold">CONCLUÍDAS</span>
-            <h3 class="fw-bold my-1">{{ qtd_concluidos }}</h3>
-            <small>Serviços finalizados</small>
+        <div class="card border-0 shadow-sm p-3 bg-success bg-opacity-10 border-start border-success border-4 rounded-4">
+            <span class="small text-muted fw-bold">CONCLUÍDAS</span>
+            <h3 class="fw-bold text-success my-1">{{ qtd_concluidos }}</h3>
+            <small class="text-muted">Serviços finalizados</small>
+        </div>
+    </div>
+</div>
+
+<!-- ITEM 10: BARRA DUPLA DE FILTROS (STATUS E PERÍODO) -->
+<div class="card border-0 shadow-sm mb-4 rounded-4">
+    <div class="card-body py-2 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+        <!-- Filtro de Status -->
+        <div class="btn-group">
+            <a href="{{ url_for('consultar_servicos', status='agenda', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'agenda' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}">
+                Agenda Ativa
+            </a>
+            <a href="{{ url_for('consultar_servicos', status='pendentes', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'pendentes' %}btn-warning text-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
+                Pendentes
+            </a>
+            <a href="{{ url_for('consultar_servicos', status='recorrentes', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'recorrentes' %}btn-info text-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
+                Recorrentes
+            </a>
+            <a href="{{ url_for('consultar_servicos', status='avulsos', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'avulsos' %}btn-secondary fw-bold{% else %}btn-outline-secondary{% endif %}">
+                Avulsos
+            </a>
+            <a href="{{ url_for('consultar_servicos', status='concluidos', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'concluidos' %}btn-success fw-bold{% else %}btn-outline-secondary{% endif %}">
+                Concluídos
+            </a>
+            <a href="{{ url_for('consultar_servicos', status='todos', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'todos' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
+                Todos
+            </a>
+        </div>
+
+        <!-- Filtro de Período -->
+        <div class="d-flex align-items-center gap-1">
+            <span class="small text-muted me-1 fw-bold"><i class="bi bi-calendar3 me-1"></i>Período:</span>
+            <div class="btn-group btn-group-sm">
+                <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='todos') }}" class="btn {% if periodo_atual == 'todos' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">Todos</a>
+                <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='semana') }}" class="btn {% if periodo_atual == 'semana' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">7 Dias</a>
+                <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='mes') }}" class="btn {% if periodo_atual == 'mes' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">Este Mês</a>
+                <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='ano') }}" class="btn {% if periodo_atual == 'ano' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">Ano</a>
+            </div>
         </div>
     </div>
 </div>
@@ -40,12 +80,13 @@
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0 small">
-                <thead class="table-light">
+                <thead class="table-light text-muted">
                     <tr>
-                        <th>OS / PREVISÃO</th>
-                        <th>CLIENTE / ENDEREÇO</th>
-                        <th>SERVIÇO / ATENDIMENTO</th>
+                        <th>Nº / TÍTULO</th>
+                        <th>CLIENTE</th>
+                        <th>SERVIÇO</th>
                         <th>RESPONSÁVEL</th>
+                        <th>PREVISÃO</th>
                         <th>STATUS</th>
                         <th class="text-end pe-3">AÇÕES</th>
                     </tr>
@@ -54,51 +95,60 @@
                     {% for s in servicos_operacionais %}
                     <tr>
                         <td>
-                            <strong class="text-dark d-block">OS-{{ "%04d"|format(s.id) }}</strong>
-                            <span class="text-muted">{{ s.data_previsao.strftime('%d/%m/%Y') if s.data_previsao else 'A definir' }}</span>
+                            <strong class="text-dark d-block">OS-{{ "%04d"|format(s.numero_sequencial_empresa) }}</strong>
+                            <small class="text-muted">{{ s.titulo_documento_custom or 'Ordem de Serviço' }}</small>
                         </td>
                         <td>
                             <strong class="text-dark d-block">{{ s.cliente.nome }}</strong>
-                            <span class="text-muted text-truncate d-inline-block" style="max-width: 210px;">
-                                {{ s.endereco_exibicao }}
-                            </span>
+                            <span class="text-muted">{{ s.cliente.cidade or '--' }}/{{ s.cliente.estado or '' }}</span>
                         </td>
                         <td>
-                            <strong class="text-primary d-block">{{ s.tipo_servico.nome }}</strong>
-                            <span class="text-muted text-truncate d-inline-block" style="max-width: 250px;">{{ s.observacoes or '--' }}</span>
+                            <span class="fw-semibold text-dark">{{ s.tipo_servico.nome if s.tipo_servico else 'Serviço' }}</span>
+                            {% if s.contrato_id %}<span class="badge bg-info-subtle text-info-emphasis d-inline-block">Recorrente</span>{% endif %}
                         </td>
                         <td>
-                            {% if s.responsavel_tecnico %}
-                                <span class="badge bg-light text-dark border"><i class="bi bi-person-badge me-1"></i>{{ s.responsavel_tecnico }}</span>
-                            {% else %}
-                                <span class="text-muted fst-italic">Não atribuído</span>
+                            <div class="text-dark fw-semibold">{{ s.responsavel_tecnico or 'A Definir' }}</div>
+                            {% if s.documento_responsavel %}
+                                <small class="text-muted d-block" style="font-size: 0.72rem;">Doc: {{ s.documento_responsavel }}</small>
                             {% endif %}
                         </td>
                         <td>
-                            {% if s.status == 'Bloqueado' %}
-                                <span class="badge bg-danger"><i class="bi bi-lock-fill me-1"></i>Aguardando Sinal</span>
-                            {% elif s.status == 'Em Andamento' %}
-                                <span class="badge bg-primary">Em Andamento</span>
-                            {% elif s.status == 'Concluido' %}
-                                <span class="badge bg-success">Concluído</span>
+                            {% if s.data_previsao %}
+                                <span class="fw-bold {% if s.data_previsao < hoje and s.status != 'Concluido' %}text-danger{% else %}text-dark{% endif %}">
+                                    {{ s.data_previsao.strftime('%d/%m/%Y') }}
+                                </span>
                             {% else %}
-                                <span class="badge bg-warning text-dark">Pendente</span>
+                                <span class="text-muted">--</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if s.status == 'Concluido' %}
+                                <span class="badge bg-success p-2">Concluído</span>
+                            {% elif s.status == 'Bloqueado' %}
+                                <span class="badge bg-danger p-2">Aguardando Sinal</span>
+                            {% elif s.status == 'Pendente' %}
+                                <span class="badge bg-warning text-dark p-2">Pendente</span>
+                            {% else %}
+                                <span class="badge bg-primary p-2">Em Andamento</span>
                             {% endif %}
                         </td>
                         <td class="text-end pe-3">
-                            <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalVerOS{{ s.id }}" title="Visualizar Detalhes e Exportar">
-                                    <i class="bi bi-eye me-1"></i>Visualizar
-                                </button>
-                                <button class="btn btn-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalGerenciarOS{{ s.id }}" title="Editar Operação & Local">
-                                    <i class="bi bi-pencil-square me-1"></i>Operação
+                            <div class="d-inline-flex gap-1">
+                                <a href="{{ url_for('gerar_pdf_ordem_servico', id=s.id) }}" target="_blank" class="btn btn-sm btn-outline-primary" title="Exportar PDF">
+                                    <i class="bi bi-file-earmark-pdf"></i>
+                                </a>
+                                <button type="button" class="btn btn-sm btn-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalGerenciarOS{{ s.id }}">
+                                    <i class="bi bi-pencil-square me-1"></i>Gerenciar
                                 </button>
                             </div>
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="text-center py-5 text-muted">Nenhum atendimento registrado nesta listagem.</td>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="bi bi-calendar-x fs-2 d-block mb-2 text-secondary"></i>
+                            Nenhuma atividade encontrada para os filtros selecionados.
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -108,351 +158,120 @@
 </div>
 
 <!-- ==================================================================== -->
-<!-- MODAL 1: VISUALIZAR DETALHE GERAL DA O.S. (COM FLAGS DE EXPORTAÇÃO PDF) -->
+<!-- MODAIS DE GERENCIAMENTO DE OPERAÇÃO & OS -->
 <!-- ==================================================================== -->
 {% for s in servicos_operacionais %}
-<div class="modal fade" id="modalVerOS{{ s.id }}" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg rounded-4">
-            <div class="modal-header bg-light">
-                <div>
-                    <h5 class="modal-title fw-bold text-dark mb-0">Ordem de Serviço: OS-{{ "%04d"|format(s.id) }}</h5>
-                    <small class="text-muted">Cliente: <b>{{ s.cliente.nome }}</b></small>
-                </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            
-            <div class="modal-body p-4 small">
-                <!-- ATRIBUIÇÃO DO RESPONSÁVEL -->
-                <form action="{{ url_for('definir_responsavel_servico', id=s.id) }}" method="POST" class="p-3 bg-light rounded-3 border mb-4">
-                    <div class="row g-2 align-items-center">
-                        <div class="col-md-8">
-                            <label class="form-label fw-bold text-dark mb-1"><i class="bi bi-person-badge text-primary me-1"></i>Responsável pelo Atendimento:</label>
-                            <input type="text" name="responsavel_tecnico" class="form-control form-control-sm" value="{{ s.responsavel_tecnico or '' }}" placeholder="Ex: Nome do consultor, perito, médico ou técnico">
-                        </div>
-                        <div class="col-md-4 align-self-end">
-                            <button type="submit" class="btn btn-sm btn-primary fw-bold w-100">
-                                <i class="bi bi-check2 me-1"></i>Salvar Responsável
-                            </button>
-                        </div>
-                    </div>
-                </form>
-
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6 class="fw-bold text-dark mb-0"><i class="bi bi-info-circle text-primary me-1"></i>Detalhe Geral</h6>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#modalGerenciarOS{{ s.id }}">
-                        <i class="bi bi-pencil-square me-1"></i>Editar Local / Dados
-                    </button>
-                </div>
-
-                <div class="row g-3 mb-3 p-3 bg-white border rounded-3">
-                    <div class="col-md-6">
-                        <span class="text-muted d-block">Serviço:</span>
-                        <strong class="text-dark">{{ s.tipo_servico.nome }}</strong>
-                    </div>
-                    <div class="col-md-3">
-                        <span class="text-muted d-block">Solicitação:</span>
-                        <strong>{{ s.data_solicitacao.strftime('%d/%m/%Y') if s.data_solicitacao else '--' }}</strong>
-                    </div>
-                    <div class="col-md-3">
-                        <span class="text-muted d-block">Previsão:</span>
-                        <strong>{{ s.data_previsao.strftime('%d/%m/%Y') if s.data_previsao else '--' }}</strong>
-                    </div>
-                    <div class="col-12 border-top pt-2">
-                        <span class="text-muted d-block">Endereço:</span>
-                        <strong class="text-dark">{{ s.endereco_exibicao }}</strong>
-                    </div>
-                </div>
-
-                {% if s.observacoes %}
-                <div class="mb-3">
-                    <h6 class="fw-bold text-dark mb-1">Descrição do Atendimento:</h6>
-                    <div class="p-2 bg-light rounded border text-muted" style="white-space: pre-line;">{{ s.observacoes }}</div>
-                </div>
-                {% endif %}
-
-                {% if s.detalhamento_execucao %}
-                <div class="mb-3">
-                    <h6 class="fw-bold text-dark mb-1">Detalhamento da Execução:</h6>
-                    <div class="p-2 bg-light rounded border text-muted" style="white-space: pre-line;">{{ s.detalhamento_execucao }}</div>
-                </div>
-                {% endif %}
-
-                {% if s.orientacoes_cliente %}
-                <div class="mb-3">
-                    <h6 class="fw-bold text-dark mb-1">Orientações / Recomendações:</h6>
-                    <div class="p-2 bg-light rounded border text-muted" style="white-space: pre-line;">{{ s.orientacoes_cliente }}</div>
-                </div>
-                {% endif %}
-
-                {% if s.arquivo_evidencia %}
-                <div class="mb-3">
-                    <a href="{{ url_for('download_file', filename=s.arquivo_evidencia) }}" target="_blank" class="btn btn-sm btn-outline-secondary fw-bold">
-                        <i class="bi bi-paperclip me-1"></i>Ver Evidência / Anexo
-                    </a>
-                </div>
-                {% endif %}
-
-                <!-- OPÇÕES DE EXPORTAÇÃO PERSONALIZADA DO PDF (FLAGS / CHECKBOXES) -->
-                <form action="{{ url_for('gerar_pdf_ordem_servico', id=s.id) }}" method="POST" target="_blank" class="p-3 bg-light rounded-3 border mt-4">
-                    <h6 class="fw-bold text-dark mb-2"><i class="bi bi-sliders text-primary me-1"></i>Selecione o que deseja incluir no arquivo PDF:</h6>
-                    <div class="row g-2">
-                        <div class="col-md-6">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="exibir_doc_cliente" value="1" id="f_doc_{{ s.id }}" checked>
-                                <label class="form-check-label" for="f_doc_{{ s.id }}">CNPJ / CPF do Cliente</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="exibir_datas" value="1" id="f_datas_{{ s.id }}" checked>
-                                <label class="form-check-label" for="f_datas_{{ s.id }}">Datas (Solicitação / Previsão)</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="exibir_responsavel" value="1" id="f_resp_{{ s.id }}" checked>
-                                <label class="form-check-label" for="f_resp_{{ s.id }}">Responsável pelo Atendimento</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="exibir_endereco" value="1" id="f_end_{{ s.id }}" checked>
-                                <label class="form-check-label" for="f_end_{{ s.id }}">Endereço do Atendimento</label>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="exibir_descricao" value="1" id="f_desc_{{ s.id }}" checked>
-                                <label class="form-check-label" for="f_desc_{{ s.id }}">Descrição do Atendimento</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="exibir_detalhamento" value="1" id="f_det_{{ s.id }}" checked>
-                                <label class="form-check-label" for="f_det_{{ s.id }}">Detalhamento da Execução</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="exibir_orientacoes" value="1" id="f_orient_{{ s.id }}" checked>
-                                <label class="form-check-label" for="f_orient_{{ s.id }}">Orientações / Recomendações</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="exibir_assinaturas" value="1" id="f_ass_{{ s.id }}" checked>
-                                <label class="form-check-label" for="f_ass_{{ s.id }}">Campos de Assinatura</label>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="text-end mt-3 border-top pt-2">
-                        <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">
-                            <i class="bi bi-file-earmark-pdf me-1"></i>Baixar PDF Personalizado
-                        </button>
-                    </div>
-                </form>
-
-            </div>
-
-            <div class="modal-footer bg-light">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ==================================================================== -->
-<!-- MODAL 2: ATUALIZAR OPERAÇÃO, ENDEREÇO & CRONOGRAMA -->
-<!-- ==================================================================== -->
 <div class="modal fade" id="modalGerenciarOS{{ s.id }}" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg rounded-4">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
             <form action="{{ url_for('atualizar_operacao_servico', id=s.id) }}" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="filtro_retorno" value="{{ filtro_atual }}">
+                
                 <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark">Atualizar Operação: OS-{{ "%04d"|format(s.id) }}</h5>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0">OS-{{ "%04d"|format(s.numero_sequencial_empresa) }} — {{ s.cliente.nome }}</h5>
+                        <small class="text-muted">{{ s.tipo_servico.nome if s.tipo_servico else 'Serviço' }}</small>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
+
                 <div class="modal-body p-4 small">
-                    
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Status da Operação *</label>
-                            <select name="status" class="form-select form-select-sm fw-bold">
-                                <option value="Pendente" {% if s.status == 'Pendente' %}selected{% endif %}>Pendente</option>
-                                <option value="Em Andamento" {% if s.status == 'Em Andamento' %}selected{% endif %}>Em Andamento</option>
-                                <option value="Concluido" {% if s.status == 'Concluido' %}selected{% endif %}>Concluído / Finalizado</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Data Prevista de Entrega</label>
-                            <input type="date" name="data_previsao" class="form-control form-control-sm" value="{{ s.data_previsao.strftime('%Y-%m-%d') if s.data_previsao else '' }}">
+                    <!-- 1. IDENTIFICAÇÃO E DOCUMENTO -->
+                    <div class="p-3 bg-light rounded-3 border mb-3">
+                        <h6 class="fw-bold text-dark mb-2"><i class="bi bi-card-heading text-primary me-1"></i>1. Dados da Ficha & Responsável Técnico</h6>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Título da Ficha / Documento</label>
+                                <input type="text" name="titulo_documento_custom" class="form-control form-control-sm fw-bold" value="{{ s.titulo_documento_custom or 'Ordem de Serviço' }}" placeholder="Ex: Ordem de Serviço, Relatório Técnico">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Responsável pelo Atendimento</label>
+                                <input type="text" name="responsavel_tecnico" class="form-control form-control-sm" value="{{ s.responsavel_tecnico or '' }}" placeholder="Nome do técnico ou consultor">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Doc / Registro Profissional (CPF, CREA, CFT)</label>
+                                <input type="text" name="documento_responsavel" class="form-control form-control-sm" value="{{ s.documento_responsavel or '' }}" placeholder="Ex: CREA 123456/SP ou CPF">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Status da Operação</label>
+                                <select name="status" class="form-select form-select-sm fw-bold">
+                                    <option value="Em Andamento" {% if s.status == 'Em Andamento' %}selected{% endif %}>Em Andamento</option>
+                                    <option value="Pendente" {% if s.status == 'Pendente' %}selected{% endif %}>Pendente</option>
+                                    <option value="Concluido" {% if s.status == 'Concluido' %}selected{% endif %} class="text-success fw-bold">✔ Concluído</option>
+                                    {% if s.status == 'Bloqueado' %}
+                                    <option value="Bloqueado" selected class="text-danger">Bloqueado (Aguardando Sinal)</option>
+                                    {% endif %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Data de Previsão / Execução</label>
+                                <input type="date" name="data_previsao" class="form-control form-control-sm" value="{{ s.data_previsao.strftime('%Y-%m-%d') if s.data_previsao else '' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Evidência / Foto Técnica</label>
+                                <input type="file" name="arquivo_evidencia" class="form-control form-control-sm">
+                            </div>
                         </div>
                     </div>
 
-                    <!-- BLOCO DE ENDEREÇO ESPECÍFICO DO ATENDIMENTO -->
+                    <!-- 2. DETALHAMENTO & ORIENTAÇÕES (ITEM 15: QUEBRA DE LINHA PRESERVADA) -->
                     <div class="p-3 bg-light rounded-3 border mb-3">
+                        <h6 class="fw-bold text-dark mb-2"><i class="bi bi-text-paragraph text-primary me-1"></i>2. Detalhamento & Orientações</h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Detalhamento da Execução Técnica</label>
+                                <textarea name="detalhamento_execucao" class="form-control form-control-sm" rows="3" placeholder="Pule linhas normalmente para tópicos ou etapas...">{{ s.detalhamento_execucao or '' }}</textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Orientações & Recomendações ao Cliente</label>
+                                <textarea name="orientacoes_cliente" class="form-control form-control-sm" rows="3" placeholder="Recomendações técnicas ou cuidados operacionais...">{{ s.orientacoes_cliente or '' }}</textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold">Observações Gerais</label>
+                                <textarea name="observacoes" class="form-control form-control-sm" rows="2">{{ s.observacoes or '' }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. LOCALIZAÇÃO / ENDEREÇO DE EXECUÇÃO -->
+                    <div class="p-3 bg-light rounded-3 border">
                         <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="usar_endereco_personalizado" id="chkEndOS{{ s.id }}" {% if s.usar_endereco_personalizado %}checked{% endif %} onchange="alternarEnderecoOS('{{ s.id }}')">
-                            <label class="form-check-label fw-bold text-dark" for="chkEndOS{{ s.id }}">
-                                <i class="bi bi-geo-alt-fill text-primary me-1"></i>Informar local de atendimento diferente do endereço principal
-                            </label>
+                            <input class="form-check-input" type="checkbox" name="usar_endereco_personalizado" id="checkEnd{{ s.id }}" {% if s.usar_endereco_personalizado %}checked{% endif %} onchange="document.getElementById('blocoEnd{{ s.id }}').classList.toggle('d-none', !this.checked)">
+                            <label class="form-check-label small fw-bold" for="checkEnd{{ s.id }}">Executar em endereço diferente do cadastro principal do cliente</label>
                         </div>
-
-                        <div id="boxEnderecoPersonalizado{{ s.id }}" class="{% if not s.usar_endereco_personalizado %}d-none{% endif %} pt-2 border-top mt-2">
-                            <div class="row g-2">
-                                <div class="col-md-4">
-                                    <label class="form-label small fw-bold">CEP</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="text" name="cep_execucao" id="cep_os_{{ s.id }}" class="form-control" value="{{ s.cep_execucao or '' }}" placeholder="00000-000">
-                                        <button type="button" class="btn btn-outline-secondary" onclick="buscarCepOS('{{ s.id }}')"><i class="bi bi-search"></i></button>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label small fw-bold">Logradouro / Rua</label>
-                                    <input type="text" name="logradouro_execucao" id="logradouro_os_{{ s.id }}" class="form-control form-control-sm" value="{{ s.logradouro_execucao or '' }}">
-                                </div>
-                                <div class="col-md-2">
-                                    <label class="form-label small fw-bold">Número</label>
-                                    <input type="text" name="numero_execucao" id="numero_os_{{ s.id }}" class="form-control form-control-sm" value="{{ s.numero_execucao or '' }}">
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label small fw-bold">Complemento</label>
-                                    <input type="text" name="complemento_execucao" class="form-control form-control-sm" value="{{ s.complemento_execucao or '' }}" placeholder="Sala, Consultório, Bloco">
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label small fw-bold">Bairro</label>
-                                    <input type="text" name="bairro_execucao" id="bairro_os_{{ s.id }}" class="form-control form-control-sm" value="{{ s.bairro_execucao or '' }}">
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label small fw-bold">Cidade</label>
-                                    <input type="text" name="cidade_execucao" id="cidade_os_{{ s.id }}" class="form-control form-control-sm" value="{{ s.cidade_execucao or '' }}">
-                                </div>
-                                <div class="col-md-2">
-                                    <label class="form-label small fw-bold">UF</label>
-                                    <input type="text" name="estado_execucao" id="estado_os_{{ s.id }}" class="form-control form-control-sm text-uppercase" maxlength="2" value="{{ s.estado_execucao or '' }}">
-                                </div>
+                        <div id="blocoEnd{{ s.id }}" class="{% if not s.usar_endereco_personalizado %}d-none{% endif %} row g-2">
+                            <div class="col-md-3">
+                                <input type="text" name="cep_execucao" class="form-control form-control-sm" value="{{ s.cep_execucao or '' }}" placeholder="CEP 00000-000">
+                            </div>
+                            <div class="col-md-6">
+                                <input type="text" name="logradouro_execucao" class="form-control form-control-sm" value="{{ s.logradouro_execucao or '' }}" placeholder="Logradouro">
+                            </div>
+                            <div class="col-md-3">
+                                <input type="text" name="numero_execucao" class="form-control form-control-sm" value="{{ s.numero_execucao or '' }}" placeholder="Número">
+                            </div>
+                            <div class="col-md-4">
+                                <input type="text" name="bairro_execucao" class="form-control form-control-sm" value="{{ s.bairro_execucao or '' }}" placeholder="Bairro">
+                            </div>
+                            <div class="col-md-6">
+                                <input type="text" name="cidade_execucao" class="form-control form-control-sm" value="{{ s.cidade_execucao or '' }}" placeholder="Cidade">
+                            </div>
+                            <div class="col-md-2">
+                                <input type="text" name="estado_execucao" class="form-control form-control-sm text-uppercase" maxlength="2" value="{{ s.estado_execucao or '' }}" placeholder="UF">
                             </div>
                         </div>
                     </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Detalhamento da Execução</label>
-                        <textarea name="detalhamento_execucao" class="form-control form-control-sm" rows="3" placeholder="Registros técnicos ou evolução do atendimento...">{{ s.detalhamento_execucao or '' }}</textarea>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Orientações / Recomendações</label>
-                        <textarea name="orientacoes_cliente" class="form-control form-control-sm" rows="2" placeholder="Orientações e recomendações ao cliente...">{{ s.orientacoes_cliente or '' }}</textarea>
-                    </div>
-
-                    <!-- FASES DINÂMICAS DO CRONOGRAMA & RASTREIO -->
-                    <div class="p-3 bg-light rounded-3 border mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-clock-history text-primary me-1"></i>Fases do Cronograma & Rastreio</h6>
-                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="adicionarFaseOS('{{ s.id }}')">
-                                <i class="bi bi-plus-lg me-1"></i>+ Adicionar Fase
-                            </button>
-                        </div>
-
-                        <div id="container-fases-os-{{ s.id }}" class="d-flex flex-column gap-2">
-                            {% for fase in s.etapas_rastreio %}
-                            <div class="row g-2 align-items-center bg-white p-2 rounded border">
-                                <div class="col-md-4">
-                                    <input type="text" name="fase_titulo[]" class="form-control form-control-sm" value="{{ fase.titulo_fase }}" placeholder="Título da Fase *" required>
-                                </div>
-                                <div class="col-md-2">
-                                    <input type="date" name="fase_data_inicio[]" class="form-control form-control-sm" value="{{ fase.data_inicio.strftime('%Y-%m-%d') if fase.data_inicio else '' }}" title="Início">
-                                </div>
-                                <div class="col-md-2">
-                                    <input type="date" name="fase_data_fim[]" class="form-control form-control-sm" value="{{ fase.data_fim.strftime('%Y-%m-%d') if fase.data_fim else '' }}" title="Fim">
-                                </div>
-                                <div class="col-md-3">
-                                    <select name="fase_status[]" class="form-select form-select-sm">
-                                        <option value="pendente" {% if fase.status_fase == 'pendente' %}selected{% endif %}>Pendente</option>
-                                        <option value="em_andamento" {% if fase.status_fase == 'em_andamento' %}selected{% endif %}>Em Andamento</option>
-                                        <option value="concluido" {% if fase.status_fase == 'concluido' %}selected{% endif %}>Concluído</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-1 text-end">
-                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.row').remove()"><i class="bi bi-trash"></i></button>
-                                </div>
-                                <div class="col-12 mt-1">
-                                    <input type="text" name="fase_descricao[]" class="form-control form-control-sm" value="{{ fase.descricao_detalhes or '' }}" placeholder="Detalhes, insumos ou anotações desta etapa...">
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Anexar Documento / Evidência</label>
-                        <input type="file" name="arquivo_evidencia" class="form-control form-control-sm">
-                        {% if s.arquivo_evidencia %}
-                            <small class="text-success d-block mt-1"><i class="bi bi-check-circle me-1"></i>Arquivo atual: {{ s.arquivo_evidencia }}</small>
-                        {% endif %}
-                    </div>
-
                 </div>
+
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success btn-sm fw-bold px-3">Salvar Atualizações</button>
+                    <a href="{{ url_for('gerar_pdf_ordem_servico', id=s.id) }}" target="_blank" class="btn btn-outline-primary btn-sm fw-bold">
+                        <i class="bi bi-file-earmark-pdf me-1"></i>Gerar PDF da OS
+                    </a>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">Salvar Alterações</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 {% endfor %}
-
-<script>
-function alternarEnderecoOS(servicoId) {
-    const chk = document.getElementById(`chkEndOS${servicoId}`);
-    const box = document.getElementById(`boxEnderecoPersonalizado${servicoId}`);
-    if (chk && box) {
-        box.classList.toggle('d-none', !chk.checked);
-    }
-}
-
-function buscarCepOS(servicoId) {
-    const cepInput = document.getElementById(`cep_os_${servicoId}`);
-    const cep = cepInput.value.replace(/\D/g, '');
-    if (cep.length === 8) {
-        fetch(`https://viacep.com.br/ws/${cep}/json/`)
-            .then(r => r.json())
-            .then(dados => {
-                if (!dados.erro) {
-                    document.getElementById(`logradouro_os_${servicoId}`).value = dados.logradouro || '';
-                    document.getElementById(`bairro_os_${servicoId}`).value = dados.bairro || '';
-                    document.getElementById(`cidade_os_${servicoId}`).value = dados.localidade || '';
-                    document.getElementById(`estado_os_${servicoId}`).value = dados.uf || '';
-                    document.getElementById(`numero_os_${servicoId}`).focus();
-                } else {
-                    alert('CEP não localizado.');
-                }
-            })
-            .catch(() => alert('Erro ao consultar CEP.'));
-    } else {
-        alert('Digite um CEP válido com 8 dígitos.');
-    }
-}
-
-function adicionarFaseOS(servicoId) {
-    const container = document.getElementById(`container-fases-os-${servicoId}`);
-    const div = document.createElement('div');
-    div.className = 'row g-2 align-items-center bg-white p-2 rounded border mt-2';
-    div.innerHTML = `
-        <div class="col-md-4">
-            <input type="text" name="fase_titulo[]" class="form-control form-control-sm" placeholder="Título da Fase *" required>
-        </div>
-        <div class="col-md-2">
-            <input type="date" name="fase_data_inicio[]" class="form-control form-control-sm" title="Data Início">
-        </div>
-        <div class="col-md-2">
-            <input type="date" name="fase_data_fim[]" class="form-control form-control-sm" title="Data Fim">
-        </div>
-        <div class="col-md-3">
-            <select name="fase_status[]" class="form-select form-select-sm">
-                <option value="pendente">Pendente</option>
-                <option value="em_andamento">Em Andamento</option>
-                <option value="concluido">Concluído</option>
-            </select>
-        </div>
-        <div class="col-md-1 text-end">
-            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.row').remove()"><i class="bi bi-trash"></i></button>
-        </div>
-        <div class="col-12 mt-1">
-            <input type="text" name="fase_descricao[]" class="form-control form-control-sm" placeholder="Detalhes, insumos ou anotações desta etapa...">
-        </div>
-    `;
-    container.appendChild(div);
-}
-</script>
 {% endblock %}

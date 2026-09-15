@@ -1,319 +1,321 @@
 {% extends 'base.html' %}
 
-{% block title %}{% if cliente %}Editar Cliente{% else %}Novo Cliente{% endif %} - Trivium ERP{% endblock %}
+{% block title %}Catálogo de Serviços & Ficha Técnica - Trivium ERP{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
     <div>
-        <a href="{{ url_for('index') }}" class="text-decoration-none small text-muted mb-1 d-inline-block">
-            <i class="bi bi-arrow-left"></i> Voltar à Lista
-        </a>
-        <h3 class="fw-bold mb-0 text-dark">{% if cliente %}Editar Cadastro{% else %}Novo Cliente{% endif %}</h3>
-        <p class="text-muted mb-0 small">Cadastre empresas (PJ) ou pessoas físicas (PF) na sua base de clientes</p>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-journal-bookmark-fill text-primary me-2"></i>Catálogo & Ficha Técnica de Serviços
+        </h2>
+        <p class="text-muted mb-0">Padronização de preços, margens mínimas e custos modulares de mão de obra e insumos</p>
+    </div>
+    <div>
+        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoServicoCatalogo">
+            <i class="bi bi-plus-circle me-1"></i>Novo Serviço
+        </button>
     </div>
 </div>
 
-<div class="card-custom p-4">
-    <form method="POST">
-        <!-- Alternador Tipo de Cliente -->
-        <div class="mb-4">
-            <label class="form-label small fw-bold text-muted d-block">Tipo de Cliente</label>
-            <div class="btn-group" role="group">
-                <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pj" value="PJ" autocomplete="off" {% if not cliente or (cliente and cliente.cnpj_cpf and cliente.cnpj_cpf|length > 14) %}checked{% endif %} onchange="alternarTipoCliente()">
-                <label class="btn btn-outline-primary fw-bold px-4" for="tipo_pj"><i class="bi bi-building me-1"></i> Pessoa Jurídica (CNPJ)</label>
-
-                <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pf" value="PF" autocomplete="off" {% if cliente and cliente.cnpj_cpf and cliente.cnpj_cpf|length <= 14 %}checked{% endif %} onchange="alternarTipoCliente()">
-                <label class="btn btn-outline-primary fw-bold px-4" for="tipo_pf"><i class="bi bi-person me-1"></i> Pessoa Física (CPF)</label>
-            </div>
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold text-dark mb-0">Serviços Cadastrados</h6>
+        <span class="badge bg-light text-dark border">{{ catalogo|length }} itens</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small text-muted">
+                    <tr>
+                        <th>NOME DO SERVIÇO</th>
+                        <th>COBRANÇA / UNIDADE</th>
+                        <th>CUSTO BASE</th>
+                        <th>VALOR SUGERIDO</th>
+                        <th>MARGEM ALVO</th>
+                        <th class="text-end pe-3">AÇÕES</th>
+                    </tr>
+                </thead>
+                <tbody class="small">
+                    {% for c in catalogo %}
+                    <tr>
+                        <td>
+                            <strong class="text-dark d-block">{{ c.nome }}</strong>
+                            <span class="text-muted text-truncate d-inline-block" style="max-width: 320px;">{{ c.descricao_padrao or '--' }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-dark border">{{ c.unidade_medida|upper }}</span>
+                            <span class="badge {{ 'bg-primary' if c.modelo_cobranca == 'mensal' else ('bg-info text-dark' if c.modelo_cobranca == 'anual' else 'bg-secondary') }}">
+                                {{ c.modelo_cobranca|capitalize }}
+                            </span>
+                        </td>
+                        <td class="text-muted">R$ {{ "%.2f"|format(c.custo_total_estimado) }}</td>
+                        <td class="fw-bold text-success fs-6">R$ {{ "%.2f"|format(c.valor_sugerido) }}</td>
+                        <td>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle fw-bold">
+                                {{ c.margem_lucro_alvo or 30 }}% Margem
+                            </span>
+                        </td>
+                        <td class="text-end pe-3">
+                            <div class="d-inline-flex gap-1">
+                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditarServico{{ c.id }}" title="Editar Serviço">
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                                <form action="{{ url_for('excluir_tipo_servico', id=c.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Deseja realmente remover este serviço do catálogo?')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Serviço">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <i class="bi bi-journal-x fs-2 d-block mb-2 text-secondary"></i>
+                            Nenhum serviço cadastrado no catálogo. Comece clicando em "Novo Serviço".
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-
-        <!-- 1. IDENTIFICAÇÃO -->
-        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-card-text me-2"></i>1. Identificação Principal</h6>
-        <div class="row g-3 mb-4">
-            <!-- Campos PJ -->
-            <div class="col-md-6 campo-pj">
-                <label class="form-label small fw-bold" id="label-razao">Razão Social / Nome da Empresa *</label>
-                <input type="text" name="nome" id="campo_nome" class="form-control" value="{{ cliente.nome if cliente else '' }}" required>
-            </div>
-            <div class="col-md-6 campo-pj">
-                <label class="form-label small fw-bold">Nome Fantasia</label>
-                <input type="text" name="nome_fantasia" id="campo_fantasia" class="form-control" value="{{ cliente.nome_fantasia if cliente else '' }}">
-            </div>
-            <div class="col-md-6 campo-pj">
-                <label class="form-label small fw-bold">CNPJ</label>
-                <input type="text" name="cnpj" id="campo_cnpj" class="form-control" placeholder="00.000.000/0000-00" value="{{ cliente.cnpj_cpf if (cliente and cliente.cnpj_cpf and cliente.cnpj_cpf|length > 14) else '' }}">
-            </div>
-            <div class="col-md-6 campo-pj">
-                <label class="form-label small fw-bold">Inscrição Estadual</label>
-                <input type="text" name="inscricao_estadual" class="form-control" value="{{ cliente.inscricao_estadual if cliente else '' }}">
-            </div>
-
-            <!-- Campos PF -->
-            <div class="col-md-6 campo-pf d-none">
-                <label class="form-label small fw-bold">CPF *</label>
-                <input type="text" name="cpf" id="campo_cpf" class="form-control" placeholder="000.000.000-00" maxlength="14" value="{{ cliente.cnpj_cpf if (cliente and cliente.cnpj_cpf and cliente.cnpj_cpf|length <= 14) else '' }}" oninput="mascaraCPF(this)" onblur="validarCampoCPF(this)">
-                    <small id="cpf-status" class="d-block mt-1" style="font-size: 0.75rem;"></small>
-                </div>
-             </div>
-
-        <hr class="my-4 text-muted">
-
-        <!-- 2. CONTATO E RESPONSÁVEL -->
-        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-telephone me-2"></i>2. Informações de Contato</h6>
-        <div class="row g-3 mb-4">
-            <div class="col-md-4">
-                <label class="form-label small fw-bold" id="label-responsavel">Pessoa de Contato / Responsável</label>
-                <input type="text" name="responsavel" class="form-control" placeholder="Ex: Diretor, Gestor ou o próprio" value="{{ cliente.responsavel if cliente else '' }}">
-            </div>
-            <div class="col-md-4">
-                <label class="form-label small fw-bold">Telefone / WhatsApp Principal *</label>
-                <input type="text" name="telefone" class="form-control" placeholder="(00) 00000-0000" value="{{ cliente.telefone if cliente else '' }}" required>
-            </div>
-            <div class="col-md-4">
-                <label class="form-label small fw-bold">Telefone Secundário</label>
-                <input type="text" name="telefone_secundario" class="form-control" placeholder="(00) 00000-0000" value="{{ cliente.telefone_secundario if cliente else '' }}">
-            </div>
-            <div class="col-md-6">
-                <label class="form-label small fw-bold">E-mail Comercial *</label>
-                <input type="email" name="email" class="form-control" placeholder="cliente@email.com" value="{{ cliente.email if cliente else '' }}" required>
-            </div>
-            <div class="col-md-6">
-                <label class="form-label small fw-bold">E-mail Financeiro (Opcional)</label>
-                <input type="email" name="email_financeiro" class="form-control" placeholder="financeiro@email.com" value="{{ cliente.email_financeiro if cliente else '' }}">
-            </div>
-        </div>
-
-        <hr class="my-4 text-muted">
-
-        <!-- 3. ENDEREÇO COM BUSCA DE CEP -->
-        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-geo-alt me-2"></i>3. Endereço</h6>
-        <div class="row g-3 mb-4">
-            <div class="col-md-4">
-                <label class="form-label small fw-bold">CEP</label>
-                <div class="input-group">
-                    <input type="text" name="cep" id="cep" class="form-control" placeholder="00000-000" maxlength="9" value="{{ cliente.cep if cliente else '' }}">
-                    <button class="btn btn-outline-secondary" type="button" id="btn-busca-cep" onclick="buscarCEP()" title="Buscar endereço pelo CEP">
-                        <i class="bi bi-search" id="icone-busca-cep"></i>
-                    </button>
-                </div>
-                <small id="cep-status" class="text-muted d-block mt-1" style="font-size: 0.75rem;"></small>
-            </div>
-            <div class="col-md-6">
-                <label class="form-label small fw-bold">Logradouro (Rua, Av, etc)</label>
-                <input type="text" name="logradouro" id="logradouro" class="form-control" value="{{ cliente.logradouro if cliente else '' }}">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small fw-bold">Número</label>
-                <input type="text" name="numero" id="numero" class="form-control" value="{{ cliente.numero if cliente else '' }}">
-            </div>
-            <div class="col-md-4">
-                <label class="form-label small fw-bold">Complemento</label>
-                <input type="text" name="complemento" id="complemento" class="form-control" placeholder="Sala, Bloco, Galpão..." value="{{ cliente.complemento if cliente else '' }}">
-            </div>
-            <div class="col-md-4">
-                <label class="form-label small fw-bold">Bairro</label>
-                <input type="text" name="bairro" id="bairro" class="form-control" value="{{ cliente.bairro if cliente else '' }}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small fw-bold">Cidade</label>
-                <input type="text" name="cidade" id="cidade" class="form-control" value="{{ cliente.cidade if cliente else '' }}">
-            </div>
-            <div class="col-md-1">
-                <label class="form-label small fw-bold">UF</label>
-                <input type="text" name="estado" id="estado" class="form-control text-uppercase" maxlength="2" placeholder="SP" value="{{ cliente.estado if cliente else '' }}">
-            </div>
-        </div>
-
-        <hr class="my-4 text-muted">
-
-        <!-- 4. OBSERVAÇÕES -->
-        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-chat-left-text me-2"></i>4. Observações Internas</h6>
-        <div class="row g-3 mb-4">
-            <div class="col-12">
-                <textarea name="observacoes" class="form-control" rows="3" placeholder="Informações de atendimento, particularidades do cliente, etc.">{{ cliente.observacoes if cliente else '' }}</textarea>
-            </div>
-        </div>
-
-        <!-- Botões de Ação no Rodapé -->
-        <div class="d-flex flex-column flex-md-row justify-content-end gap-2 mt-4 pt-3 border-top">
-            <a href="{{ url_for('listar_clientes') }}" class="btn btn-light px-4">Cancelar</a>
-            
-            <button type="submit" name="acao" value="salvar" class="btn btn-outline-primary fw-bold px-4">
-                <i class="bi bi-check-lg me-1"></i> {% if cliente %}Salvar Alterações{% else %}Salvar Cliente{% endif %}
-            </button>
-
-            {% if not cliente %}
-            <!-- Botão de Ação Rápida para Primeiro Cadastro -->
-            <button type="submit" name="acao" value="salvar_e_proposta" class="btn btn-success fw-bold px-4 shadow-sm">
-                <i class="bi bi-file-earmark-plus me-1"></i> Salvar e Gerar Proposta
-            </button>
-            {% endif %}
-        </div>
-    </form>
+    </div>
 </div>
 
+<!-- MODAL: NOVO SERVIÇO COM COMPOSIÇÃO DE CUSTOS -->
+<div class="modal fade" id="modalNovoServicoCatalogo" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('novo_tipo_servico') }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-journal-plus text-primary me-2"></i>Ficha Técnica do Serviço
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold">Nome do Serviço *</label>
+                            <input type="text" name="nome" class="form-control" required placeholder="Ex: Elaboração de Laudo / Assessoria Técnica">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Modelo de Cobrança</label>
+                            <select name="modelo_cobranca" class="form-select">
+                                <option value="pontual">Pontual / Avulso</option>
+                                <option value="mensal">Recorrente Mensal</option>
+                                <option value="anual">Recorrente Anual</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">Unidade</label>
+                            <input type="text" name="unidade_medida" class="form-control" value="un" placeholder="un, m2, h">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Margem Alvo (%)</label>
+                            <input type="number" step="0.1" name="margem_lucro_alvo" id="cat_margem" class="form-control" value="35.0" oninput="calcularPrecoSugeridoCatalogo('')">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Custo Base (R$)</label>
+                            <input type="number" step="0.01" id="cat_custo_total" class="form-control bg-light" value="0.00" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-success">Valor Sugerido (R$) *</label>
+                            <input type="number" step="0.01" name="valor_sugerido" id="cat_valor_sugerido" class="form-control fw-bold border-success text-success" placeholder="0.00" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Descrição Padrão / Escopo</label>
+                        <textarea name="descricao" class="form-control" rows="2" placeholder="Texto padrão que virá preenchido na proposta..."></textarea>
+                    </div>
+
+                    <div class="p-3 bg-light rounded-3 border">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-calculator me-1 text-primary"></i>Composição de Custos Padrão (Opcional)</h6>
+                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="adicionarLinhaCusto('')">
+                                <i class="bi bi-plus-lg me-1"></i>Adicionar Custo
+                            </button>
+                        </div>
+                        <div id="container-custos-novo" class="d-flex flex-column gap-2"></div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success fw-bold px-4">Salvar no Catálogo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAIS: EDIÇÃO DE SERVIÇOS -->
+{% for c in catalogo %}
+<div class="modal fade" id="modalEditarServico{{ c.id }}" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('editar_tipo_servico', id=c.id) }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-pencil-square text-primary me-2"></i>Editar Serviço: {{ c.nome }}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold">Nome do Serviço *</label>
+                            <input type="text" name="nome" class="form-control" value="{{ c.nome }}" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Modelo de Cobrança</label>
+                            <select name="modelo_cobranca" class="form-select">
+                                <option value="pontual" {% if c.modelo_cobranca == 'pontual' %}selected{% endif %}>Pontual / Avulso</option>
+                                <option value="mensal" {% if c.modelo_cobranca == 'mensal' %}selected{% endif %}>Recorrente Mensal</option>
+                                <option value="anual" {% if c.modelo_cobranca == 'anual' %}selected{% endif %}>Recorrente Anual</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">Unidade</label>
+                            <input type="text" name="unidade_medida" class="form-control" value="{{ c.unidade_medida or 'un' }}">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Margem Alvo (%)</label>
+                            <input type="number" step="0.1" name="margem_lucro_alvo" id="cat_margem_{{ c.id }}" class="form-control" value="{{ c.margem_lucro_alvo or 30.0 }}" oninput="calcularPrecoSugeridoCatalogo('_{{ c.id }}')">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Custo Base (R$)</label>
+                            <input type="number" step="0.01" id="cat_custo_total_{{ c.id }}" class="form-control bg-light" value="{{ '%.2f'|format(c.custo_total_estimado) }}" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-success">Valor Sugerido (R$) *</label>
+                            <input type="number" step="0.01" name="valor_sugerido" id="cat_valor_sugerido_{{ c.id }}" class="form-control fw-bold border-success text-success" value="{{ '%.2f'|format(c.valor_sugerido) }}" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Descrição Padrão / Escopo</label>
+                        <textarea name="descricao" class="form-control" rows="2">{{ c.descricao_padrao or '' }}</textarea>
+                    </div>
+
+                    <div class="p-3 bg-light rounded-3 border">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-calculator me-1 text-primary"></i>Composição de Custos Diretos</h6>
+                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="adicionarLinhaCusto('_{{ c.id }}')">
+                                <i class="bi bi-plus-lg me-1"></i>Adicionar Custo
+                            </button>
+                        </div>
+                        <div id="container-custos-edit_{{ c.id }}" class="d-flex flex-column gap-2">
+                            {% for cp in c.custos_padrao %}
+                            <div class="row g-2 align-items-center bg-white p-2 rounded border item-custo-linha_{{ c.id }}">
+                                <div class="col-md-3">
+                                    <select name="custo_tipo[]" class="form-select form-select-sm">
+                                        <option value="mao_de_obra" {% if cp.tipo_custo == 'mao_de_obra' %}selected{% endif %}>👷 Mão de Obra</option>
+                                        <option value="material" {% if cp.tipo_custo == 'material' %}selected{% endif %}>🧱 Insumo/Material</option>
+                                        <option value="logistica" {% if cp.tipo_custo == 'logistica' %}selected{% endif %}>🚚 Logística/KM</option>
+                                        <option value="taxa" {% if cp.tipo_custo == 'taxa' %}selected{% endif %}>📑 Taxa/Outros</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <input type="text" name="custo_desc[]" class="form-control form-control-sm" value="{{ cp.descricao }}" required>
+                                </div>
+                                <div class="col-md-2">
+                                    <input type="number" step="0.1" name="custo_qtd[]" class="form-control form-control-sm custo-qtd_{{ c.id }}" value="{{ cp.quantidade }}" oninput="calcularPrecoSugeridoCatalogo('_{{ c.id }}')">
+                                </div>
+                                <div class="col-md-2">
+                                    <input type="number" step="0.01" name="custo_unit[]" class="form-control form-control-sm custo-unit_{{ c.id }}" value="{{ cp.custo_unitario }}" oninput="calcularPrecoSugeridoCatalogo('_{{ c.id }}')">
+                                </div>
+                                <div class="col-md-1 text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.row').remove(); calcularPrecoSugeridoCatalogo('_{{ c.id }}');">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
 <script>
-function alternarTipoCliente() {
-    const isPj = document.getElementById('tipo_pj').checked;
-    const camposPJ = document.querySelectorAll('.campo-pj');
-    const camposPF = document.querySelectorAll('.campo-pf');
-    const labelRazao = document.getElementById('label-razao');
-    const labelResponsavel = document.getElementById('label-responsavel');
+function adicionarLinhaCusto(sufixo) {
+    const containerId = sufixo ? `container-custos-edit${sufixo}` : 'container-custos-novo';
+    const container = document.getElementById(containerId);
+    const div = document.createElement('div');
+    const classeLinha = sufixo ? `item-custo-linha${sufixo}` : 'item-custo-linha';
+    const classeQtd = sufixo ? `custo-qtd${sufixo}` : 'custo-qtd';
+    const classeUnit = sufixo ? `custo-unit${sufixo}` : 'custo-unit';
 
-    if (isPj) {
-        camposPJ.forEach(el => el.classList.remove('d-none'));
-        camposPF.forEach(el => el.classList.add('d-none'));
-        labelRazao.innerText = 'Razão Social / Nome da Empresa *';
-        labelResponsavel.innerText = 'Pessoa de Contato / Responsável';
-    } else {
-        document.getElementById('campo_fantasia').closest('.campo-pj').classList.add('d-none');
-        document.getElementById('campo_cnpj').closest('.campo-pj').classList.add('d-none');
-        document.querySelector('input[name="inscricao_estadual"]').closest('.campo-pj').classList.add('d-none');
-        camposPF.forEach(el => el.classList.remove('d-none'));
-        labelRazao.innerText = 'Nome Completo da Pessoa *';
-        labelResponsavel.innerText = 'Apelido / Como prefere ser chamado';
-    }
+    div.className = `row g-2 align-items-center bg-white p-2 rounded border ${classeLinha}`;
+    div.innerHTML = `
+        <div class="col-md-3">
+            <select name="custo_tipo[]" class="form-select form-select-sm">
+                <option value="mao_de_obra">👷 Mão de Obra</option>
+                <option value="material">🧱 Insumo/Material</option>
+                <option value="logistica">🚚 Logística/KM</option>
+                <option value="taxa">📑 Taxa/Outros</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <input type="text" name="custo_desc[]" class="form-control form-control-sm" placeholder="Descrição do custo" required>
+        </div>
+        <div class="col-md-2">
+            <input type="number" step="0.1" name="custo_qtd[]" class="form-control form-control-sm ${classeQtd}" value="1" placeholder="Qtd" oninput="calcularPrecoSugeridoCatalogo('${sufixo}')">
+        </div>
+        <div class="col-md-2">
+            <input type="number" step="0.01" name="custo_unit[]" class="form-control form-control-sm ${classeUnit}" placeholder="Custo Unit." oninput="calcularPrecoSugeridoCatalogo('${sufixo}')">
+        </div>
+        <div class="col-md-1 text-end">
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.row').remove(); calcularPrecoSugeridoCatalogo('${sufixo}');">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    `;
+    container.appendChild(div);
 }
 
-// BUSCA AUTOMÁTICA DE CEP VIA API
-function buscarCEP() {
-    const cepInput = document.getElementById('cep');
-    const statusText = document.getElementById('cep-status');
-    const iconeBusca = document.getElementById('icone-busca-cep');
-    
-    // Limpa caracteres especiais
-    const cep = cepInput.value.replace(/\D/g, '');
+function calcularPrecoSugeridoCatalogo(sufixo) {
+    let custoTotal = 0.0;
+    const seletorQtd = sufixo ? `.custo-qtd${sufixo}` : '.custo-qtd';
+    const seletorUnit = sufixo ? `.custo-unit${sufixo}` : '.custo-unit';
+    const idCustoTotal = sufixo ? `cat_custo_total${sufixo}` : 'cat_custo_total';
+    const idMargem = sufixo ? `cat_margem${sufixo}` : 'cat_margem';
+    const idValorSugerido = sufixo ? `cat_valor_sugerido${sufixo}` : 'cat_valor_sugerido';
 
-    if (cep.length !== 8) {
-        statusText.innerText = 'Digite um CEP válido com 8 dígitos.';
-        statusText.className = 'text-danger d-block mt-1';
-        return;
+    const qtds = document.querySelectorAll(seletorQtd);
+    const units = document.querySelectorAll(seletorUnit);
+
+    for (let i = 0; i < qtds.length; i++) {
+        const q = parseFloat(qtds[i].value) || 0.0;
+        const u = parseFloat(units[i].value) || 0.0;
+        custoTotal += (q * u);
     }
 
-    // Feedback visual de carregamento
-    iconeBusca.className = 'spinner-border spinner-border-sm text-primary';
-    statusText.innerText = 'Consultando endereço...';
-    statusText.className = 'text-muted d-block mt-1';
+    const campoCustoTotal = document.getElementById(idCustoTotal);
+    if (campoCustoTotal) campoCustoTotal.value = custoTotal.toFixed(2);
 
-    fetch(`https://viacep.com.br/ws/${cep}/json/`)
-        .then(response => response.json())
-        .then(dados => {
-            iconeBusca.className = 'bi bi-search';
+    const campoMargem = document.getElementById(idMargem);
+    const margem = campoMargem ? (parseFloat(campoMargem.value) || 0.0) : 30.0;
 
-            if (dados.erro) {
-                statusText.innerText = 'CEP não encontrado.';
-                statusText.className = 'text-danger d-block mt-1';
-            } else {
-                document.getElementById('logradouro').value = dados.logradouro || '';
-                document.getElementById('bairro').value = dados.bairro || '';
-                document.getElementById('cidade').value = dados.localidade || '';
-                document.getElementById('estado').value = dados.uf || '';
-                
-                statusText.innerText = 'Endereço localizado com sucesso!';
-                statusText.className = 'text-success d-block mt-1';
-
-                // Coloca o foco no número para agilizar a digitação
-                document.getElementById('numero').focus();
-            }
-        })
-        .catch(() => {
-            iconeBusca.className = 'bi bi-search';
-            statusText.innerText = 'Erro ao consultar o serviço de CEP.';
-            statusText.className = 'text-danger d-block mt-1';
-        });
-}
-
-// Dispara busca ao pressionar Enter no campo do CEP ou ao sair dele (blur)
-document.getElementById('cep').addEventListener('blur', function() {
-    if (this.value.replace(/\D/g, '').length === 8) {
-        buscarCEP();
-    }
-});
-
-document.getElementById('cep').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        buscarCEP();
-    }
-});
-
-document.addEventListener('DOMContentLoaded', alternarTipoCliente);
-
-// Máscara dinâmica do CPF: 000.000.000-00
-function mascaraCPF(input) {
-    let v = input.value.replace(/\D/g, '');
-    v = v.replace(/(\d{3})(\d)/, '$1.$2');
-    v = v.replace(/(\d{3})(\d)/, '$1.$2');
-    v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-    input.value = v;
-}
-
-// Algoritmo Oficial de Validação dos Dígitos Verificadores do CPF
-function validarCPF(cpfLimpo) {
-    cpfLimpo = cpfLimpo.replace(/\D/g, '');
-    
-    // Rejeita se não tiver 11 dígitos ou se forem todos iguais (ex: 111.111.111-11)
-    if (cpfLimpo.length !== 11 || /^(\d)\1{10}$/.test(cpfLimpo)) {
-        return false;
-    }
-
-    // Validação do 1º Dígito Verificador
-    let soma = 0;
-    for (let i = 0; i < 9; i++) {
-        soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
-    }
-    let resto = 11 - (soma % 11);
-    let digito1 = (resto === 10 || resto === 11) ? 0 : resto;
-    if (digito1 !== parseInt(cpfLimpo.charAt(9))) return false;
-
-    // Validação do 2º Dígito Verificador
-    soma = 0;
-    for (let i = 0; i < 10; i++) {
-        soma += parseInt(cpfLimpo.charAt(i)) * (11 - i);
-    }
-    resto = 11 - (soma % 11);
-    let digito2 = (resto === 10 || resto === 11) ? 0 : resto;
-    if (digito2 !== parseInt(cpfLimpo.charAt(10))) return false;
-
-    return true;
-}
-
-// Feedback visual na tela ao sair do campo
-function validarCampoCPF(input) {
-    const statusText = document.getElementById('cpf-status');
-    const valor = input.value.trim();
-
-    if (!valor) {
-        statusText.innerText = '';
-        input.classList.remove('is-invalid', 'is-valid');
-        return true;
-    }
-
-    if (validarCPF(valor)) {
-        input.classList.remove('is-invalid');
-        input.classList.add('is-valid');
-        statusText.innerText = 'CPF válido';
-        statusText.className = 'text-success d-block mt-1';
-        return true;
-    } else {
-        input.classList.remove('is-valid');
-        input.classList.add('is-invalid');
-        statusText.innerText = 'CPF inválido. Verifique os números digitados.';
-        statusText.className = 'text-danger d-block mt-1';
-        return false;
+    if (margem < 100 && custoTotal > 0) {
+        const preco = custoTotal / (1 - (margem / 100.0));
+        const campoSugerido = document.getElementById(idValorSugerido);
+        if (campoSugerido) campoSugerido.value = preco.toFixed(2);
     }
 }
-
-// Trava o submit do formulário se o CPF estiver incorreto
-document.querySelector('form').addEventListener('submit', function(e) {
-    const isPf = document.getElementById('tipo_pf').checked;
-    if (isPf) {
-        const cpfInput = document.getElementById('campo_cpf');
-        if (cpfInput.value && !validarCampoCPF(cpfInput)) {
-            e.preventDefault();
-            cpfInput.focus();
-        }
-    }
-});
 </script>
 {% endblock %}
