@@ -140,12 +140,13 @@
                                                             <option value="cancelado" {% if emp.status_assinatura == 'cancelado' %}selected{% endif %}>Cancelado</option>
                                                         </select>
                                                     </div>
-                                                    <div class="col-md-6">
+                                                    <div class="col-md-6 mb-3">
                                                         <label class="form-label small fw-bold">Plano Contratado</label>
-                                                        <select name="plano" class="form-select form-select-sm">
-                                                            <option value="Founder" {% if emp.plano == 'Founder' %}selected{% endif %}>Founder (Beta)</option>
-                                                            <option value="Profissional" {% if emp.plano == 'Profissional' %}selected{% endif %}>Profissional</option>
-                                                            <option value="Empresarial" {% if emp.plano == 'Empresarial' %}selected{% endif %}>Empresarial</option>
+                                                        <select name="plano" class="form-select form-select-sm fw-bold">
+                                                            <option value="Mensal" {% if emp.plano == 'Mensal' %}selected{% endif %}>Mensal (R$ 39,90/mês)</option>
+                                                            <option value="Semestral" {% if emp.plano == 'Semestral' %}selected{% endif %}>Semestral (6x R$ 34,90 - R$ 209,40)</option>
+                                                            <option value="Anual" {% if emp.plano == 'Anual' %}selected{% endif %}>Anual (12x R$ 29,90 - R$ 358,80)</option>
+                                                            <option value="Trial" {% if emp.plano in ['Trial', 'Período de Testes (Trial)'] %}selected{% endif %}>Período de Testes (Trial)</option>
                                                         </select>
                                                     </div>
                                                 </div>

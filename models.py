@@ -213,6 +213,7 @@ class ServicoCliente(db.Model):
     detalhamento_execucao = db.Column(db.Text, nullable=True)
     orientacoes_cliente = db.Column(db.Text, nullable=True)
     arquivo_evidencia = db.Column(db.String(255), nullable=True)
+    evidencias = db.relationship('EvidenciaServico', backref='servico', lazy=True, cascade="all, delete-orphan")
 
     # Local de Execução / Atendimento Personalizado
     usar_endereco_personalizado = db.Column(db.Boolean, default=False)
@@ -264,7 +265,14 @@ class ServicoEtapaRastreio(db.Model):
 
     servico = db.relationship('ServicoCliente', backref=db.backref('etapas_rastreio', lazy=True, cascade="all, delete-orphan"))
 
-
+class EvidenciaServico(db.Model):
+    __tablename__ = 'evidencias_servico'
+    id = db.Column(db.Integer, primary_key=True)
+    servico_cliente_id = db.Column(db.Integer, db.ForeignKey('servicos_cliente.id'), nullable=False)
+    chave_bucket = db.Column(db.String(255), nullable=False)
+    nome_original = db.Column(db.String(150), nullable=True)
+    data_upload = db.Column(db.DateTime, default=datetime.utcnow)
+    
 class Proposta(db.Model):
     __tablename__ = 'propostas'
     id = db.Column(db.Integer, primary_key=True)

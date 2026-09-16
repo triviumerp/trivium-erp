@@ -5,54 +5,50 @@
 {% block content %}
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
     <div>
-        <h2 class="fw-bold text-dark mb-0">
-            <i class="bi bi-file-earmark-text-fill text-primary me-2"></i>Propostas Comerciais & Orçamentos
-        </h2>
-        <p class="text-muted mb-0">Emissão formal, controle de margens, aditivos e cartas-proposta em PDF</p>
+        <h2 class="fw-bold text-dark mb-0"><i class="bi bi-file-earmark-text text-primary me-2"></i>Propostas Comerciais</h2>
+        <p class="text-muted mb-0">Emissão de orçamentos, termos aditivos e exportação de cartas timbradas em PDF</p>
     </div>
-    <div class="d-flex gap-2">
-        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovaProposta">
-            <i class="bi bi-plus-circle me-1"></i>Nova Proposta
-        </button>
-    </div>
+    <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovaProposta">
+        <i class="bi bi-plus-circle me-1"></i>Nova Proposta
+    </button>
 </div>
 
-<!-- CARDS DE MÉTRICAS -->
+<!-- CARDS RESUMO -->
 <div class="row g-3 mb-4">
     <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-3 bg-warning bg-opacity-10 border-start border-warning border-4 rounded-4">
-            <span class="small text-muted fw-bold">AGUARDANDO APROVAÇÃO</span>
-            <h3 class="fw-bold text-dark my-1">R$ {{ "%.2f"|format(total_aguardando) }}</h3>
-            <small class="text-muted">{{ qtd_aguardando }} proposta(s) em negociação</small>
+        <div class="card border-0 shadow-sm p-3 bg-warning text-dark rounded-4">
+            <span class="small fw-bold text-dark-50">EM NEGOCIAÇÃO</span>
+            <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_aguardando) }}</h3>
+            <small>{{ qtd_aguardando }} proposta(s) aberta(s)</small>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-3 bg-success bg-opacity-10 border-start border-success border-4 rounded-4">
-            <span class="small text-muted fw-bold">PROPOSTAS APROVADAS</span>
-            <h3 class="fw-bold text-success my-1">R$ {{ "%.2f"|format(total_aprovadas) }}</h3>
-            <small class="text-muted">Convertidas em faturamento e agenda</small>
+        <div class="card border-0 shadow-sm p-3 bg-success text-white rounded-4">
+            <span class="small fw-bold text-white-50">APROVADAS</span>
+            <h3 class="fw-bold my-1">R$ {{ "%.2f"|format(total_aprovadas) }}</h3>
+            <small>Convertidas em faturamento</small>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-3 bg-primary bg-opacity-10 border-start border-primary border-4 rounded-4">
-            <span class="small text-muted fw-bold">TOTAL CADASTRADO</span>
-            <h3 class="fw-bold text-primary my-1">{{ propostas|length }}</h3>
-            <small class="text-muted">Propostas no histórico geral</small>
+        <div class="card border-0 shadow-sm p-3 bg-light rounded-4 border">
+            <span class="small fw-bold text-muted">TOTAL DE PROPOSTAS</span>
+            <h3 class="fw-bold my-1 text-dark">{{ propostas|length }}</h3>
+            <small class="text-muted">No filtro selecionado</small>
         </div>
     </div>
 </div>
 
-<!-- FILTROS DE VISUALIZAÇÃO -->
+<!-- FILTRO -->
 <div class="card border-0 shadow-sm mb-4 rounded-4">
     <div class="card-body py-2 d-flex justify-content-between align-items-center">
         <div class="btn-group">
-            <a href="{{ url_for('listar_propostas', filtro='ativas') }}" class="btn btn-sm {% if filtro_atual == 'ativas' %}btn-warning text-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
+            <a href="{{ url_for('listar_propostas', filtro='ativas') }}" class="btn btn-sm {% if filtro_atual == 'ativas' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}">
                 Aguardando Aprovação
             </a>
             <a href="{{ url_for('listar_propostas', filtro='aprovadas') }}" class="btn btn-sm {% if filtro_atual == 'aprovadas' %}btn-success fw-bold{% else %}btn-outline-secondary{% endif %}">
                 Aprovadas
             </a>
-            <a href="{{ url_for('listar_propostas', filtro='canceladas') }}" class="btn btn-sm {% if filtro_atual == 'canceladas' %}btn-secondary fw-bold{% else %}btn-outline-secondary{% endif %}">
+            <a href="{{ url_for('listar_propostas', filtro='canceladas') }}" class="btn btn-sm {% if filtro_atual == 'canceladas' %}btn-danger fw-bold{% else %}btn-outline-secondary{% endif %}">
                 Canceladas
             </a>
             <a href="{{ url_for('listar_propostas', filtro='todas') }}" class="btn btn-sm {% if filtro_atual == 'todas' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">
@@ -62,19 +58,19 @@
     </div>
 </div>
 
-<!-- TABELA DE PROPOSTAS -->
+<!-- TABELA DE PROPOSTAS COM COLUNA DE BOLETOS -->
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0 small">
                 <thead class="table-light text-muted">
                     <tr>
-                        <th>NÚMERO / TIPO</th>
+                        <th>NÚMERO</th>
                         <th>CLIENTE</th>
-                        <th>EMISSÃO</th>
-                        <th>SERVIÇOS / ITENS</th>
+                        <th>EMISSÃO / VALIDADE</th>
                         <th>VALOR TOTAL</th>
                         <th>STATUS</th>
+                        <th class="text-center">BOLETOS / TÍTULOS</th>
                         <th class="text-end pe-3">AÇÕES</th>
                     </tr>
                 </thead>
@@ -84,23 +80,23 @@
                         <td>
                             <strong class="text-dark d-block">{{ p.numero_proposta }}</strong>
                             {% if p.tipo_documento == 'aditivo' %}
-                                <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Termo Aditivo</span>
+                                <span class="badge bg-info text-dark">Aditivo #{{ p.numero_aditivo }}</span>
                             {% elif p.tipo_cobranca == 'recorrente' %}
-                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Recorrente Mensal</span>
+                                <span class="badge bg-primary">Mensalista</span>
                             {% else %}
-                                <span class="badge bg-light text-muted border">Pontual</span>
+                                <span class="badge bg-light text-muted border">Avulso</span>
                             {% endif %}
                         </td>
                         <td>
                             <strong class="text-dark d-block">{{ p.cliente.nome }}</strong>
-                            <span class="text-muted">{{ p.cliente.cnpj_cpf or '--' }}</span>
-                        </td>
-                        <td>{{ p.data_criacao.strftime('%d/%m/%Y') if p.data_criacao else '--' }}</td>
-                        <td>
-                            <span class="badge bg-light text-dark border">{{ p.itens|length }} serviço(s)</span>
+                            <span class="text-muted">{{ p.cliente.telefone }}</span>
                         </td>
                         <td>
-                            <strong class="text-success fs-6">R$ {{ "%.2f"|format(p.valor_total) }}</strong>
+                            <div>{{ p.data_criacao.strftime('%d/%m/%Y') if p.data_criacao else '--' }}</div>
+                            <small class="text-muted">Validade: {{ p.validade_dias }} dias</small>
+                        </td>
+                        <td class="fw-bold text-success fs-6">
+                            R$ {{ "%.2f"|format(p.valor_total) }}
                             {% if p.tipo_cobranca == 'recorrente' %}<small class="text-muted">/mês</small>{% endif %}
                         </td>
                         <td>
@@ -112,28 +108,67 @@
                                 <span class="badge bg-warning text-dark p-2">Aguardando</span>
                             {% endif %}
                         </td>
+
+                        <!-- BOTÕES DIRETOS PARA VER BOLETOS GERADOS PELA PROPOSTA -->
+                        <td class="text-center">
+                            {% set boletos_prop = [] %}
+                            {% if p.faturas %}
+                                {% for f in p.faturas %}
+                                    {% for parc in f.parcelas %}
+                                        {% if parc.arquivo_comprovante_boleto %}
+                                            {% set _ = boletos_prop.append(parc) %}
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endfor %}
+                            {% endif %}
+
+                            {% if boletos_prop %}
+                                <div class="btn-group btn-group-sm">
+                                    {% for b in boletos_prop %}
+                                        <a href="{{ url_for('download_file', filename=b.arquivo_comprovante_boleto) }}" target="_blank" class="btn btn-outline-primary py-0 px-2 fw-bold" title="{{ b.descricao_parcela }}">
+                                            <i class="bi bi-file-earmark-pdf me-1"></i>Boleto ({{ b.numero_parcela }}/{{ b.total_parcelas }})
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <span class="text-muted" style="font-size: 0.75rem;">--</span>
+                            {% endif %}
+                        </td>
+
                         <td class="text-end pe-3">
-                            <div class="d-inline-flex gap-1">
-                                <a href="{{ url_for('gerar_pdf_proposta', id=p.id) }}" target="_blank" class="btn btn-sm btn-outline-primary" title="Exportar PDF">
+                            <div class="d-flex gap-1 justify-content-end">
+                                <a href="{{ url_for('gerar_pdf_proposta', id=p.id) }}" target="_blank" class="btn btn-sm btn-outline-primary" title="Exportar PDF Timbrado">
                                     <i class="bi bi-file-earmark-pdf"></i>
                                 </a>
-                                {% if p.status != 'Aprovado' %}
-                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalEditarProposta{{ p.id }}" title="Editar Proposta">
-                                    <i class="bi bi-pencil-square"></i>
-                                </button>
+
+                                {% if p.status == 'Aguardando Aprovação' %}
+                                    <form action="{{ url_for('atualizar_status_proposta', id=p.id) }}" method="POST" class="d-inline">
+                                        <input type="hidden" name="novo_status" value="Aprovado">
+                                        <button type="submit" class="btn btn-sm btn-success fw-bold" onclick="return confirm('Deseja aprovar e faturar esta proposta?')">
+                                            <i class="bi bi-check2"></i> Aprovar
+                                        </button>
+                                    </form>
                                 {% endif %}
-                                <button type="button" class="btn btn-sm btn-dark" data-bs-toggle="modal" data-bs-target="#modalStatusProposta{{ p.id }}" title="Alterar Status">
-                                    <i class="bi bi-arrow-repeat"></i>
-                                </button>
+
+                                {% if p.status == 'Aprovado' %}
+                                    <form action="{{ url_for('gerar_aditivo_proposta', id=p.id) }}" method="POST" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-outline-dark" title="Gerar Termo Aditivo">
+                                            <i class="bi bi-node-plus"></i>
+                                        </button>
+                                    </form>
+                                {% endif %}
+
+                                {% if not p.faturas %}
+                                    <form action="{{ url_for('excluir_proposta', id=p.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Deseja excluir esta proposta?')">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="7" class="text-center py-5 text-muted">
-                            <i class="bi bi-file-earmark-x fs-2 d-block mb-2 text-secondary"></i>
-                            Nenhuma proposta comercial encontrada para este filtro.
-                        </td>
+                        <td colspan="7" class="text-center py-5 text-muted">Nenhuma proposta encontrada.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -142,353 +177,156 @@
     </div>
 </div>
 
-<!-- ==================================================================== -->
-<!-- MODAL: NOVA PROPOSTA COMERCIAL -->
-<!-- ==================================================================== -->
+<!-- MODAL NOVA PROPOSTA -->
 <div class="modal fade" id="modalNovaProposta" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content border-0 shadow rounded-4">
             <form action="{{ url_for('criar_proposta') }}" method="POST">
                 <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark">
-                        <i class="bi bi-file-earmark-plus text-primary me-2"></i>Nova Proposta Comercial
-                    </h5>
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-file-earmark-plus text-primary me-2"></i>Nova Proposta Comercial</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
                             <label class="form-label small fw-bold">Cliente *</label>
-                            <select name="cliente_id" class="form-select" required>
-                                <option value="">Selecione um cliente...</option>
-                                {% for cli in clientes %}
-                                <option value="{{ cli.id }}">{{ cli.nome }} ({{ cli.cnpj_cpf }})</option>
+                            <select name="cliente_id" class="form-select form-select-sm" required>
+                                <option value="">Selecione o Cliente...</option>
+                                {% for c in clientes %}
+                                <option value="{{ c.id }}">{{ c.nome }} ({{ c.cnpj_cpf }})</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small fw-bold">Validade da Proposta (Dias)</label>
-                            <input type="number" name="validade_dias" class="form-control" value="15" required>
+                            <label class="form-label small fw-bold">Modelo de Cobrança</label>
+                            <select name="tipo_cobranca" class="form-select form-select-sm" id="prop_tipo_cobranca" onchange="alternarModoCobranca()">
+                                <option value="pontual">Pontual (Com ou sem Sinal)</option>
+                                <option value="recorrente">Recorrente (Mensalista)</option>
+                            </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small fw-bold">Tipo de Cobrança</label>
-                            <select name="tipo_cobranca" class="form-select">
-                                <option value="pontual">Serviço Pontual (Avulso)</option>
-                                <option value="recorrente">Contrato Recorrente (Mensal)</option>
-                            </select>
+                            <label class="form-label small fw-bold">Validade da Proposta</label>
+                            <input type="number" name="validade_dias" class="form-control form-control-sm" value="15">
                         </div>
                     </div>
 
-                    <!-- 1. ESCOPO TÉCNICO & SERVIÇOS INCLUSOS -->
+                    <!-- SERVIÇOS DA PROPOSTA -->
                     <div class="p-3 bg-light rounded-3 border mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-journal-text me-1 text-primary"></i>1. Serviços & Escopo Técnico</h6>
-                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="adicionarLinhaItemProposta()">
+                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-list-check me-1 text-primary"></i>Itens e Serviços</h6>
+                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="adicionarItemProposta()">
                                 <i class="bi bi-plus-lg me-1"></i>Adicionar Serviço
                             </button>
                         </div>
-                        <div id="container-itens-proposta" class="d-flex flex-column gap-2">
-                            <div class="row g-2 align-items-center bg-white p-2 rounded border item-proposta-linha">
-                                <div class="col-md-4">
-                                    <select name="tipo_servico_id[]" class="form-select form-select-sm select-servico" onchange="atualizarDadosServico(this)" required>
-                                        <option value="">Selecione o serviço...</option>
-                                        {% for s in tipos_servico %}
-                                        <option value="{{ s.id }}" data-preco="{{ s.valor_sugerido }}" data-unidade="{{ s.unidade_medida }}" data-desc="{{ s.descricao_padrao or '' }}">{{ s.nome }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <input type="text" name="descricao[]" class="form-control form-control-sm campo-desc" placeholder="Detalhamento técnico / escopo">
-                                </div>
-                                <div class="col-md-1">
-                                    <input type="number" step="0.1" name="quantidade[]" class="form-control form-control-sm campo-qtd" value="1" placeholder="Qtd">
-                                </div>
-                                <div class="col-md-1">
-                                    <input type="text" name="unidade[]" class="form-control form-control-sm campo-und" value="un" placeholder="Und">
-                                </div>
-                                <div class="col-md-2">
-                                    <input type="number" step="0.01" name="valor_unitario[]" class="form-control form-control-sm fw-bold text-success campo-val" placeholder="Valor Unit." required>
-                                </div>
-                            </div>
-                        </div>
+                        <div id="container-itens-proposta" class="d-flex flex-column gap-2"></div>
                     </div>
 
-                    <!-- 2. CONDIÇÕES COMERCIAIS & FORMA DE PAGAMENTO -->
-                    <div class="p-3 bg-light rounded-3 border">
-                        <h6 class="fw-bold text-dark mb-2"><i class="bi bi-credit-card me-1 text-primary"></i>2. Condições Comerciais & Pagamento</h6>
-                        <div class="row g-3">
+                    <!-- CONDIÇÕES DE PAGAMENTO -->
+                    <div class="p-3 bg-light rounded-3 border mb-3" id="box-condicoes-pontual">
+                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-credit-card me-1 text-primary"></i>Condições de Pagamento & Parcelamento</h6>
+                        <div class="row g-3 align-items-center">
                             <div class="col-md-3">
                                 <div class="form-check form-switch mt-3">
-                                    <input class="form-check-input" type="checkbox" name="exige_entrada" id="checkEntradaNova">
-                                    <label class="form-check-label small fw-bold" for="checkEntradaNova">Exigir Sinal de Entrada</label>
+                                    <input class="form-check-input" type="checkbox" name="exige_entrada" id="exige_entrada" onchange="alternarEntrada()">
+                                    <label class="form-check-label fw-bold small" for="exige_entrada">Exigir Sinal de Entrada</label>
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-3" id="col_valor_entrada" style="display: none;">
                                 <label class="form-label small fw-bold">Valor do Sinal (R$)</label>
-                                <input type="number" step="0.01" name="valor_entrada" class="form-control form-control-sm" value="0.00">
+                                <input type="number" step="0.01" name="valor_entrada" class="form-control form-control-sm" placeholder="0.00">
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label small fw-bold">Forma de Entrada</label>
-                                <select name="forma_pagamento_entrada" class="form-select form-select-sm">
-                                    <option value="PIX">PIX</option>
-                                    <option value="Boleto Bancário">Boleto Bancário</option>
-                                    <option value="Transferência Bancária">Transferência</option>
+                                <label class="form-label small fw-bold">Parcelar Restante em</label>
+                                <select name="qtd_parcelas" class="form-select form-select-sm">
+                                    {% for i in range(1, 13) %}
+                                    <option value="{{ i }}">{{ i }}x título(s)</option>
+                                    {% endfor %}
                                 </select>
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label small fw-bold">Qtd. Parcelas Restantes</label>
-                                <input type="number" name="qtd_parcelas" class="form-control form-control-sm" value="1" min="1" max="12">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold">Forma das Parcelas</label>
-                                <select name="forma_pagamento_parcelas" class="form-select form-select-sm">
-                                    <option value="Boleto Bancário">Boleto Bancário</option>
-                                    <option value="PIX">PIX</option>
-                                    <option value="Cartão de Crédito">Cartão de Crédito</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold">Intervalo entre Parcelas (Dias)</label>
+                                <label class="form-label small fw-bold">Intervalo de Dias</label>
                                 <input type="number" name="intervalo_dias" class="form-control form-control-sm" value="30">
                             </div>
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold">Dia Vencimento (Recorrente)</label>
-                                <input type="number" name="dia_vencimento" class="form-control form-control-sm" value="10" min="1" max="31">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label small fw-bold">Termos Gerais de Pagamento</label>
-                                <input type="text" name="condicoes_pagamento" class="form-control form-control-sm" value="Faturamento conforme entrega técnica">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label small fw-bold">Observações Técnicas / Comerciais</label>
-                                <textarea name="observacoes" class="form-control form-control-sm" rows="2" placeholder="Observações exibidas no rodapé da proposta..."></textarea>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success fw-bold px-4">Gerar Proposta</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- ==================================================================== -->
-<!-- MODAIS DE EDIÇÃO DE PROPOSTA -->
-<!-- ==================================================================== -->
-{% for p in propostas %}
-{% if p.status != 'Aprovado' %}
-<div class="modal fade" id="modalEditarProposta{{ p.id }}" tabindex="-1">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content border-0 shadow rounded-4">
-            <form action="{{ url_for('editar_proposta', id=p.id) }}" method="POST">
-                <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark">
-                        <i class="bi bi-pencil-square text-primary me-2"></i>Editar Proposta: {{ p.numero_proposta }}
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold">Cliente *</label>
-                            <select name="cliente_id" class="form-select" required>
-                                {% for cli in clientes %}
-                                <option value="{{ cli.id }}" {% if cli.id == p.cliente_id %}selected{% endif %}>{{ cli.nome }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small fw-bold">Validade (Dias)</label>
-                            <input type="number" name="validade_dias" class="form-control" value="{{ p.validade_dias or 15 }}">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small fw-bold">Tipo de Cobrança</label>
-                            <select name="tipo_cobranca" class="form-select">
-                                <option value="pontual" {% if p.tipo_cobranca == 'pontual' %}selected{% endif %}>Serviço Pontual</option>
-                                <option value="recorrente" {% if p.tipo_cobranca == 'recorrente' %}selected{% endif %}>Contrato Recorrente</option>
-                            </select>
                         </div>
                     </div>
 
-                    <!-- 1. SERVIÇOS & ESCOPO -->
-                    <div class="p-3 bg-light rounded-3 border mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-journal-text me-1 text-primary"></i>1. Serviços & Escopo Técnico</h6>
-                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="adicionarLinhaItemEdicao('{{ p.id }}')">
-                                <i class="bi bi-plus-lg me-1"></i>Adicionar Linha
-                            </button>
-                        </div>
-                        <div id="container-itens-edicao-{{ p.id }}" class="d-flex flex-column gap-2">
-                            {% for item in p.itens %}
-                            <div class="row g-2 align-items-center bg-white p-2 rounded border item-linha-edicao">
-                                <div class="col-md-4">
-                                    <select name="tipo_servico_id[]" class="form-select form-select-sm" required>
-                                        {% for s in tipos_servico %}
-                                        <option value="{{ s.id }}" {% if s.id == item.tipo_servico_id %}selected{% endif %}>{{ s.nome }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <input type="text" name="descricao[]" class="form-control form-control-sm" value="{{ item.descricao_personalizada or '' }}" placeholder="Detalhamento técnico">
-                                </div>
-                                <div class="col-md-1">
-                                    <input type="number" step="0.1" name="quantidade[]" class="form-control form-control-sm" value="{{ item.quantidade }}">
-                                </div>
-                                <div class="col-md-1">
-                                    <input type="text" name="unidade[]" class="form-control form-control-sm" value="{{ item.unidade }}">
-                                </div>
-                                <div class="col-md-2">
-                                    <input type="number" step="0.01" name="valor_unitario[]" class="form-control form-control-sm fw-bold text-success" value="{{ item.valor_unitario }}" required>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-
-                    <!-- 2. CONDIÇÕES COMERCIAIS -->
-                    <div class="p-3 bg-light rounded-3 border">
-                        <h6 class="fw-bold text-dark mb-2"><i class="bi bi-credit-card me-1 text-primary"></i>2. Condições Comerciais & Pagamento</h6>
-                        <div class="row g-3">
-                            <div class="col-md-3">
-                                <div class="form-check form-switch mt-3">
-                                    <input class="form-check-input" type="checkbox" name="exige_entrada" id="entradaEdit{{ p.id }}" {% if p.exige_entrada %}checked{% endif %}>
-                                    <label class="form-check-label small fw-bold" for="entradaEdit{{ p.id }}">Exigir Sinal de Entrada</label>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold">Valor do Sinal (R$)</label>
-                                <input type="number" step="0.01" name="valor_entrada" class="form-control form-control-sm" value="{{ p.valor_entrada or 0.0 }}">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold">Forma de Entrada</label>
-                                <select name="forma_pagamento_entrada" class="form-select form-select-sm">
-                                    <option value="PIX" {% if p.forma_pagamento_entrada == 'PIX' %}selected{% endif %}>PIX</option>
-                                    <option value="Boleto Bancário" {% if p.forma_pagamento_entrada == 'Boleto Bancário' %}selected{% endif %}>Boleto Bancário</option>
-                                    <option value="Transferência Bancária" {% if p.forma_pagamento_entrada == 'Transferência Bancária' %}selected{% endif %}>Transferência</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold">Qtd. Parcelas Restantes</label>
-                                <input type="number" name="qtd_parcelas" class="form-control form-control-sm" value="{{ p.qtd_parcelas or 1 }}" min="1" max="12">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold">Forma das Parcelas</label>
-                                <select name="forma_pagamento_parcelas" class="form-select form-select-sm">
-                                    <option value="Boleto Bancário" {% if p.forma_pagamento_parcelas == 'Boleto Bancário' %}selected{% endif %}>Boleto Bancário</option>
-                                    <option value="PIX" {% if p.forma_pagamento_parcelas == 'PIX' %}selected{% endif %}>PIX</option>
-                                    <option value="Cartão de Crédito" {% if p.forma_pagamento_parcelas == 'Cartão de Crédito' %}selected{% endif %}>Cartão de Crédito</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold">Intervalo (Dias)</label>
-                                <input type="number" name="intervalo_dias" class="form-control form-control-sm" value="{{ p.intervalo_dias or 30 }}">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold">Dia Vencimento (Recorrente)</label>
-                                <input type="number" name="dia_vencimento" class="form-control form-control-sm" value="{{ p.dia_vencimento or 10 }}">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label small fw-bold">Termos Gerais de Pagamento</label>
-                                <input type="text" name="condicoes_pagamento" class="form-control form-control-sm" value="{{ p.condicoes_pagamento or '' }}">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label small fw-bold">Observações Gerais</label>
-                                <textarea name="observacoes" class="form-control form-control-sm" rows="2">{{ p.observacoes or '' }}</textarea>
-                            </div>
-                        </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Observações Gerais</label>
+                        <textarea name="observacoes" class="form-control form-control-sm" rows="2" placeholder="Informações adicionais que constarão na proposta impressa..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">Salvar Alterações</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">Gerar Proposta</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-{% endif %}
-{% endfor %}
-
-<!-- ==================================================================== -->
-<!-- MODAIS DE STATUS / APROVAÇÃO -->
-<!-- ==================================================================== -->
-{% for p in propostas %}
-<div class="modal fade" id="modalStatusProposta{{ p.id }}" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow rounded-4">
-            <form action="{{ url_for('atualizar_status_proposta', id=p.id) }}" method="POST">
-                <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-arrow-repeat text-primary me-2"></i>Status da Proposta</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <p class="small text-muted mb-3">Proposta: <b>{{ p.numero_proposta }}</b> - {{ p.cliente.nome }}</p>
-                    <label class="form-label small fw-bold">Novo Status</label>
-                    <select name="novo_status" class="form-select">
-                        <option value="Aguardando Aprovação" {% if p.status == 'Aguardando Aprovação' %}selected{% endif %}>Aguardando Aprovação</option>
-                        <option value="Aprovado" {% if p.status == 'Aprovado' %}selected{% endif %} class="text-success fw-bold">✔ Aprovado (Gerar Fatura & Agenda)</option>
-                        <option value="Cancelado" {% if p.status == 'Cancelado' %}selected{% endif %} class="text-danger">✖ Cancelado</option>
-                    </select>
-                </div>
-                <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
-                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Atualizar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-{% endfor %}
 
 <script>
-function atualizarDadosServico(selectEl) {
-    const selectedOption = selectEl.options[selectEl.selectedIndex];
-    const linha = selectEl.closest('.item-proposta-linha');
-    if (!linha || !selectedOption.value) return;
+const catalogoServicos = [
+    {% for s in tipos_servico %}
+    { id: {{ s.id }}, nome: "{{ s.nome }}", valor: {{ s.valor_sugerido or 0.0 }}, und: "{{ s.unidade_medida or 'un' }}" },
+    {% endfor %}
+];
 
-    const preco = selectedOption.getAttribute('data-preco') || '0.00';
-    const unidade = selectedOption.getAttribute('data-unidade') || 'un';
-    const desc = selectedOption.getAttribute('data-desc') || '';
-
-    const campoVal = linha.querySelector('.campo-val');
-    const campoUnd = linha.querySelector('.campo-und');
-    const campoDesc = linha.querySelector('.campo-desc');
-
-    if (campoVal) campoVal.value = parseFloat(preco).toFixed(2);
-    if (campoUnd) campoUnd.value = unidade;
-    if (campoDesc && !campoDesc.value) campoDesc.value = desc;
-}
-
-function adicionarLinhaItemProposta() {
+function adicionarItemProposta() {
     const container = document.getElementById('container-itens-proposta');
-    const primeiraLinha = container.querySelector('.item-proposta-linha');
-    if (!primeiraLinha) return;
-
-    const novaLinha = primeiraLinha.cloneNode(true);
-    novaLinha.querySelectorAll('input').forEach(input => {
-        if (input.classList.contains('campo-qtd')) input.value = '1';
-        else if (input.classList.contains('campo-und')) input.value = 'un';
-        else input.value = '';
+    const div = document.createElement('div');
+    div.className = 'row g-2 align-items-center bg-white p-2 rounded border';
+    
+    let options = '<option value="">Selecione o serviço do catálogo...</option>';
+    catalogoServicos.forEach(s => {
+        options += `<option value="${s.id}" data-valor="${s.valor}" data-und="${s.und}">${s.nome} (R$ ${s.valor.toFixed(2)})</option>`;
     });
-    novaLinha.querySelector('select').selectedIndex = 0;
-    container.appendChild(novaLinha);
+
+    div.innerHTML = `
+        <div class="col-md-4">
+            <select name="tipo_servico_id[]" class="form-select form-select-sm select-servico" required onchange="aoSelecionarServico(this)">
+                ${options}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <input type="text" name="descricao[]" class="form-control form-control-sm" placeholder="Detalhamento do escopo">
+        </div>
+        <div class="col-md-1">
+            <input type="number" step="0.1" name="quantidade[]" class="form-control form-control-sm" value="1" placeholder="Qtd">
+        </div>
+        <div class="col-md-1">
+            <input type="text" name="unidade[]" class="form-control form-control-sm input-und" value="un" placeholder="Und">
+        </div>
+        <div class="col-md-1">
+            <input type="number" step="0.01" name="valor_unitario[]" class="form-control form-control-sm input-val" placeholder="0.00" required>
+        </div>
+        <div class="col-md-1 text-end">
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.row').remove()"><i class="bi bi-trash"></i></button>
+        </div>
+    `;
+    container.appendChild(div);
 }
 
-function adicionarLinhaItemEdicao(propostaId) {
-    const container = document.getElementById(`container-itens-edicao-${propostaId}`);
-    const primeiraLinha = container.querySelector('.item-linha-edicao');
-    if (!primeiraLinha) return;
-
-    const novaLinha = primeiraLinha.cloneNode(true);
-    novaLinha.querySelectorAll('input').forEach(input => {
-        if (input.name === 'quantidade[]') input.value = '1';
-        else if (input.name === 'unidade[]') input.value = 'un';
-        else input.value = '';
-    });
-    container.appendChild(novaLinha);
+function aoSelecionarServico(selectEl) {
+    const opt = selectEl.selectedOptions[0];
+    const row = selectEl.closest('.row');
+    if (opt) {
+        row.querySelector('.input-val').value = opt.getAttribute('data-valor') || '';
+        row.querySelector('.input-und').value = opt.getAttribute('data-und') || 'un';
+    }
 }
+
+function alternarEntrada() {
+    const check = document.getElementById('exige_entrada').checked;
+    document.getElementById('col_valor_entrada').style.display = check ? 'block' : 'none';
+}
+
+function alternarModoCobranca() {
+    const tipo = document.getElementById('prop_tipo_cobranca').value;
+    document.getElementById('box-condicoes-pontual').style.display = (tipo === 'pontual') ? 'block' : 'none';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    adicionarItemProposta();
+});
 </script>
 {% endblock %}

@@ -7,21 +7,21 @@ load_dotenv()
 
 PLANOS_CONFIG = {
     'MENSAL': {
-        'nome': 'Plano Flex Mensal',
+        'nome': 'Mensal',
         'valor_total': 39.90,
         'valor_exibicao': 39.90,
         'parcelas': 1,
         'dias_validade': 30
     },
     'SEMESTRAL': {
-        'nome': 'Plano Pro Semestral',
+        'nome': 'Semestral',
         'valor_total': 209.40,
         'valor_exibicao': 34.90,
         'parcelas': 6,
         'dias_validade': 180
     },
     'ANUAL': {
-        'nome': 'Plano Anual Founder',
+        'nome': 'Anual',
         'valor_total': 358.80,
         'valor_exibicao': 29.90,
         'parcelas': 12,

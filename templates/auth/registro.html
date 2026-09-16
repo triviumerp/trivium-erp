@@ -3,340 +3,409 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cadastro - Trivium ERP</title>
+    <title>Criar Conta - Trivium ERP</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap 5 CSS & Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem 0; }
-        .reg-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 580px; padding: 2.5rem; }
-        .btn-brand { background-color: #059669; color: #fff; font-weight: 700; border-radius: 10px; padding: 12px; border: none; }
-        .btn-brand:hover { background-color: #047857; color: #fff; }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+        }
+        .card-registro {
+            max-width: 540px;
+            width: 100%;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05);
+            padding: 2.5rem;
+        }
+        .brand-logo-text {
+            font-size: 1.6rem;
+            font-weight: 800;
+            letter-spacing: -0.8px;
+            color: #1e3a8a;
+            text-decoration: none;
+        }
+        .brand-logo-text span {
+            color: #2563eb;
+        }
+        .termos-scroll-box {
+            max-height: 520px;
+            overflow-y: auto;
+            padding-right: 14px;
+            font-size: 0.88rem;
+            line-height: 1.75;
+            color: #334155;
+        }
+        .termos-scroll-box::-webkit-scrollbar {
+            width: 6px;
+        }
+        .termos-scroll-box::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        .termos-scroll-box::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .termos-scroll-box::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
     </style>
 </head>
 <body>
-    <div class="reg-card">
+
+    <div class="card-registro">
         <div class="text-center mb-4">
-            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Trivium ERP" style="height: 48px; width: auto; object-fit: contain;" class="mb-2" onerror="this.style.display='none'">
-            <h3 class="fw-bold text-primary mb-1">Trivium <span class="text-dark">ERP</span></h3>
-            <p class="text-muted small">Crie sua conta e comece a gerenciar suas propostas</p>
+            <a href="{{ url_for('auth.login') }}" class="brand-logo-text">Trivium <span>ERP</span></a>
+            <p class="text-muted small mt-1">Crie sua conta e comece o seu período de testes</p>
         </div>
 
+        <!-- Mensagens Flash -->
         {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} small py-2">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show small mb-3" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        {% endif %}
         {% endwith %}
 
         <form method="POST" id="formRegistro">
-            <!-- Input Oculto de Cupom / Indicação -->
-            <input type="hidden" name="cupom_indicacao" value="{{ cupom_ref or request.args.get('ref', '') }}">
-            <!-- SELETOR PJ / PF -->
-            <div class="mb-3">
-                <label class="form-label small fw-bold text-muted d-block">Tipo de Perfil</label>
-                <div class="btn-group w-100" role="group">
-                    <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pj" value="PJ" autocomplete="off" checked onchange="alternarTipoCadastro()">
-                    <label class="btn btn-outline-primary fw-bold py-2" for="tipo_pj"><i class="bi bi-building me-1"></i> Empresa (CNPJ)</label>
+            {% if cupom_ref %}
+            <div class="alert alert-success small py-2 mb-3">
+                <i class="bi bi-tag-fill me-1"></i> Cupom promocional aplicado: <strong>{{ cupom_ref }}</strong>
+                <input type="hidden" name="cupom_indicacao" value="{{ cupom_ref }}">
+            </div>
+            {% endif %}
 
-                    <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pf" value="PF" autocomplete="off" onchange="alternarTipoCadastro()">
-                    <label class="btn btn-outline-primary fw-bold py-2" for="tipo_pf"><i class="bi bi-person me-1"></i> Autônomo (CPF)</label>
+            {% if afiliado_id %}
+            <input type="hidden" name="afiliado_id" value="{{ afiliado_id }}">
+            {% endif %}
+
+            <!-- TIPO DE PESSOA -->
+            <div class="mb-3 p-2 bg-light rounded-3 border d-flex gap-4 small">
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="tipo_pessoa" id="tipoPJ" value="PJ" checked onchange="alternarTipoPessoaReg('PJ')">
+                    <label class="form-check-label fw-bold" for="tipoPJ">Pessoa Jurídica (CNPJ)</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="tipo_pessoa" id="tipoPF" value="PF" onchange="alternarTipoPessoaReg('PF')">
+                    <label class="form-check-label fw-bold" for="tipoPF">Autônomo (CPF)</label>
                 </div>
             </div>
 
-            <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-briefcase me-1"></i> Dados Cadastrais</h6>
             <div class="row g-2 mb-3">
                 <div class="col-md-7">
-                    <label class="form-label small fw-bold" id="label-razao">Razão Social / Nome da Empresa *</label>
-                    <input type="text" name="razao_social" id="campo_razao" class="form-control" required>
+                    <label class="form-label small fw-bold" id="labelNomeReg">Razão Social / Nome da Empresa *</label>
+                    <input type="text" name="razao_social" id="inputRazaoSocial" class="form-control form-control-sm" required placeholder="Nome ou Razão Social">
                 </div>
-                
-                <!-- Campo CNPJ (PJ) -->
-                <div class="col-md-5 campo-pj">
-                    <label class="form-label small fw-bold">CNPJ</label>
-                    <input type="text" name="cnpj" class="form-control" placeholder="00.000.000/0000-00">
-                </div>
-
-                <!-- Campo CPF com Validação (PF) -->
-                <div class="col-md-5 campo-pf d-none">
-                    <label class="form-label small fw-bold">CPF *</label>
-                    <input type="text" name="cpf" id="campo_cpf" class="form-control" placeholder="000.000.000-00" maxlength="14" oninput="mascaraCPF(this)" onblur="validarCampoCPF(this)">
-                    <small id="cpf-status" class="d-block mt-1" style="font-size: 0.75rem;"></small>
-                </div>
-
-                <div class="col-12">
-                    <label class="form-label small fw-bold">Telefone / WhatsApp Comercial *</label>
-                    <input type="text" name="telefone" id="campo_telefone" class="form-control" placeholder="(00) 00000-0000" required>
+                <div class="col-md-5" id="colDocReg">
+                    <label class="form-label small fw-bold" id="labelDocReg">CNPJ *</label>
+                    <input type="text" name="cnpj" id="inputDocReg" class="form-control form-control-sm font-monospace" required placeholder="00.000.000/0000-00">
                 </div>
             </div>
 
-            <h6 class="fw-bold text-secondary mb-3 mt-4"><i class="bi bi-person-badge me-1"></i> Usuário Administrador</h6>
-            <div class="row g-2 mb-4">
-                <div class="col-md-6">
+            <div class="row g-2 mb-3">
+                <div class="col-md-7">
                     <label class="form-label small fw-bold">Seu Nome Completo *</label>
-                    <input type="text" name="nome_usuario" id="campo_nome_usuario" class="form-control" required>
+                    <input type="text" name="nome_usuario" class="form-control form-control-sm" required placeholder="Nome do administrador">
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">E-mail de Acesso *</label>
-                    <input type="email" name="email" id="campo_email" class="form-control" placeholder="seu@email.com" required>
+                <div class="col-md-5">
+                    <label class="form-label small fw-bold">Telefone / WhatsApp *</label>
+                    <input type="text" name="telefone" class="form-control form-control-sm" required placeholder="(11) 99999-9999">
                 </div>
+            </div>
 
-                <!-- Senha -->
+            <!-- E-MAIL E CONFIRMAÇÃO DE E-MAIL -->
+            <div class="mb-3">
+                <label class="form-label small fw-bold">E-mail de Acesso *</label>
+                <input type="email" name="email" id="email" class="form-control form-control-sm" required placeholder="seu@email.com">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold">Confirme seu E-mail *</label>
+                <input type="email" name="confirma_email" id="confirma_email" class="form-control form-control-sm" required placeholder="Digite o e-mail novamente">
+                <div id="erroEmail" class="invalid-feedback">Os e-mails digitados não conferem.</div>
+            </div>
+
+            <!-- SENHAS -->
+            <div class="row g-2 mb-3">
                 <div class="col-md-6">
                     <label class="form-label small fw-bold">Senha de Acesso *</label>
-                    <input type="password" name="senha" id="campo_senha" class="form-control" placeholder="Crie uma senha forte" required minlength="8">
+                    <input type="password" name="senha" class="form-control form-control-sm" required placeholder="Mínimo 8 caracteres">
                 </div>
-
-                <!-- Confirmação de Senha -->
                 <div class="col-md-6">
-                    <label class="form-label small fw-bold">Confirme sua Senha *</label>
-                    <input type="password" name="confirma_senha" id="campo_confirma_senha" class="form-control" placeholder="Repita a senha" required minlength="8">
-                </div>
-
-                <div class="col-12">
-                    <!-- Feedback visual de senha e correspondência -->
-                    <small id="senha-ajuda" class="text-muted d-block mt-1" style="font-size: 0.75rem;">
-                        <i class="bi bi-shield-lock text-primary me-1"></i>
-                        Mínimo de 8 caracteres contendo maiúsculas, minúsculas, números e caracteres especiais (ex: <code>@</code>, <code>#</code>, <code>$</code>, <code>!</code>).
-                    </small>
-                    <small id="confirma-senha-status" class="d-block mt-1" style="font-size: 0.75rem;"></small>
+                    <label class="form-label small fw-bold">Confirme a Senha *</label>
+                    <input type="password" name="confirma_senha" class="form-control form-control-sm" required placeholder="Repita a senha">
                 </div>
             </div>
 
-            <!-- Botão que valida o formulário e abre o modal -->
-            <button type="button" class="btn btn-brand w-100 mb-3" onclick="verificarFormularioEAbrirModal()">
-                Concluir Cadastro e Ativar
+            <!-- ACEITE DOS TERMOS COM POP-UP MODAL -->
+            <div class="form-check mb-3 small">
+                <input class="form-check-input" type="checkbox" id="checkTermos" required>
+                <label class="form-check-label text-muted" for="checkTermos">
+                    Li e concordo com os <a href="#" data-bs-toggle="modal" data-bs-target="#modalTermosJuridicos" class="text-primary fw-bold text-decoration-underline">Termos de Uso, Política de Reembolso e LGPD</a>.
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary fw-bold w-100 py-2 shadow-sm mb-3">
+                <i class="bi bi-rocket-takeoff me-1"></i> Criar Minha Conta Grátis
             </button>
+
+            <div class="text-center small">
+                <span class="text-muted">Já tem uma conta?</span> <a href="{{ url_for('auth.login') }}" class="fw-bold text-decoration-none">Faça login</a>
+            </div>
         </form>
-
-        <div class="text-center">
-            <small class="text-muted">Já possui cadastro? <a href="{{ url_for('auth.login') }}" class="fw-bold text-decoration-none">Fazer Login</a></small>
-        </div>
     </div>
 
-    <!-- MODAL DE TERMOS E ISENÇÃO BETA -->
-    <div class="modal fade" id="modalTermosBeta" tabindex="-1" aria-labelledby="modalTermosBetaLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-          <div class="modal-header bg-warning bg-opacity-25 border-bottom border-warning">
-            <h5 class="modal-title fw-bold text-dark" id="modalTermosBetaLabel">
-              <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Aviso: Ambiente de Teste Beta
-            </h5>
-          </div>
-          <div class="modal-body p-4 text-start" style="font-size: 0.92rem; line-height: 1.5;">
-            <p class="mb-3">Seja bem-vindo(a) à versão experimental do <strong>Trivium ERP</strong>.</p>
-            <p class="mb-3">Antes de finalizar sua adesão, leia atentamente as condições deste ambiente de testes:</p>
-            
-            <ul class="list-unstyled mb-3">
-              <li class="mb-2 d-flex align-items-start gap-2">
-                <i class="bi bi-arrow-right-circle-fill text-primary mt-1"></i>
-                <span><strong>Ambiente Temporário:</strong> O sistema está em fase contínua de melhorias e validações. Recursos e cadastros podem sofrer instabilidades ou exclusões sem aviso prévio.</span>
-              </li>
-              <li class="mb-2 d-flex align-items-start gap-2">
-                <i class="bi bi-arrow-right-circle-fill text-primary mt-1"></i>
-                <span><strong>Responsabilidade sobre Dados:</strong> Você é o único responsável pelos dados comerciais e de clientes que inserir no sistema.</span>
-              </li>
-              <li class="mb-2 d-flex align-items-start gap-2">
-                <i class="bi bi-arrow-right-circle-fill text-primary mt-1"></i>
-                <span><strong>Isenção de Responsabilidade:</strong> Não nos responsabilizamos por perdas de registros ou indisponibilidade temporária durante a fase experimental.</span>
-              </li>
-            </ul>
+    <!-- ================================================================= -->
+    <!-- MODAL (POP-UP) COM TODO O TEXTO JURÍDICO INTEGRAL -->
+    <!-- ================================================================= -->
+    <div class="modal fade" id="modalTermosJuridicos" tabindex="-1" aria-labelledby="modalTermosLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-header bg-light border-bottom py-3">
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" id="modalTermosLabel">
+                            <i class="bi bi-shield-check text-primary me-2"></i>Termos de Uso, Licenciamento, Reembolso & LGPD
+                        </h5>
+                        <small class="text-muted">Trivium ERP • Plataforma de Gestão em Nuvem</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                
+                <div class="modal-body p-4 p-md-5">
+                    <div class="termos-scroll-box">
 
-            <div class="form-check p-3 bg-light rounded border">
-              <input class="form-check-input" type="checkbox" id="checkConcordoTermos" style="cursor: pointer;">
-              <label class="form-check-label fw-bold text-dark" for="checkConcordoTermos" style="cursor: pointer;">
-                Li, estou ciente e concordo com os termos do período Beta.
-              </label>
+                        <!-- ================================================================= -->
+                        <!-- TERMOS DE USO E LICENCIAMENTO DE SOFTWARE -->
+                        <!-- ================================================================= -->
+                        <h3 class="fw-bold text-dark mb-1">Termos de Uso e Licenciamento de Software</h3>
+                        <p class="text-muted small mb-4">Última atualização: Setembro de 2026</p>
+
+                        <p>Este Instrumento Particular de Termos de Uso ("Termo") constitui um contrato vinculante entre a plataforma <strong>TRIVIUM ERP</strong> ("Licenciante" ou "Plataforma") e a pessoa física ou jurídica devidamente qualificada no ato do cadastro ("Licenciada", "Contratante" ou "Usuário").</p>
+
+                        <h5 class="fw-bold text-dark mt-4">1. Objeto e Concessão da Licença</h5>
+                        <p>1.1. O presente instrumento tem por objeto a concessão de licença de uso temporária, pessoal, onerosa, intransferível e não exclusiva do software como serviço (SaaS) denominado <strong>Trivium ERP</strong>, destinado à gestão operacional, emissão de propostas, controle de ordens de serviço e gestão financeira empresarial.</p>
+                        <p>1.2. O presente Termo não transfere à Licenciada qualquer direito de propriedade intelectual sobre o software, banco de dados, layout, algoritmos, marcas ou códigos-fonte, que permanecem sob propriedade exclusiva da Licenciante.</p>
+
+                        <h5 class="fw-bold text-dark mt-4">2. Do Cadastro e Período de Avaliação Gratuita (Trial)</h5>
+                        <p>2.1. O acesso poderá ser precedido por um período de avaliação gratuita de 14 (quatorze) dias ("Trial"), sem exigência prévia de dados de cartão de crédito.</p>
+                        <p>2.2. A Licenciada é a única responsável pela veracidade, exatidão e atualização dos dados cadastrais fornecidos (como CNPJ, CPF, razão social e e-mails). O uso de dados de terceiros ou informações fraudulentas ensejará o cancelamento imediato da conta, sem prejuízo das sanções civis e criminais cabíveis.</p>
+                        <p>2.3. As credenciais de login e senha são de uso pessoal e intransferível. A Licenciada responde integralmente por todos os atos praticados sob suas credenciais.</p>
+
+                        <h5 class="fw-bold text-dark mt-4">3. Planos, Cobrança e Formas de Pagamento</h5>
+                        <p>3.1. Encerrado o período de Trial, a continuidade do serviço dependerá da adesão a um dos planos comerciais vigentes (Mensal, Semestral ou Anual).</p>
+                        <p>3.2. As cobranças serão processadas via intermediadores de pagamento integrados (Mercado Pago / Asaas), por meio de Cartão de Crédito, PIX ou Boleto Bancário.</p>
+                        <p>3.3. No plano <strong>Mensal</strong>, a cobrança opera sob regime de recorrência automática. Nos planos <strong>Semestrais ou Anuais</strong> com parcelamento no cartão de crédito, o valor total do período compromete o limite do cartão e é faturado nas faturas mensais da operadora.</p>
+                        <p>3.4. O atraso no pagamento de qualquer título superior a 5 (cinco) dias corridos facultará à Licenciante o bloqueio preventivo de acesso ao sistema até a respectiva regularização, sem prejuízo da incidência de juros moratórios de 1% ao mês e multa compensatória de 2% sobre o montante em aberto.</p>
+
+                        <h5 class="fw-bold text-dark mt-4 text-danger">4. Política de Arrependimento e Reembolso</h5>
+                        <p>4.1. Em observância ao Artigo 49 do Código de Defesa do Consumidor (Lei Federal nº 8.078/1990), a Licenciada poderá exercer o direito de arrependimento e solicitar o cancelamento com estorno integral no prazo improrrogável de até <strong>7 (sete) dias corridos</strong> contados da data da primeira contratação on-line.</p>
+                        <p>4.2. <strong>Da Inexistência de Reembolso Proporcional (Pró-rata):</strong> Transcorrido o prazo legal de 7 (sete) dias, ou após o decurso voluntário do período de testes (Trial), <strong>não haverá qualquer devolução ou reembolso, integral ou proporcional, de quantias já pagas</strong> referentes aos ciclos vigentes (mensais, semestrais ou anuais), tendo em vista a alocação imediata de servidores, armazenamento em nuvem e licenças de infraestrutura tecnológica dedicadas à conta da Licenciada.</p>
+                        <p>4.3. Em caso de cancelamento de planos anuais ou semestrais pagos à vista ou parcelados, a Licenciada manterá o direito de uso até o término do período contratado, cessando a cobrança após o término do ciclo, sem direito a estorno do saldo residual.</p>
+
+                        <h5 class="fw-bold text-dark mt-4">5. Reajuste Anual de Preços</h5>
+                        <p>5.1. Os valores contratados para as assinaturas poderão ser reajustados a cada período de 12 (doze) meses, tendo como referência a variação positiva acumulada do <strong>IPCA (Índice Nacional de Preços ao Consumidor Amplo)</strong>, medido pelo IBGE, ou, na sua ausência, pelo IGP-M ou índice legalmente admitido.</p>
+                        <p>5.2. Quaisquer reajustes que excedam a recomposição inflacionária ordinária serão precedidos de notificação formal por e-mail com antecedência mínima de 30 (trinta) dias, facultando à Licenciada rescindir o contrato antes da vigência dos novos valores.</p>
+
+                        <h5 class="fw-bold text-dark mt-4">6. Nível de Serviço (SLA) e Disponibilidade</h5>
+                        <p>6.1. A Licenciante empenhará seus melhores esforços técnicos para manter a Plataforma com índice de disponibilidade de 99% (noventa e nove por cento) ao mês.</p>
+                        <p>6.2. Não computam para o índice de indisponibilidade as interrupções decorrentes de: (a) falhas na infraestrutura de internet do usuário; (b) manutenções programadas comunicadas previamente; (c) falhas em serviços de nuvem de terceiros (hospedagem, S3/Supabase, gateways de pagamento); e (d) eventos de força maior ou caso fortuito.</p>
+
+                        <h5 class="fw-bold text-dark mt-4">7. Limitação de Responsabilidade</h5>
+                        <p>7.1. A Plataforma constitui ferramenta de apoio à gestão corporativa. A Licenciante não fiscaliza, valida ou audita o conteúdo técnico de ordens de serviço, vistorias, laudos periciais com ART, cálculos tributários ou descrições fiscais inseridas pelos usuários.</p>
+                        <p>7.2. Sob nenhuma hipótese a Licenciante responderá por danos indiretos, lucros cessantes, perdas financeiras comerciais, autuações fiscais, perda de contratos ou danos morais decorrentes do uso ou da impossibilidade de uso do software.</p>
+
+                        <h5 class="fw-bold text-dark mt-4">8. Rescisão e Guarda dos Dados</h5>
+                        <p>8.1. A Licenciada poderá solicitar a rescisão do contrato a qualquer momento através do painel de controle ou por chamado de suporte.</p>
+                        <p>8.2. Em caso de encerramento da assinatura ou inadimplência superior a 60 (sessenta) dias, a Licenciante reserva-se o direito de excluir permanentemente os bancos de dados e documentos anexados da conta, sendo de exclusiva responsabilidade da Licenciada a exportação de seus relatórios e arquivos antes do término da vigência.</p>
+
+                        <h5 class="fw-bold text-dark mt-4">9. Foro</h5>
+                        <p>9.1. Para dirimir quaisquer litígios oriundos do presente Termo de Uso, as partes elegem o Foro da Comarca de Suzano, Estado de São Paulo, com renúncia expressa a qualquer outro, por mais privilegiado que seja.</p>
+
+                        <hr class="my-5">
+
+                        <!-- ================================================================= -->
+                        <!-- POLÍTICA DE PRIVACIDADE E LGPD -->
+                        <!-- ================================================================= -->
+                        <h3 class="fw-bold text-dark mb-1">Política de Privacidade e Proteção de Dados (LGPD)</h3>
+                        <p class="text-muted small mb-4">Em conformidade com a Lei Geral de Proteção de Dados Pessoais (Lei Federal nº 13.709/2018)</p>
+
+                        <h5 class="fw-bold text-dark mt-4">1. Definições e Papéis na LGPD</h5>
+                        <p>Para fins da legislação aplicável de proteção de dados:</p>
+                        <ul>
+                            <li><strong>Controlador:</strong> A Licenciada (Empresa Contratante) é a única Controladora dos dados pessoais de seus clientes finais, colaboradores e fornecedores inseridos no ERP.</li>
+                            <li><strong>Operador:</strong> O Trivium ERP atua estritamente na condição de Operador técnico, tratando os dados exclusivamente sob as instruções da Licenciada e nos limites da execução do software.</li>
+                            <li><strong>Titular:</strong> Pessoas físicas a quem os dados se referem.</li>
+                        </ul>
+
+                        <h5 class="fw-bold text-dark mt-4">2. Dados Coletados pela Plataforma</h5>
+                        <p>2.1. <strong>Dados Cadastrais do Contratante:</strong> Nome completo, razão social, CNPJ, CPF, endereço comercial, telefone, e-mail e credenciais de login com senhas criptografadas via hash unidirecional (PBKDF2/SHA-256).</p>
+                        <p>2.2. <strong>Dados Operacionais Inseridos no Sistema:</strong> Nomes, documentos, endereços de atendimento, dados de faturamento e arquivos técnicos anexados pela Licenciada no exercício de suas atividades.</p>
+                        <p>2.3. <strong>Dados de Conexão:</strong> Endereço IP, tipo de navegador, registros de auditoria interna (*logs* de requisições) e data/hora de acesso para cumprimento do Marco Civil da Internet (Lei nº 12.965/2014).</p>
+
+                        <h5 class="fw-bold text-dark mt-4">3. Finalidade do Tratamento de Dados</h5>
+                        <p>O tratamento de dados restringe-se às seguintes bases legais:</p>
+                        <ul>
+                            <li>Execução de contrato ou de procedimentos preliminares (Art. 7º, V da LGPD);</li>
+                            <li>Cumprimento de obrigação legal ou regulatória (emissão de documentos fiscais e guarda de registros por 6 meses conforme o Marco Civil da Internet);</li>
+                            <li>Legítimo interesse do Controlador para gestão de seus clientes e agenda técnica.</li>
+                        </ul>
+
+                        <h5 class="fw-bold text-dark mt-4">4. Compartilhamento de Dados com Terceiros</h5>
+                        <p>O Trivium ERP não comercializa, aluga ou cede dados a terceiros para fins publicitários. O compartilhamento ocorre exclusivamente com subcontratados essenciais para a operação da infraestrutura:</p>
+                        <ul>
+                            <li><strong>Infraestrutura de Nuvem e Banco de Dados:</strong> Render Cloud Services (servidor e PostgreSQL);</li>
+                            <li><strong>Armazenamento de Arquivos em Nuvem:</strong> Supabase Inc. (S3 Storage com URLs temporárias pré-assinadas);</li>
+                            <li><strong>Gateways de Pagamento:</strong> Mercado Pago e Asaas Gestão Financeira (para liquidação de cobranças);</li>
+                            <li><strong>Serviço Transacional de E-mail:</strong> Resend Inc. (envio de alertas e links de redefinição de senha).</li>
+                        </ul>
+
+                        <h5 class="fw-bold text-dark mt-4">5. Medidas de Segurança da Informação</h5>
+                        <p>A Plataforma emprega salvaguardas técnicas adequadas para proteger os dados pessoais contra acesso não autorizado, destruição acidental ou alteração indevida, tais como:</p>
+                        <ul>
+                            <li>Comunicação 100% criptografada via protocolo HTTPS / TLS 1.3;</li>
+                            <li>Isolamento de banco de dados e segregação lógica multi-tenant pelo identificador da empresa (<code>empresa_id</code>);</li>
+                            <li>Armazenamento de arquivos com URLs pré-assinadas com tempo de expiração de 15 minutos;</li>
+                            <li>Senhas armazenadas obrigatoriamente sob hash criptográfico seguro.</li>
+                        </ul>
+
+                        <h5 class="fw-bold text-dark mt-4">6. Direitos do Titular dos Dados</h5>
+                        <p>O Titular tem direito de solicitar o acesso, retificação, anonimização, portabilidade ou eliminação de seus dados. Caso o titular seja um cliente final da Licenciada, a solicitação deve ser dirigida primeiramente à Licenciada (Controladora), a quem incumbe instruir a exclusão no sistema.</p>
+
+                        <hr class="my-5">
+
+                        <!-- ================================================================= -->
+                        <!-- POLÍTICA DE COOKIES -->
+                        <!-- ================================================================= -->
+                        <h3 class="fw-bold text-dark mb-1">Política de Cookies e Tecnologias de Sessão</h3>
+
+                        <p>A Plataforma utiliza cookies exclusivamente técnicos e estritamente necessários para permitir a autenticação contínua e a segurança da navegação corporativa.</p>
+
+                        <div class="table-responsive my-3">
+                            <table class="table table-bordered small">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Cookie</th>
+                                        <th>Tipo</th>
+                                        <th>Finalidade</th>
+                                        <th>Validade</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>session</code></td>
+                                        <td>Essencial / HTTPOnly</td>
+                                        <td>Armazena o identificador criptografado da sessão do usuário no Flask-Login.</td>
+                                        <td>Sessão / 8 horas</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>remember_token</code></td>
+                                        <td>Essencial / Seguro</td>
+                                        <td>Permite ao usuário permanecer conectado ao fechar e reabrir o navegador.</td>
+                                        <td>30 dias</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>trivium_cookie_aceite</code></td>
+                                        <td>Preferência (LocalStorage)</td>
+                                        <td>Registra que o usuário tomou ciência e aceitou as políticas do site.</td>
+                                        <td>Permanente</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p class="small text-muted">A desativação dos cookies essenciais nas configurações do navegador impedirá o login e a navegação no sistema.</p>
+
+                        <div class="alert alert-light border mt-4 p-3 rounded-3 text-center small text-muted">
+                            Dúvidas ou solicitações relacionadas a estes termos podem ser enviadas ao Encarregado de Dados (DPO) através da Central de Suporte da Plataforma.
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light border-top py-2 d-flex justify-content-between">
+                    <span class="small text-muted">Role para leitura e clique para aceitar.</span>
+                    <button type="button" class="btn btn-primary fw-bold px-4" onclick="aceitarTermosModal()">
+                        <i class="bi bi-check2-circle me-1"></i> Li e Concordo com os Termos
+                    </button>
+                </div>
             </div>
-          </div>
-          <div class="modal-footer bg-light border-top">
-            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Revisar Cadastro</button>
-            <button type="button" class="btn btn-success fw-bold px-4" id="btnConfirmarCadastroBeta" disabled onclick="submeterFormulario()">
-              Concordar e Finalizar
-            </button>
-          </div>
         </div>
-      </div>
     </div>
 
-    <!-- Bootstrap 5 JS -->
+    <!-- Bootstrap 5 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-    function alternarTipoCadastro() {
-        const isPj = document.getElementById('tipo_pj').checked;
-        const camposPJ = document.querySelectorAll('.campo-pj');
-        const camposPF = document.querySelectorAll('.campo-pf');
-        const labelRazao = document.getElementById('label-razao');
+    function alternarTipoPessoaReg(tipo) {
+        const inputDoc = document.getElementById('inputDocReg');
+        const labelDoc = document.getElementById('labelDocReg');
+        const labelNome = document.getElementById('labelNomeReg');
 
-        if (isPj) {
-            camposPJ.forEach(el => el.classList.remove('d-none'));
-            camposPF.forEach(el => el.classList.add('d-none'));
-            labelRazao.innerText = 'Razão Social / Nome da Empresa *';
-            document.getElementById('campo_cpf').required = false;
+        if (tipo === 'PF') {
+            labelNome.innerText = 'Seu Nome / Nome Profissional *';
+            labelDoc.innerText = 'CPF *';
+            inputDoc.name = 'cpf';
+            inputDoc.placeholder = '000.000.000-00';
         } else {
-            camposPJ.forEach(el => el.classList.add('d-none'));
-            camposPF.forEach(el => el.classList.remove('d-none'));
-            labelRazao.innerText = 'Nome Comercial / Fantasia *';
-            document.getElementById('campo_cpf').required = true;
+            labelNome.innerText = 'Razão Social / Nome da Empresa *';
+            labelDoc.innerText = 'CNPJ *';
+            inputDoc.name = 'cnpj';
+            inputDoc.placeholder = '00.000.000/0000-00';
         }
     }
 
-    function mascaraCPF(input) {
-        let v = input.value.replace(/\D/g, '');
-        v = v.replace(/(\d{3})(\d)/, '$1.$2');
-        v = v.replace(/(\d{3})(\d)/, '$1.$2');
-        v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-        input.value = v;
-    }
-
-    function validarCPF(cpfLimpo) {
-        cpfLimpo = cpfLimpo.replace(/\D/g, '');
-        if (cpfLimpo.length !== 11 || /^(\d)\1{10}$/.test(cpfLimpo)) return false;
-
-        let soma = 0;
-        for (let i = 0; i < 9; i++) soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
-        let resto = 11 - (soma % 11);
-        let digito1 = (resto === 10 || resto === 11) ? 0 : resto;
-        if (digito1 !== parseInt(cpfLimpo.charAt(9))) return false;
-
-        soma = 0;
-        for (let i = 0; i < 10; i++) soma += parseInt(cpfLimpo.charAt(i)) * (11 - i);
-        resto = 11 - (soma % 11);
-        let digito2 = (resto === 10 || resto === 11) ? 0 : resto;
-        return digito2 === parseInt(cpfLimpo.charAt(10));
-    }
-
-    function validarCampoCPF(input) {
-        const statusText = document.getElementById('cpf-status');
-        const valor = input.value.trim();
-
-        if (!valor) {
-            statusText.innerText = '';
-            input.classList.remove('is-invalid', 'is-valid');
-            return false;
-        }
-
-        if (validarCPF(valor)) {
-            input.classList.remove('is-invalid');
-            input.classList.add('is-valid');
-            statusText.innerText = 'CPF válido';
-            statusText.className = 'text-success d-block mt-1';
-            return true;
-        } else {
-            input.classList.remove('is-valid');
-            input.classList.add('is-invalid');
-            statusText.innerText = 'CPF inválido. Verifique os dígitos.';
-            statusText.className = 'text-danger d-block mt-1';
-            return false;
+    // Função que marca o checkbox no formulário e fecha o modal
+    function aceitarTermosModal() {
+        const check = document.getElementById('checkTermos');
+        if (check) check.checked = true;
+        
+        const modalEl = document.getElementById('modalTermosJuridicos');
+        const modalInstance = bootstrap.Modal.getInstance(modalEl);
+        if (modalInstance) {
+            modalInstance.hide();
         }
     }
 
-    // Validação da Senha e Confirmação em Tempo Real
-    const inputSenha = document.getElementById('campo_senha');
-    const inputConfirmaSenha = document.getElementById('campo_confirma_senha');
-    const ajudaSenha = document.getElementById('senha-ajuda');
-    const statusConfirma = document.getElementById('confirma-senha-status');
-
-    function validarSenhaRequisitos(senha) {
-        const temTamanho = senha.length >= 8;
-        const temMaiuscula = /[A-Z]/.test(senha);
-        const temMinuscula = /[a-z]/.test(senha);
-        const temNumero = /[0-9]/.test(senha);
-        const temEspecial = /[!@#$%^&*(),.?":{}|<>_\-\\\/\[\]~+=\`]/.test(senha);
-        return temTamanho && temMaiuscula && temMinuscula && temNumero && temEspecial;
-    }
-
-    function checarCorrespondenciaSenhas() {
-        if (!inputConfirmaSenha.value) {
-            inputConfirmaSenha.classList.remove('is-valid', 'is-invalid');
-            statusConfirma.innerText = '';
-            return false;
-        }
-        if (inputSenha.value === inputConfirmaSenha.value) {
-            inputConfirmaSenha.classList.remove('is-invalid');
-            inputConfirmaSenha.classList.add('is-valid');
-            statusConfirma.className = 'text-success d-block mt-1';
-            statusConfirma.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> As senhas conferem.';
-            return true;
-        } else {
-            inputConfirmaSenha.classList.remove('is-valid');
-            inputConfirmaSenha.classList.add('is-invalid');
-            statusConfirma.className = 'text-danger d-block mt-1';
-            statusConfirma.innerHTML = '<i class="bi bi-x-circle me-1"></i> As senhas não conferem.';
-            return false;
-        }
-    }
-
-    inputSenha.addEventListener('input', function(e) {
-        const val = e.target.value;
-        if (!val) {
-            inputSenha.classList.remove('is-valid', 'is-invalid');
-            ajudaSenha.className = 'text-muted d-block mt-1';
-            return;
-        }
-
-        if (validarSenhaRequisitos(val)) {
-            inputSenha.classList.remove('is-invalid');
-            inputSenha.classList.add('is-valid');
-            ajudaSenha.className = 'text-success d-block mt-1';
-            ajudaSenha.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Senha forte e válida!';
-        } else {
-            inputSenha.classList.remove('is-valid');
-            inputSenha.classList.add('is-invalid');
-            ajudaSenha.className = 'text-danger d-block mt-1';
-            ajudaSenha.innerHTML = '<i class="bi bi-x-circle me-1"></i> A senha deve ter 8+ dígitos com maiúsculas, minúsculas, números e símbolos especiais.';
-        }
-
-        if (inputConfirmaSenha.value) {
-            checarCorrespondenciaSenhas();
-        }
-    });
-
-    inputConfirmaSenha.addEventListener('input', checarCorrespondenciaSenhas);
-
-    // Validação completa antes de abrir o modal de termos
-    function verificarFormularioEAbrirModal() {
+    // Validação preventiva do e-mail no envio do formulário
+    document.addEventListener('DOMContentLoaded', () => {
+        const emailInput = document.getElementById('email');
+        const confirmaInput = document.getElementById('confirma_email');
         const form = document.getElementById('formRegistro');
-        const isPf = document.getElementById('tipo_pf').checked;
 
-        if (isPf) {
-            const cpfInput = document.getElementById('campo_cpf');
-            if (!validarCampoCPF(cpfInput)) {
-                cpfInput.focus();
-                return;
-            }
+        if (form && emailInput && confirmaInput) {
+            form.addEventListener('submit', (e) => {
+                if (emailInput.value.trim().toLowerCase() !== confirmaInput.value.trim().toLowerCase()) {
+                    e.preventDefault();
+                    confirmaInput.classList.add('is-invalid');
+                    alert('Os campos de e-mail não conferem. Por favor, revise a digitação.');
+                    confirmaInput.focus();
+                } else {
+                    confirmaInput.classList.remove('is-invalid');
+                }
+            });
         }
-
-        if (!validarSenhaRequisitos(inputSenha.value)) {
-            inputSenha.focus();
-            inputSenha.classList.add('is-invalid');
-            ajudaSenha.className = 'text-danger d-block mt-1';
-            return;
-        }
-
-        if (!checarCorrespondenciaSenhas()) {
-            inputConfirmaSenha.focus();
-            return;
-        }
-
-        if (!form.checkValidity()) {
-            form.reportValidity();
-            return;
-        }
-
-        const modal = new bootstrap.Modal(document.getElementById('modalTermosBeta'));
-        modal.show();
-    }
-
-    document.getElementById('checkConcordoTermos').addEventListener('change', function() {
-        document.getElementById('btnConfirmarCadastroBeta').disabled = !this.checked;
     });
-
-    function submeterFormulario() {
-        document.getElementById('formRegistro').submit();
-    }
     </script>
 </body>
 </html>

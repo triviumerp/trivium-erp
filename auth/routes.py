@@ -47,14 +47,11 @@ def validar_senha_forte(senha):
 # -----------------------------------------------------------------------------
 # ROTAS DE AUTENTICAÇÃO
 # -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# ROTAS DE AUTENTICAÇÃO
-# -----------------------------------------------------------------------------
+
 @auth_bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit("10 per minute")
 def login():
     if current_user.is_authenticated:
-        # Se já estiver logado, manda para a tela correta conforme o nível
         if current_user.nivel_acesso == 'afiliado':
             return redirect(url_for('painel_afiliado'))
         elif current_user.nivel_acesso == 'master':
@@ -88,7 +85,6 @@ def login():
             if proxima_pagina:
                 return redirect(proxima_pagina)
 
-            # Redirecionamento inteligente por papel/perfil:
             if usuario.nivel_acesso == 'afiliado':
                 return redirect(url_for('painel_afiliado'))
             elif usuario.nivel_acesso == 'master':
@@ -105,7 +101,6 @@ def registro():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
 
-    # Captura tanto ?ref=CUPOM quanto ?afiliado=ID
     cupom_url = (request.args.get('ref') or '').strip().upper()
     afiliado_id_url = request.args.get('afiliado', type=int)
 
@@ -118,18 +113,24 @@ def registro():
         telefone = re.sub(r'\D', '', request.form.get('telefone', ''))
         nome_usuario = (request.form.get('nome_usuario') or '').strip()
         email = (request.form.get('email') or '').strip().lower()
+        confirma_email = (request.form.get('confirma_email') or '').strip().lower()
         senha = request.form.get('senha', '')
         confirma_senha = request.form.get('confirma_senha', '')
         
         cupom_indicacao = (request.form.get('cupom_indicacao') or cupom_url).strip().upper()
         afiliado_form_id = request.form.get('afiliado_id', type=int) or afiliado_id_url
 
-        # 1. Validação de CPF
+        # Validação de E-mail duplicado/confirmação
+        if email != confirma_email:
+            flash('O e-mail e a confirmação de e-mail não conferem.', 'warning')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
+
+        # Validação de CPF
         if tipo_pessoa == 'PF' and not is_cpf_valido(doc_identificacao):
             flash('O CPF informado é inválido. Por favor, revise os dígitos.', 'danger')
             return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
 
-        # 2. Identificação e Validação Antifraude do Parceiro
+        # Identificação e Validação Antifraude do Parceiro
         cupom_obj = None
         parceiro_obj = None
 
@@ -144,14 +145,13 @@ def registro():
         if not parceiro_obj and afiliado_form_id:
             parceiro_obj = Usuario.query.filter_by(id=afiliado_form_id, nivel_acesso='afiliado').first()
 
-        # Blindagem Antifraude: impede autoindicação
         if parceiro_obj:
             doc_afiliado = re.sub(r'\D', '', parceiro_obj.cpf_cnpj or '')
             if parceiro_obj.email.lower() == email or (doc_identificacao and doc_identificacao == doc_afiliado):
                 flash('Não é permitido utilizar seu próprio vínculo ou cupom de afiliado.', 'danger')
                 return render_template('auth/registro.html', cupom_ref='', afiliado_id=None)
 
-        # 3. Validação de Senha Forte
+        # Validação de Senha Forte
         senha_valida, msg_erro = validar_senha_forte(senha)
         if not senha_valida:
             flash(msg_erro, 'warning')
@@ -170,7 +170,6 @@ def registro():
             return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
 
         try:
-            # Captura parâmetros da campanha ou define os padrões
             comissao_pct = cupom_obj.percentual_comissao if cupom_obj else 20.0
             meses_limite = getattr(cupom_obj, 'meses_comissao_limite', 3) if cupom_obj else 3
 
@@ -188,7 +187,6 @@ def registro():
                 afiliado_id=cupom_obj.id if cupom_obj else None
             )
             
-            # Atribui dinamicamente as colunas extras de campanha
             if hasattr(nova_empresa, 'percentual_comissao_parceiro'):
                 nova_empresa.percentual_comissao_parceiro = comissao_pct
             if hasattr(nova_empresa, 'meses_comissao_limite'):
@@ -275,11 +273,16 @@ def registro_afiliado():
     if request.method == 'POST':
         nome = (request.form.get('nome') or '').strip()
         email = (request.form.get('email') or '').strip().lower()
+        confirma_email = (request.form.get('confirma_email') or '').strip().lower()
         cpf_cnpj = (request.form.get('cpf_cnpj') or '').strip()
         rede_social = (request.form.get('rede_social_principal') or '').strip()
         tipo_parceiro = request.form.get('tipo_parceiro', 'Outros')
         senha = request.form.get('senha', '')
         confirma_senha = request.form.get('confirma_senha', '')
+
+        if email != confirma_email:
+            flash('O e-mail e a confirmação de e-mail não conferem.', 'warning')
+            return render_template('auth/registro_afiliado.html')
 
         senha_valida, msg_erro = validar_senha_forte(senha)
         if not senha_valida:
@@ -294,7 +297,6 @@ def registro_afiliado():
             flash('Este e-mail já está cadastrado. Faça login na sua conta.', 'warning')
             return render_template('auth/registro_afiliado.html')
 
-        # 1. Cria a Conta de Usuário do Parceiro
         novo_user = Usuario(
             empresa_id=None,
             nome=nome,
@@ -311,7 +313,6 @@ def registro_afiliado():
         db.session.add(novo_user)
         db.session.flush()
 
-        # 2. Gera o Primeiro Cupom Vinculado ao ID do Parceiro
         codigo_sugerido = re.sub(r'[^A-Z0-9]', '', nome.split()[0].upper()) + "10"
         
         novo_cupom = CupomDesconto(
@@ -320,7 +321,7 @@ def registro_afiliado():
             percentual_desconto=10.0,
             percentual_comissao=20.0,
             limite_usos=100,
-            ativo=False  # Fica inativo até o Master aprovar o parceiro
+            ativo=False
         )
         db.session.add(novo_cupom)
         db.session.commit()
@@ -342,8 +343,6 @@ def logout():
     
     flash('Você saiu da sua conta com segurança.', 'info')
     resposta = make_response(redirect(url_for('auth.login')))
-    
-    # Limpa o cookie principal de sessão e o token de "lembrar-me" do Flask-Login
     resposta.set_cookie('session', '', expires=0, max_age=0, path='/')
     resposta.set_cookie('remember_token', '', expires=0, max_age=0, path='/')
     

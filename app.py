@@ -36,15 +36,21 @@ from models import (
     ServicoCliente, Proposta, ItemProposta, ContratoRecorrente, 
     Fatura, ParcelaFatura, ChamadoSuporte, MensagemChamado, CupomDesconto, 
     ServicoCustoPadrao, ItemPropostaCusto, ContratoGerado, ServicoEtapaRastreio, 
-    ComissaoAfiliado, RepasseAfiliado
+    ComissaoAfiliado, RepasseAfiliado, EvidenciaServico
 )
 from auth.routes import auth_bp
 
-# Serviços Externos (Mercado Pago)
+# Serviços Externos (Mercado Pago e Armazenamento Supabase S3)
 import mercadopago
 from services.mercadopago_service import (
     criar_cobranca_mercadopago, 
     PLANOS_CONFIG
+)
+from services.storage_service import (
+    salvar_arquivo_supabase,
+    excluir_arquivo_supabase,
+    gerar_url_temporaria,
+    obter_arquivo_bytes
 )
 
 # -----------------------------------------------------------------------------
@@ -140,6 +146,28 @@ def master_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def _obter_logo_reportlab(logo_filename, width=1.5*inch, height=0.6*inch):
+    """Auxiliar unificado para obter imagem para o ReportLab sem travar o PDF."""
+    if not logo_filename:
+        return None
+    try:
+        # Se estiver no Supabase
+        if logo_filename.startswith('emp_') or '/' in logo_filename:
+            stream = obter_arquivo_bytes(logo_filename)
+            if stream:
+                img = RLImage(stream, width=width, height=height)
+                img.hAlign = 'LEFT'
+                return img
+        # Suporte para caminho local
+        caminho_local = os.path.join(app.config['UPLOAD_FOLDER'], logo_filename)
+        if os.path.exists(caminho_local):
+            img = RLImage(caminho_local, width=width, height=height)
+            img.hAlign = 'LEFT'
+            return img
+    except Exception as e:
+        print(f"[AVISO REPORTLAB LOGO]: {e}")
+    return None
+
 # -----------------------------------------------------------------------------
 # 2. ROTAS DO PAINEL MASTER
 # -----------------------------------------------------------------------------
@@ -207,16 +235,21 @@ def admin_atender_chamado(id):
 
         filename = None
         if arquivo and arquivo.filename:
-            filename = f'suporte_{chamado.id}_{int(time.time())}_{secure_filename(arquivo.filename)}'
-            upload_folder = app.config.get('UPLOAD_FOLDER', 'static/uploads')
-            os.makedirs(upload_folder, exist_ok=True)
-            arquivo.save(os.path.join(upload_folder, filename))
+            try:
+                filename = salvar_arquivo_supabase(
+                    file_storage=arquivo,
+                    pasta_destino='suporte',
+                    empresa_id=chamado.empresa_id
+                )
+            except ValueError as err:
+                flash(str(err), 'danger')
+                return redirect(url_for('admin_atender_chamado', id=chamado.id))
 
-        if conteudo:
+        if conteudo or filename:
             msg_suporte = MensagemChamado(
                 chamado_id=chamado.id,
                 usuario_id=current_user.id,
-                conteudo=conteudo,
+                conteudo=conteudo or "Anexo enviado pelo suporte.",
                 is_suporte=True,
                 anexo_filename=filename,
             )
@@ -300,12 +333,24 @@ def admin_sair_impersonacao():
 def admin_atualizar_gestao_empresa(id):
     empresa = Empresa.query.get_or_404(id)
     
+    plano_escolhido = request.form.get('plano', empresa.plano)
+    empresa.plano = plano_escolhido
     empresa.status_assinatura = request.form.get('status_assinatura', empresa.status_assinatura)
-    empresa.plano = request.form.get('plano', empresa.plano)
-    empresa.forma_pagamento_asaas = request.form.get('forma_pagamento_asaas')
-    empresa.asaas_customer_id = request.form.get('asaas_customer_id')
-    empresa.valor_mensalidade = float(request.form.get('valor_mensalidade') or 0.0)
+    empresa.forma_pagamento_mp = request.form.get('forma_pagamento_mp', getattr(empresa, 'forma_pagamento_mp', None))
     empresa.observacoes_master = request.form.get('observacoes_master')
+
+    # Preenche valor correspondente caso não seja digitado manualmente
+    valor_form = request.form.get('valor_mensalidade')
+    if valor_form and valor_form.strip():
+        empresa.valor_mensalidade = float(valor_form)
+    else:
+        valores_padrao = {
+            'Mensal': 39.90,
+            'Semestral': 34.90,
+            'Anual': 29.90,
+            'Trial': 0.0
+        }
+        empresa.valor_mensalidade = valores_padrao.get(plano_escolhido, empresa.valor_mensalidade)
 
     dt_venc = request.form.get('data_vencimento')
     if dt_venc:
@@ -650,19 +695,24 @@ def upload_documento(id):
     file = request.files['arquivo']
     tipo = request.form.get('tipo_documento')
 
-    if file.filename == '':
+    if not file or file.filename == '':
         flash('Nenhum arquivo selecionado!', 'danger')
         return redirect(url_for('detalhe_cliente', id=id))
 
-    if file:
-        nome_limpo = secure_filename(file.filename)
-        nome_salvo = f"doc_{cliente.id}_{int(datetime.now().timestamp())}_{nome_limpo}"
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_salvo))
-
-        doc = Documento(cliente_id=cliente.id, nome_arquivo=nome_salvo, tipo_documento=tipo)
+    try:
+        chave_salva = salvar_arquivo_supabase(
+            file_storage=file,
+            pasta_destino='docs_clientes',
+            empresa_id=current_user.empresa_id
+        )
+        doc = Documento(cliente_id=cliente.id, nome_arquivo=chave_salva, tipo_documento=tipo)
         db.session.add(doc)
         db.session.commit()
-        flash('Documento anexado com sucesso!', 'success')
+        flash('Documento anexado com sucesso no Supabase!', 'success')
+    except ValueError as err:
+        flash(str(err), 'danger')
+    except Exception as e:
+        flash(f'Erro ao enviar o documento: {str(e)}', 'danger')
 
     return redirect(url_for('detalhe_cliente', id=id))
 
@@ -672,9 +722,8 @@ def deletar_documento(doc_id):
     doc = Documento.query.join(Cliente).filter(Documento.id == doc_id, Cliente.empresa_id == current_user.empresa_id).first_or_404()
     cliente_id = doc.cliente_id
 
-    caminho = os.path.join(app.config['UPLOAD_FOLDER'], doc.nome_arquivo)
-    if os.path.exists(caminho):
-        os.remove(caminho)
+    if doc.nome_arquivo:
+        excluir_arquivo_supabase(doc.nome_arquivo)
 
     db.session.delete(doc)
     db.session.commit()
@@ -684,7 +733,16 @@ def deletar_documento(doc_id):
 @app.route('/uploads/<path:filename>')
 @login_required
 def download_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    """Redireciona diretamente para o link assinado temporário do Supabase Storage."""
+    prefixo_permitido = f"emp_{current_user.empresa_id}/"
+    if not filename.startswith(prefixo_permitido) and getattr(current_user, 'nivel_acesso', '') != 'master':
+        abort(403)
+
+    url_temporaria = gerar_url_temporaria(filename, tempo_segundos=900)
+    if not url_temporaria:
+        abort(404)
+
+    return redirect(url_temporaria)
 
 # -----------------------------------------------------------------------------
 # 5. ROTAS DE PROPOSTAS COMERCIAIS
@@ -1047,8 +1105,6 @@ def editar_proposta(id):
 
     return redirect(url_for('listar_propostas'))
 
-
-
 @app.route('/proposta/excluir/<int:id>', methods=['POST'])
 @login_required
 def excluir_proposta(id):
@@ -1125,15 +1181,7 @@ def gerar_pdf_proposta(id):
     estilo_escopo = ParagraphStyle('PDF_Escopo', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=11, textColor=colors.HexColor("#64748b"))
     estilo_total = ParagraphStyle('PDF_TotalNum', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=13, textColor=colors.HexColor("#16a34a"), alignment=2)
 
-    logo_elemento = None
-    if empresa.logo_filename:
-        caminho_logo = os.path.join(app.config['UPLOAD_FOLDER'], empresa.logo_filename)
-        if os.path.exists(caminho_logo):
-            try:
-                logo_elemento = RLImage(caminho_logo, width=1.5*inch, height=0.6*inch)
-                logo_elemento.hAlign = 'LEFT'
-            except Exception:
-                logo_elemento = None
+    logo_elemento = _obter_logo_reportlab(empresa.logo_filename, width=1.5*inch, height=0.6*inch)
 
     razao_empresa = _limpar_texto(empresa.razao_social or 'EMPRESA PRESTADORA')
     fantasia_empresa = _limpar_texto(empresa.nome_fantasia or '')
@@ -1175,7 +1223,6 @@ def gerar_pdf_proposta(id):
         f"{cliente.logradouro or ''}, {cliente.numero or 'S/N'} {cliente.complemento or ''} - {cliente.bairro or ''}, {cliente.cidade or ''}/{cliente.estado or ''}".strip(" ,-/")
     ) or "Endereço não informado"
 
-    # Item 7: "RESPONSÁVEL PELA PROPOSTA" no lugar de "RESPONSÁVEL TÉCNICO"
     dados_painel = [
         [
             Paragraph(f"<b>PROPOSTA COMERCIAL:</b> {num_prop}", estilo_corpo_bold),
@@ -1205,7 +1252,6 @@ def gerar_pdf_proposta(id):
     elementos.append(tab_painel)
     elementos.append(Spacer(1, 10))
 
-    # Item 9: 1. ESCOPO TÉCNICO E SERVIÇOS INCLUSOS PRIMEIRO
     elementos.append(Paragraph("1. ESCOPO TÉCNICO & SERVIÇOS INCLUSOS", estilo_secao))
     elementos.append(Spacer(1, 4))
 
@@ -1252,7 +1298,6 @@ def gerar_pdf_proposta(id):
     elementos.append(tab_servicos)
     elementos.append(Spacer(1, 10))
 
-    # Item 9: 2. CONDIÇÕES COMERCIAIS E FORMA DE PAGAMENTO SEGUNDO
     elementos.append(Paragraph("2. CONDIÇÕES COMERCIAIS & FORMA DE PAGAMENTO", estilo_secao))
     elementos.append(Spacer(1, 4))
 
@@ -1338,7 +1383,6 @@ def consultar_servicos():
 
     query_base = ServicoCliente.query.filter_by(empresa_id=current_user.empresa_id)
 
-    # Item 10: Filtros por status de execução
     if filtro_atual == 'agenda':
         query = query_base.filter(ServicoCliente.status.in_(['Em Andamento', 'Pendente', 'Bloqueado']))
     elif filtro_atual == 'recorrentes':
@@ -1352,7 +1396,6 @@ def consultar_servicos():
     else:
         query = query_base
 
-    # Item 10: Filtros de período (Semana, Mês, Ano)
     if periodo_atual == 'semana':
         fim_periodo = hoje + timedelta(days=7)
         query = query.filter(ServicoCliente.data_previsao.between(hoje - timedelta(days=1), fim_periodo))
@@ -1445,7 +1488,6 @@ def editar_tipo_servico(id):
     item.valor_sugerido = float(request.form.get('valor_sugerido') or 0.0)
     item.descricao_padrao = request.form.get('descricao', '').strip()
 
-    # Atualiza composição de custos padrão (Ficha Técnica)
     ServicoCustoPadrao.query.filter_by(tipo_servico_id=item.id).delete()
 
     tipos_custo = request.form.getlist('custo_tipo[]')
@@ -1509,14 +1551,13 @@ def atualizar_operacao_servico(id):
         servico.data_previsao = datetime.strptime(data_prev_str, '%Y-%m-%d').date()
         
     servico.responsavel_tecnico = request.form.get('responsavel_tecnico', '').strip()
-    servico.documento_responsavel = request.form.get('documento_responsavel', '').strip() # Item 3
-    servico.titulo_documento_custom = request.form.get('titulo_documento_custom', 'Ordem de Serviço').strip() # Item 8
+    servico.documento_responsavel = request.form.get('documento_responsavel', '').strip()
+    servico.titulo_documento_custom = request.form.get('titulo_documento_custom', 'Ordem de Serviço').strip()
 
     servico.detalhamento_execucao = request.form.get('detalhamento_execucao')
     servico.orientacoes_cliente = request.form.get('orientacoes_cliente')
     servico.observacoes = request.form.get('observacoes')
 
-    # Trata Endereço Específico do Atendimento / Local
     usar_end_custom = bool(request.form.get('usar_endereco_personalizado'))
     servico.usar_endereco_personalizado = usar_end_custom
 
@@ -1540,13 +1581,49 @@ def atualizar_operacao_servico(id):
         servico.estado_execucao = None
         servico.endereco_execucao_completo = None
 
-    if 'arquivo_evidencia' in request.files:
-        arq = request.files['arquivo_evidencia']
+    # Upload Múltiplo de Fotos / Evidências para o Supabase
+    arquivos_evidencia = request.files.getlist('arquivos_evidencia[]')
+    for arq in arquivos_evidencia:
         if arq and arq.filename:
-            nome_salvo = secure_filename(f"os_{servico.id}_{int(time.time())}_{arq.filename}")
-            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-            arq.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_salvo))
-            servico.arquivo_evidencia = nome_salvo
+            try:
+                chave_evidencia = salvar_arquivo_supabase(
+                    file_storage=arq,
+                    pasta_destino='ordens_servico',
+                    empresa_id=current_user.empresa_id
+                )
+                nova_evidencia = EvidenciaServico(
+                    servico_cliente_id=servico.id,
+                    chave_bucket=chave_evidencia,
+                    nome_original=secure_filename(arq.filename)
+                )
+                db.session.add(nova_evidencia)
+            except ValueError as err:
+                flash(f"Aviso no arquivo {arq.filename}: {str(err)}", 'warning')
+            except Exception as e:
+                flash(f"Erro ao enviar {arq.filename}: {str(e)}", 'danger')
+
+    # Atualização dinâmica de Etapas / Cronograma (Gantt)
+    titulos_fase = request.form.getlist('etapa_titulo[]')
+    inicios_fase = request.form.getlist('etapa_inicio[]')
+    fins_fase = request.form.getlist('etapa_fim[]')
+    status_fase = request.form.getlist('etapa_status[]')
+
+    if titulos_fase:
+        ServicoEtapaRastreio.query.filter_by(servico_cliente_id=servico.id).delete()
+        for idx, t in enumerate(titulos_fase):
+            if t.strip():
+                d_ini = datetime.strptime(inicios_fase[idx], '%Y-%m-%d').date() if idx < len(inicios_fase) and inicios_fase[idx] else None
+                d_fim = datetime.strptime(fins_fase[idx], '%Y-%m-%d').date() if idx < len(fins_fase) and fins_fase[idx] else None
+                st = status_fase[idx] if idx < len(status_fase) else 'pendente'
+                nova_etapa = ServicoEtapaRastreio(
+                    servico_cliente_id=servico.id,
+                    titulo_fase=t.strip(),
+                    data_inicio=d_ini,
+                    data_fim=d_fim,
+                    status_fase=st,
+                    ordem=idx + 1
+                )
+                db.session.add(nova_etapa)
 
     db.session.commit()
     flash('Operação, responsáveis e dados do atendimento atualizados com sucesso!', 'success')
@@ -1554,6 +1631,7 @@ def atualizar_operacao_servico(id):
 
 @app.route('/servicos/<int:id>/pdf', methods=['GET', 'POST'])
 @login_required
+
 def gerar_pdf_ordem_servico(id):
     servico = ServicoCliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     cliente = servico.cliente
@@ -1589,15 +1667,7 @@ def gerar_pdf_ordem_servico(id):
     estilo_corpo = ParagraphStyle('PDF_Corpo', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=12, textColor=colors.HexColor("#1e293b"))
     estilo_corpo_bold = ParagraphStyle('PDF_CorpoB', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, leading=12, textColor=colors.HexColor("#0f172a"))
 
-    logo_elemento = None
-    if empresa.logo_filename:
-        caminho_logo = os.path.join(app.config['UPLOAD_FOLDER'], empresa.logo_filename)
-        if os.path.exists(caminho_logo):
-            try:
-                logo_elemento = RLImage(caminho_logo, width=1.5*inch, height=0.6*inch)
-                logo_elemento.hAlign = 'LEFT'
-            except Exception:
-                logo_elemento = None
+    logo_elemento = _obter_logo_reportlab(empresa.logo_filename, width=1.5*inch, height=0.6*inch)
 
     info_emp = f"<b>{_limpar_texto(empresa.razao_social).upper()}</b><br/>CNPJ: {_limpar_texto(empresa.cnpj or '--')} | Tel: {_limpar_texto(empresa.telefone or '--')}<br/>{_limpar_texto(empresa.endereco_completo or '')}"
     if logo_elemento:
@@ -1610,7 +1680,6 @@ def gerar_pdf_ordem_servico(id):
     elementos.append(Spacer(1, 4))
     elementos.append(HRFlowable(width="100%", thickness=1.5, color=cor_marca, spaceAfter=10))
 
-    # Item 8: Título customizado com contador sequencial da empresa
     tit_doc = _limpar_texto(servico.titulo_documento_custom or 'ORDEM DE SERVIÇO').upper()
     elementos.append(Paragraph(f"<b>{tit_doc} Nº OS-{servico.numero_sequencial_empresa:04d}</b>", estilo_secao))
     elementos.append(Spacer(1, 4))
@@ -1624,7 +1693,6 @@ def gerar_pdf_ordem_servico(id):
     if exibir_doc_cliente or exibir_datas:
         dados_os.append([col_esq_2, col_dir_2])
 
-    # Item 3: Responsável + Registro / Documento
     if exibir_responsavel:
         resp_nome = _limpar_texto(servico.responsavel_tecnico or 'Não informado')
         doc_resp = f" (Doc/Registro: {_limpar_texto(servico.documento_responsavel)})" if servico.documento_responsavel else ""
@@ -1649,7 +1717,6 @@ def gerar_pdf_ordem_servico(id):
     nome_serv = _limpar_texto(servico.tipo_servico.nome if servico.tipo_servico else 'Atendimento Técnico')
     detalhes_blocos = [f"<b>Serviço:</b> {nome_serv}"]
 
-    # Item 15: Substituição de quebras de linha por <br/>
     if exibir_descricao and servico.observacoes:
         obs_fmt = _limpar_texto(servico.observacoes).replace('\n', '<br/>')
         detalhes_blocos.append(f"<b>Descrição do Atendimento:</b><br/>{obs_fmt}")
@@ -1701,6 +1768,29 @@ def gerar_pdf_ordem_servico(id):
         download_name=nome_pdf, 
         mimetype='application/pdf'
     )
+
+@app.route('/servicos/evidencia/<int:evidencia_id>/excluir', methods=['POST'])
+@login_required
+def excluir_evidencia_servico(evidencia_id):
+    evidencia = EvidenciaServico.query.join(ServicoCliente).filter(
+        EvidenciaServico.id == evidencia_id,
+        ServicoCliente.empresa_id == current_user.empresa_id
+    ).first_or_404()
+    
+    servico_id = evidencia.servico_cliente_id
+    if evidencia.chave_bucket:
+        excluir_arquivo_supabase(evidencia.chave_bucket)
+        
+    db.session.delete(evidencia)
+    db.session.commit()
+    flash('Evidência removida com sucesso!', 'info')
+    return redirect(url_for('consultar_servicos'))
+
+@app.route('/servicos/<int:id>/visualizar')
+@login_required
+def visualizar_ficha_servico(id):
+    servico = ServicoCliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    return render_template('detalhe_servico.html', servico=servico, hoje=date.today())
 
 # -----------------------------------------------------------------------------
 # 7. ROTAS DO MÓDULO FINANCEIRO
@@ -1780,17 +1870,24 @@ def atualizar_cobranca_fatura(id):
 
     if 'arquivo_nf' in request.files:
         f = request.files['arquivo_nf']
-        if f.filename:
-            nome_arq = secure_filename(f"nf_fat_{fatura.id}_{int(datetime.now().timestamp())}_{f.filename}")
-            f.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_arq))
-            fatura.arquivo_nf = nome_arq
+        if f and f.filename:
+            try:
+                if fatura.arquivo_nf:
+                    excluir_arquivo_supabase(fatura.arquivo_nf)
+                fatura.arquivo_nf = salvar_arquivo_supabase(f, 'notas_fiscais', current_user.empresa_id)
+            except ValueError as err:
+                flash(str(err), 'danger')
+                return redirect(url_for('financeiro', status=request.form.get('filtro_retorno', 'todos')))
 
     boleto_salvo = None
     if 'arquivo_boleto' in request.files:
         f_bol = request.files['arquivo_boleto']
-        if f_bol.filename:
-            boleto_salvo = secure_filename(f"boleto_fat_{fatura.id}_{int(datetime.now().timestamp())}_{f_bol.filename}")
-            f_bol.save(os.path.join(app.config['UPLOAD_FOLDER'], boleto_salvo))
+        if f_bol and f_bol.filename:
+            try:
+                boleto_salvo = salvar_arquivo_supabase(f_bol, 'boletos', current_user.empresa_id)
+            except ValueError as err:
+                flash(str(err), 'danger')
+                return redirect(url_for('financeiro', status=request.form.get('filtro_retorno', 'todos')))
 
     nova_obs = request.form.get('nova_ocorrencia')
 
@@ -1835,10 +1932,14 @@ def atualizar_cobranca_parcela(id):
 
     if 'arquivo_comprovante_boleto' in request.files:
         f = request.files['arquivo_comprovante_boleto']
-        if f.filename:
-            nome_arq = secure_filename(f"parc_{parcela.id}_{int(datetime.now().timestamp())}_{f.filename}")
-            f.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_arq))
-            parcela.arquivo_comprovante_boleto = nome_arq
+        if f and f.filename:
+            try:
+                if parcela.arquivo_comprovante_boleto:
+                    excluir_arquivo_supabase(parcela.arquivo_comprovante_boleto)
+                parcela.arquivo_comprovante_boleto = salvar_arquivo_supabase(f, 'comprovantes_parcelas', current_user.empresa_id)
+            except ValueError as err:
+                flash(str(err), 'danger')
+                return redirect(url_for('financeiro', status=request.form.get('filtro_retorno', 'todos')))
 
     nova_obs = request.form.get('nova_ocorrencia')
     if nova_obs:
@@ -1986,13 +2087,22 @@ def perfil_empresa():
 
             logo_file = request.files.get('logo')
             if logo_file and logo_file.filename != '':
-                ext = logo_file.filename.rsplit('.', 1)[-1].lower()
-                if ext in ['png', 'jpg', 'jpeg', 'webp']:
-                    filename = f"logo_emp_{empresa.id}_{int(datetime.now().timestamp())}.{ext}"
-                    caminho_upload = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-                    logo_file.save(caminho_upload)
-                    empresa.logo_filename = filename
+                try:
+                    if empresa.logo_filename:
+                        excluir_arquivo_supabase(empresa.logo_filename)
+
+                    chave_salva = salvar_arquivo_supabase(
+                        file_storage=logo_file,
+                        pasta_destino='logos',
+                        empresa_id=empresa.id
+                    )
+                    empresa.logo_filename = chave_salva
+                except ValueError as err:
+                    flash(str(err), 'danger')
+                    return redirect(url_for('perfil_empresa'))
+                except Exception as e:
+                    flash(f'Erro ao enviar o logotipo: {str(e)}', 'danger')
+                    return redirect(url_for('perfil_empresa'))
 
             db.session.commit()
             flash('Dados cadastrais e identidade visual atualizados com sucesso!', 'success')
@@ -2045,7 +2155,6 @@ def criar_usuario_equipe():
         flash('Acesso restrito ao administrador.', 'danger')
         return redirect(url_for('perfil_empresa'))
 
-    # Limite de 4 usuários por empresa cadastrada
     total_usuarios_empresa = Usuario.query.filter_by(empresa_id=current_user.empresa_id).count()
     if total_usuarios_empresa >= 4 and current_user.nivel_acesso != 'master':
         flash('Limite atingido: Cada empresa pode cadastrar no máximo 4 colaboradores na equipe.', 'warning')
@@ -2192,10 +2301,15 @@ def novo_chamado():
 
     filename = None
     if arquivo and arquivo.filename:
-        filename = f"chamado_{novo_ticket.id}_{int(time.time())}_{secure_filename(arquivo.filename)}"
-        upload_folder = app.config.get('UPLOAD_FOLDER', 'static/uploads')
-        os.makedirs(upload_folder, exist_ok=True)
-        arquivo.save(os.path.join(upload_folder, filename))
+        try:
+            filename = salvar_arquivo_supabase(
+                file_storage=arquivo,
+                pasta_destino='suporte',
+                empresa_id=current_user.empresa_id
+            )
+        except ValueError as err:
+            flash(str(err), 'danger')
+            return redirect(url_for('suporte'))
 
     primeira_msg = MensagemChamado(
         chamado_id=novo_ticket.id,
@@ -2224,23 +2338,29 @@ def detalhe_chamado(id):
 
         filename = None
         if arquivo and arquivo.filename:
-            filename = f"chamado_{chamado.id}_{int(time.time())}_{secure_filename(arquivo.filename)}"
-            upload_folder = app.config.get('UPLOAD_FOLDER', 'static/uploads')
-            os.makedirs(upload_folder, exist_ok=True)
-            arquivo.save(os.path.join(upload_folder, filename))
+            try:
+                filename = salvar_arquivo_supabase(
+                    file_storage=arquivo,
+                    pasta_destino='suporte',
+                    empresa_id=current_user.empresa_id
+                )
+            except ValueError as err:
+                flash(str(err), 'danger')
+                return redirect(url_for('detalhe_chamado', id=chamado.id))
 
-        nova_msg = MensagemChamado(
-            chamado_id=chamado.id,
-            usuario_id=current_user.id,
-            conteudo=conteudo,
-            is_suporte=False,
-            anexo_filename=filename
-        )
-        chamado.status = 'Em Atendimento'
-        db.session.add(nova_msg)
-        db.session.commit()
-        flash('Mensagem enviada com sucesso!', 'success')
-        return redirect(url_for('detalhe_chamado', id=chamado.id))
+        if conteudo or filename:
+            nova_msg = MensagemChamado(
+                chamado_id=chamado.id,
+                usuario_id=current_user.id,
+                conteudo=conteudo or "Anexo enviado.",
+                is_suporte=False,
+                anexo_filename=filename
+            )
+            chamado.status = 'Em Atendimento'
+            db.session.add(nova_msg)
+            db.session.commit()
+            flash('Mensagem enviada com sucesso!', 'success')
+            return redirect(url_for('detalhe_chamado', id=chamado.id))
 
     return render_template('detalhe_chamado.html', chamado=chamado)
 
@@ -2285,13 +2405,11 @@ def webhook_mercadopago():
                         empresa.valor_mensalidade = valor_pago
                         empresa.mp_payment_id = str(payment_id)
 
-                        # Item 6: Contabiliza o cupom e gera a comissão apenas após aprovação real
                         if empresa.cupom_utilizado and status_anterior != 'ativo':
                             cupom_obj = CupomDesconto.query.filter_by(codigo=empresa.cupom_utilizado).first()
                             if cupom_obj:
                                 cupom_obj.usos_atuais = (cupom_obj.usos_atuais or 0) + 1
                                 
-                                # Se o cupom pertence a um parceiro cadastrado, cria a comissão
                                 if cupom_obj.usuario_id:
                                     mes_ref = date.today().strftime('%Y-%m')
                                     ja_tem_comissao = ComissaoAfiliado.query.filter_by(
@@ -2328,7 +2446,6 @@ def webhook_mercadopago():
                 print(f"[ERRO NO PROCESSAMENTO WEBHOOK MP]: {e}")
 
     return {"status": "success"}, 200
-
 
 # -----------------------------------------------------------------------------
 # ENDPOINT DE CHECKOUT TRANSPARENTE MERCADO PAGO
@@ -2525,7 +2642,6 @@ def admin_auditoria_parceiro(id):
     codigos = [c.codigo for c in cupons]
     cupons_ids = [c.id for c in cupons]
 
-    # Busca todas as empresas vinculadas por código de cupom ou afiliado_id
     from sqlalchemy import or_
     condicoes = []
     if codigos:
@@ -2572,10 +2688,15 @@ def admin_liquidar_repasse(id):
     nome_arquivo_salvo = None
     arquivo = request.files.get('comprovante')
     if arquivo and arquivo.filename:
-        ext = arquivo.filename.rsplit('.', 1)[-1].lower()
-        if ext in ['pdf', 'png', 'jpg', 'jpeg']:
-            nome_arquivo_salvo = f"repasse_afiliado_{parceiro.id}_{int(datetime.utcnow().timestamp())}.{ext}"
-            arquivo.save(os.path.join(app.config['UPLOAD_FOLDER'], nome_arquivo_salvo))
+        try:
+            nome_arquivo_salvo = salvar_arquivo_supabase(
+                file_storage=arquivo,
+                pasta_destino='repasses_afiliados',
+                empresa_id=0  # Escopo administrativo/master
+            )
+        except ValueError as err:
+            flash(str(err), 'danger')
+            return redirect(url_for('admin_auditoria_parceiro', id=parceiro.id))
 
     novo_repasse = RepasseAfiliado(
         usuario_id=parceiro.id,
@@ -2805,15 +2926,7 @@ def gerar_pdf_contrato(id):
     estilo_corpo = ParagraphStyle('PDF_ContrCorpo', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=13, textColor=colors.HexColor("#1e293b"), alignment=4)
     estilo_subtit = ParagraphStyle('PDF_ContrSubTit', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=cor_marca)
 
-    logo_elemento = None
-    if empresa.logo_filename:
-        caminho_logo = os.path.join(app.config['UPLOAD_FOLDER'], empresa.logo_filename)
-        if os.path.exists(caminho_logo):
-            try:
-                logo_elemento = RLImage(caminho_logo, width=1.6*inch, height=0.6*inch)
-                logo_elemento.hAlign = 'LEFT'
-            except Exception:
-                logo_elemento = None
+    logo_elemento = _obter_logo_reportlab(empresa.logo_filename, width=1.6*inch, height=0.6*inch)
 
     razao_empresa = _limpar_texto(empresa.razao_social or 'EMPRESA PRESTADORA')
     fantasia_empresa = _limpar_texto(empresa.nome_fantasia or '')

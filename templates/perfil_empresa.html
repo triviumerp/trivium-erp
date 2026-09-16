@@ -256,18 +256,7 @@
                                 {% if perfil.status_assinatura == 'trial' %}
                                     Período de Testes (Trial)
                                 {% else %}
-                                    {{ perfil.plano or 'Plano Flex' }}
-                                {% endif %}
-                            </strong>
-                        </div>
-
-                        <div class="col-md-3">
-                            <small class="text-muted d-block">Plano Atual:</small>
-                            <strong class="text-dark fs-6">
-                                {% if perfil.status_assinatura == 'trial' or current_user.empresa.status_assinatura == 'trial' %}
-                                    Período de Testes (Trial)
-                                {% else %}
-                                    {{ perfil.plano or 'Plano Flex' }}
+                                    Plano {{ perfil.plano or 'Mensal' }}
                                 {% endif %}
                             </strong>
                         </div>
@@ -299,95 +288,105 @@
                         <div class="col-md-3">
                             <small class="text-muted d-block">Forma de Pagamento:</small>
                             <strong class="text-primary fs-6">
-                                {{ perfil.forma_pagamento_asaas or 'Pix / Cartão' }}
+                                {{ perfil.forma_pagamento_mp or perfil.forma_pagamento_asaas or 'Pix / Cartão' }}
                             </strong>
                         </div>
                     </div>
                 </div>
 
-                <!-- GRADE DE PLANOS COM MODAL DE CHECKOUT -->
-                <h5 class="fw-bold text-dark mb-3">Escolha ou Altere o Ciclo da sua Assinatura</h5>
-                
-                <div class="row g-3 mb-4">
+                <!-- GRADE DE PLANOS PADRONIZADA (CONFIGURAÇÕES / PERFIL) -->
+                <div class="row g-4 text-start mb-4">
+                    
                     <!-- PLANO MENSAL -->
-                    <div class="col-md-4">
-                        <div class="card border-0 shadow-sm p-4 rounded-4 bg-white h-100 d-flex flex-column justify-content-between">
-                            <div>
-                                <span class="badge bg-light text-secondary border fw-bold mb-2">Mensal</span>
-                                <h4 class="fw-bold text-dark mb-1">Plano Flex</h4>
-                                <p class="text-muted small">Sem fidelidade, cancele quando quiser.</p>
-                                <div class="d-flex align-items-baseline gap-1 mb-3">
-                                    <h3 class="fw-bold text-dark mb-0">R$ 39,90</h3>
-                                    <span class="text-muted small">/mês</span>
-                                </div>
-                                <ul class="list-unstyled small text-muted mb-4">
-                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Acesso completo a todos os módulos</li>
-                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Emissão ilimitada de propostas em PDF</li>
-                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Controle financeiro & parcelamento</li>
-                                </ul>
+                    <div class="col-lg-4">
+                        <div class="card border rounded-4 p-4 h-100 d-flex flex-column bg-white shadow-sm">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge bg-light text-secondary border px-3 py-1 fw-bold">Mensal</span>
                             </div>
-                            <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2 rounded-3" onclick="abrirCheckoutPerfil('MENSAL', 39.90, 1, 'R$ 39,90/mês')">
-                                Contratar Mensal
+                            <h4 class="fw-bold mb-1 text-dark">Plano Mensal</h4>
+                            <p class="text-muted small mb-3">Máxima flexibilidade para o seu dia a dia.</p>
+
+                            <div class="d-flex align-items-baseline gap-2 mb-1">
+                                <span class="fs-2 fw-bold text-dark">R$ 39,90</span>
+                                <span class="text-muted small fw-semibold">/mês</span>
+                            </div>
+                            <small class="text-muted d-block mb-3">Cobrança recorrente mensal</small>
+
+                            <ul class="list-unstyled small text-muted mb-4 flex-grow-1">
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Acesso irrestrito a todos os módulos do sistema</li>
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Gestão de clientes e catálogo de serviços</li>
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Propostas comerciais e minutas de contrato em PDF</li>
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Agenda de OS, etapas (Gantt) e fotos na nuvem</li>
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Controle financeiro de parcelas e faturamento</li>
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Sem fidelidade: cancele quando quiser</li>
+                            </ul>
+
+                            <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2 rounded-3 mt-auto" onclick="abrirCheckoutPerfil('MENSAL', 39.90, 1, 'R$ 39,90/mês')">
+                                <i class="bi bi-arrow-repeat me-1"></i> Assinar Mensal
                             </button>
                         </div>
                     </div>
 
                     <!-- PLANO SEMESTRAL -->
-                    <div class="col-md-4">
-                        <div class="card border-0 shadow-sm p-4 rounded-4 bg-white h-100 d-flex flex-column justify-content-between">
-                            <div>
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle fw-bold">Semestral</span>
-                                    <span class="badge bg-success-subtle text-success small fw-bold">Economize 12%</span>
-                                </div>
-                                <h4 class="fw-bold text-dark mb-1">Plano Semestral</h4>
-                                <p class="text-muted small">Maior comodidade e economia semestral.</p>
-                                <div class="d-flex align-items-baseline gap-1 mb-1">
-                                    <h3 class="fw-bold text-dark mb-0">R$ 34,90</h3>
-                                    <span class="text-muted small">/mês</span>
-                                </div>
-                                <small class="text-success fw-bold d-block mb-3">Total de R$ 209,40 em até 6x</small>
-                                <ul class="list-unstyled small text-muted mb-4">
-                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Tudo do Plano Flex</li>
-                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Cobrança única a cada 6 meses</li>
-                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Prioridade no suporte técnico</li>
-                                </ul>
+                    <div class="col-lg-4">
+                        <div class="card border rounded-4 p-4 h-100 d-flex flex-column bg-white shadow-sm">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle px-3 py-1 fw-bold">Semestral</span>
+                                <span class="badge bg-success-subtle text-success small fw-bold">Economize 12%</span>
                             </div>
-                            <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2 rounded-3" onclick="abrirCheckoutPerfil('SEMESTRAL', 209.40, 6, '6x de R$ 34,90')">
-                                Contratar Semestral
+                            <h4 class="fw-bold mb-1 text-dark">Plano Semestral</h4>
+                            <p class="text-muted small mb-3">Equilíbrio entre economia e previsibilidade.</p>
+
+                            <div class="d-flex align-items-baseline gap-2 mb-1">
+                                <span class="fs-2 fw-bold text-dark">R$ 34,90</span>
+                                <span class="text-muted small fw-semibold">/mês</span>
+                            </div>
+                            <small class="text-success fw-bold d-block mb-3">Total de R$ 209,40 em até 6x sem juros</small>
+
+                            <ul class="list-unstyled small text-muted mb-4 flex-grow-1">
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong class="text-dark">Todos os recursos do Trivium ERP inclusos</strong></li>
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Economia de 12% em relação ao mensal</li>
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Cobrança única e renovação a cada 6 meses</li>
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Parcelamento no cartão em até 6x sem juros</li>
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Suporte técnico prioritário para a equipe</li>
+                            </ul>
+
+                            <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2 rounded-3 mt-auto" onclick="abrirCheckoutPerfil('SEMESTRAL', 209.40, 6, '6x de R$ 34,90')">
+                                <i class="bi bi-credit-card me-1"></i> Assinar Semestral
                             </button>
                         </div>
                     </div>
 
                     <!-- PLANO ANUAL -->
-                    <div class="col-md-4">
-                        <div class="card border-primary shadow p-4 rounded-4 bg-white h-100 d-flex flex-column justify-content-between border-2 position-relative">
-                            <span class="position-absolute top-0 end-0 translate-middle-y me-3 badge bg-primary px-3 py-1 fw-bold shadow-sm">
-                                <i class="bi bi-star-fill me-1"></i> Mais Vantajoso
-                            </span>
-                            <div>
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="badge bg-primary fw-bold">Anual Founder</span>
-                                    <span class="badge bg-success-subtle text-success small fw-bold">Economize 25%</span>
-                                </div>
-                                <h4 class="fw-bold text-primary mb-1">Plano Anual</h4>
-                                <p class="text-muted small">Máxima economia com acesso ininterrupto.</p>
-                                <div class="d-flex align-items-baseline gap-1 mb-1">
-                                    <h3 class="fw-bold text-primary mb-0">R$ 29,90</h3>
-                                    <span class="text-muted small">/mês</span>
-                                </div>
-                                <small class="text-primary fw-bold d-block mb-3">Total de R$ 358,80 em até 12x</small>
-                                <ul class="list-unstyled small text-muted mb-4">
-                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-primary me-2"></i>Acesso anual ininterrupto</li>
-                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-primary me-2"></i>White-label com logotipo e cores</li>
-                                    <li class="mb-2"><i class="bi bi-check-circle-fill text-primary me-2"></i>Suporte VIP Prioritário</li>
-                                </ul>
+                    <div class="col-lg-4">
+                        <div class="card border rounded-4 p-4 h-100 d-flex flex-column bg-white shadow-sm">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge bg-primary px-3 py-1 fw-bold">Anual</span>
+                                <span class="badge bg-success-subtle text-success small fw-bold">Economize 25%</span>
                             </div>
-                            <button type="button" class="btn btn-primary fw-bold w-100 py-2 rounded-3 shadow-sm" onclick="abrirCheckoutPerfil('ANUAL', 358.80, 12, '12x de R$ 29,90')">
-                                Contratar Anual
+                            <h4 class="fw-bold mb-1 text-primary">Plano Anual</h4>
+                            <p class="text-muted small mb-3">Máxima economia para empresas consolidadas.</p>
+
+                            <div class="d-flex align-items-baseline gap-2 mb-1">
+                                <span class="fs-2 fw-bold text-primary">R$ 29,90</span>
+                                <span class="text-muted small fw-semibold">/mês</span>
+                            </div>
+                            <small class="text-primary fw-bold d-block mb-3">Total de R$ 358,80 em até 12x sem juros</small>
+
+                            <ul class="list-unstyled small text-muted mb-4 flex-grow-1">
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong class="text-dark">Todos os recursos do Trivium ERP inclusos</strong></li>
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Economia máxima de 25% (R$ 29,90/mês equivalente)</li>
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Parcelamento no cartão em até 12x sem juros</li>
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Preço fixo garantido por 1 ano sem reajustes</li>
+                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Suporte VIP prioritário direto via WhatsApp</li>
+                            </ul>
+
+                            <button type="button" class="btn btn-primary fw-bold w-100 py-2 rounded-3 shadow-sm mt-auto" onclick="abrirCheckoutPerfil('ANUAL', 358.80, 12, '12x de R$ 29,90')">
+                                <i class="bi bi-lightning-charge-fill me-1"></i> Assinar Anual
                             </button>
                         </div>
                     </div>
+
                 </div>
             </div>
 
@@ -758,7 +757,7 @@ function abrirCheckoutPerfil(plano, valorTotal, parcelas, rotulo) {
     parcelasEscolhidas = parcelas;
     
     const tituloEl = document.getElementById('tituloModalPlano');
-    if (tituloEl) tituloEl.innerText = `Finalizar Assinatura: ${plano} (${rotulo})`;
+    if (tituloEl) tituloEl.innerText = `Finalizar Assinatura: Plano ${plano.charAt(0) + plano.slice(1).toLowerCase()} (${rotulo})`;
     
     const areaPix = document.getElementById('resultadoPix');
     if (areaPix) {

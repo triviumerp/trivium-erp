@@ -44,14 +44,6 @@
             height: 100%;
         }
         .card-plano:hover { transform: translateY(-4px); box-shadow: 0 12px 24px -10px rgba(0,0,0,0.08); }
-        .card-plano.destaque { border-color: #2563eb; box-shadow: 0 10px 30px -5px rgba(37, 99, 235, 0.15); }
-        .tag-destaque {
-            position: absolute; top: -14px; right: 24px;
-            background: #2563eb; color: #ffffff;
-            font-size: 0.75rem; font-weight: 700;
-            padding: 4px 14px; border-radius: 20px;
-            letter-spacing: 0.5px; text-transform: uppercase;
-        }
         .preco-valor { font-size: 2.3rem; font-weight: 800; line-height: 1; }
         .preco-periodo { font-size: 0.9rem; color: #64748b; font-weight: 600; }
         .lista-recursos { list-style: none; padding: 0; margin: 1.5rem 0 2rem 0; flex-grow: 1; }
@@ -67,12 +59,12 @@
             <i class="bi bi-shield-lock-fill"></i>
         </div>
 
-        <h2 class="fw-extrabold text-dark mb-2">Acesso ou Período de Testes</h2>
+        <h2 class="fw-extrabold text-dark mb-2">Acesso & Assinatura</h2>
         <p class="text-muted mx-auto mb-4" style="max-width: 680px; font-size: 0.98rem;">
-            Empresa: <strong>{{ current_user.empresa.razao_social }}</strong>. Escolha um ciclo de assinatura abaixo para ativação imediata via Pix, Cartão ou Boleto pelo Asaas.
+            Empresa: <strong>{{ current_user.empresa.razao_social }}</strong>. Escolha o ciclo de faturamento ideal para o seu negócio. Todos os planos liberam o sistema completo com ativação imediata via Pix, Cartão ou Boleto.
         </p>
 
-        <!-- GRADE DE 3 PLANOS OFICIAIS -->
+        <!-- GRADE DOS PLANOS PADRONIZADOS -->
         <div class="row g-4 text-start mb-4">
             
             <!-- PLANO MENSAL -->
@@ -81,20 +73,22 @@
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <span class="badge bg-light text-secondary border px-3 py-1 fw-bold">Mensal</span>
                     </div>
-                    <h4 class="fw-bold mb-1 text-dark">Plano Flex</h4>
-                    <p class="text-muted small mb-3">Sem fidelidade, cancele quando quiser.</p>
+                    <h4 class="fw-bold mb-1 text-dark">Plano Mensal</h4>
+                    <p class="text-muted small mb-3">Máxima flexibilidade para o seu dia a dia.</p>
 
                     <div class="d-flex align-items-baseline gap-2 mb-1">
                         <span class="preco-valor text-dark">R$ 39,90</span>
                         <span class="preco-periodo">/mês</span>
                     </div>
-                    <small class="text-muted d-block mb-3">Cobrança mensal recorrente</small>
+                    <small class="text-muted d-block mb-3">Cobrança recorrente mensal</small>
 
                     <ul class="lista-recursos">
-                        <li><i class="bi bi-check-circle-fill"></i><span>Acesso completo a todos os módulos</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Emissão ilimitada de propostas em PDF</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Controle financeiro & parcelamento</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Agenda técnica e ordens de serviço</span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span>Acesso irrestrito a todos os módulos do sistema</span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span>Gestão de clientes e catálogo de serviços</span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span>Propostas comerciais e minutas de contrato em PDF</span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span>Agenda de OS, etapas (Gantt) e fotos na nuvem</span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span>Controle financeiro de parcelas e faturamento</span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span>Sem fidelidade: cancele quando quiser</span></li>
                     </ul>
 
                     <button type="button" class="btn btn-outline-primary btn-lg w-100 fw-bold py-2 rounded-3" onclick="abrirCheckoutModal('MENSAL', 39.90, 1, 'R$ 39,90/mês')">
@@ -111,7 +105,7 @@
                         <span class="badge bg-success-subtle text-success small fw-bold">Economize 12%</span>
                     </div>
                     <h4 class="fw-bold mb-1 text-dark">Plano Semestral</h4>
-                    <p class="text-muted small mb-3">Maior comodidade e economia semestral.</p>
+                    <p class="text-muted small mb-3">Equilíbrio perfeito entre economia e previsibilidade.</p>
 
                     <div class="d-flex align-items-baseline gap-2 mb-1">
                         <span class="preco-valor text-dark">R$ 34,90</span>
@@ -120,9 +114,11 @@
                     <small class="text-success fw-bold d-block mb-3">Total de R$ 209,40 em até 6x sem juros</small>
 
                     <ul class="lista-recursos">
-                        <li><i class="bi bi-check-circle-fill"></i><span><strong>Tudo do Plano Flex</strong></span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Cobrança única a cada 6 meses</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Prioridade no suporte técnico</span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span><strong>Todos os recursos do Trivium ERP inclusos</strong></span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span>Economia de 12% em comparação ao plano mensal</span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span>Cobrança única e renovação a cada 6 meses</span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span>Parcelamento no cartão em até 6x sem juros</span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span>Suporte técnico prioritário para a equipe</span></li>
                     </ul>
 
                     <button type="button" class="btn btn-outline-primary btn-lg w-100 fw-bold py-2 rounded-3" onclick="abrirCheckoutModal('SEMESTRAL', 209.40, 6, '6x de R$ 34,90')">
@@ -133,15 +129,13 @@
 
             <!-- PLANO ANUAL -->
             <div class="col-lg-4">
-                <div class="card-plano destaque">
-                    <span class="tag-destaque"><i class="bi bi-star-fill me-1"></i> Mais Vantajoso</span>
-
+                <div class="card-plano">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="badge bg-primary px-3 py-1 fw-bold">Anual Founder</span>
+                        <span class="badge bg-primary px-3 py-1 fw-bold">Anual</span>
                         <span class="badge bg-success-subtle text-success small fw-bold">Economize 25%</span>
                     </div>
                     <h4 class="fw-bold mb-1 text-primary">Plano Anual</h4>
-                    <p class="text-muted small mb-3">Máxima economia com acesso anual garantido.</p>
+                    <p class="text-muted small mb-3">Máxima economia para empresas consolidadas.</p>
 
                     <div class="d-flex align-items-baseline gap-2 mb-1">
                         <span class="preco-valor text-primary">R$ 29,90</span>
@@ -150,10 +144,11 @@
                     <small class="text-primary fw-bold d-block mb-3">Total de R$ 358,80 em até 12x sem juros</small>
 
                     <ul class="lista-recursos">
-                        <li><i class="bi bi-check-circle-fill"></i><span><strong>Acesso anual ininterrupto</strong></span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>White-label com logotipo e cores customizadas</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Gestão de contratos mensalistas</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Suporte VIP Prioritário</span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span><strong>Todos os recursos do Trivium ERP inclusos</strong></span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span>Economia máxima de 25% (R$ 29,90/mês equivalente)</span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span>Parcelamento no cartão em até 12x sem juros</span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span>Preço fixo garantido por 1 ano sem reajustes</span></li>
+                        <li><i class="bi bi-check-circle-fill"></i><span>Suporte VIP prioritário direto via WhatsApp</span></li>
                     </ul>
 
                     <button type="button" class="btn btn-primary btn-lg w-100 fw-bold py-2 rounded-3 shadow-sm" onclick="abrirCheckoutModal('ANUAL', 358.80, 12, '12x de R$ 29,90')">
@@ -167,10 +162,10 @@
         <!-- SUPORTE WHATSAPP & LOGOUT -->
         <div class="card-ajuda d-flex flex-column flex-md-row align-items-center justify-content-between gap-3 text-start mb-4">
             <div>
-                <h6 class="fw-bold text-dark mb-1">Dúvidas ou Ativação Manual?</h6>
-                <p class="text-muted small mb-0">Fale com nossa equipe técnica para suporte ou envio de comprovantes.</p>
+                <h6 class="fw-bold text-dark mb-1">Dúvidas sobre os planos?</h6>
+                <p class="text-muted small mb-0">Fale com nossa equipe técnica para esclarecimentos ou atendimento comercial personalizado.</p>
             </div>
-            <a href="https://wa.me/5511999999999?text=Olá,%20gostaria%20de%20ajuda%20para%20ativar%20minha%20assinatura%20no%20Trivium%20ERP" target="_blank" class="btn btn-outline-success fw-bold px-4 py-2 text-nowrap rounded-3">
+            <a href="https://wa.me/5511914589026?text=Olá,%20gostaria%20de%20tirar%20dúvidas%20sobre%20os%20planos%20do%20Trivium%20ERP" target="_blank" class="btn btn-outline-success fw-bold px-4 py-2 text-nowrap rounded-3">
                 <i class="bi bi-whatsapp me-2"></i> Falar no WhatsApp
             </a>
         </div>
@@ -182,7 +177,7 @@
         </div>
     </div>
 
-    <!-- MODAL DE CHECKOUT TRANSPARENTE INTEGRADO -->
+    <!-- MODAL DE CHECKOUT TRANSPARENTE -->
     <div class="modal fade" id="modalCheckoutTransparente" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content rounded-4 border-0 shadow">
@@ -192,7 +187,7 @@
                 </div>
                 <div class="modal-body p-4">
 
-                    <!-- CAMPO DE CUPOM COM VALIDAÇÃO E AUTO-PREENCHIMENTO -->
+                    <!-- CAMPO DE CUPOM COM VALIDAÇÃO -->
                     <div class="mb-3 p-3 bg-light rounded-3 border text-start">
                         <label class="small text-muted fw-bold d-block">Cupom Promocional de Desconto</label>
                         <div class="input-group input-group-sm mt-1">
@@ -298,7 +293,7 @@
         parcelasEscolhidas = parcelas;
         
         const tituloEl = document.getElementById('tituloModalPlano');
-        if (tituloEl) tituloEl.innerText = `Finalizar Assinatura: ${plano} (${rotulo})`;
+        if (tituloEl) tituloEl.innerText = `Finalizar Assinatura: Plano ${plano.charAt(0) + plano.slice(1).toLowerCase()} (${rotulo})`;
         
         const areaPix = document.getElementById('resultadoPix');
         if (areaPix) {
@@ -315,7 +310,6 @@
         const modalEl = document.getElementById('modalCheckoutTransparente');
         if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
 
-        // Se já tiver cupom herdado do cadastro, valida e aplica o desconto automaticamente
         const cupomAtual = document.getElementById('cupomCheckoutInput')?.value;
         if (cupomAtual) {
             validarCupomAoVivo();

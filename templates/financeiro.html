@@ -83,7 +83,7 @@
                         <th>TOTAL / RECEBIDO</th>
                         <th>VENCIMENTO</th>
                         <th>STATUS</th>
-                        <th>ANEXOS</th>
+                        <th class="text-center">NOTA FISCAL</th>
                         <th class="text-end pe-3">AÇÕES</th>
                     </tr>
                 </thead>
@@ -124,7 +124,6 @@
                             </button>
                         </td>
 
-                        <!-- VALOR TOTAL E PAGO COM DISTINÇÃO DE CORES -->
                         <td>
                             <div class="p-2 border rounded-3 {{ cor_status }}" style="max-width: 180px;">
                                 <div class="d-flex justify-content-between">
@@ -160,12 +159,14 @@
                             {% endif %}
                         </td>
 
-                        <td>
-                            {% if item.arquivo_boleto %}
-                                <a href="{{ url_for('download_file', filename=item.arquivo_boleto) }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2 me-1" title="Boleto"><i class="bi bi-file-earmark-pdf"></i></a>
-                            {% endif %}
+                        <!-- APENAS A NOTA FISCAL NA TABELA PRINCIPAL -->
+                        <td class="text-center">
                             {% if item.arquivo_nf %}
-                                <a href="{{ url_for('download_file', filename=item.arquivo_nf) }}" target="_blank" class="btn btn-sm btn-outline-success py-0 px-2" title="NF"><i class="bi bi-file-earmark-spreadsheet"></i></a>
+                                <a href="{{ url_for('download_file', filename=item.arquivo_nf) }}" target="_blank" class="btn btn-sm btn-outline-success py-0 px-2 fw-bold" title="Abrir Nota Fiscal">
+                                    <i class="bi bi-file-earmark-check me-1"></i>NF-e
+                                </a>
+                            {% else %}
+                                <span class="text-muted" style="font-size: 0.75rem;">Sem NF</span>
                             {% endif %}
                         </td>
 
@@ -192,7 +193,7 @@
 </div>
 
 <!-- ==================================================================== -->
-<!-- MODAIS DE CONSULTA DOS SERVIÇOS DA FATURA -->
+<!-- MODAIS DE CONSULTA DOS SERVIÇOS DA FATURA (COM LINK DE BOLETOS) -->
 <!-- ==================================================================== -->
 {% for item in itens %}
 {% set f = item.fatura %}
@@ -204,7 +205,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4 small">
-                <div class="table-responsive">
+                <div class="table-responsive mb-3">
                     <table class="table table-bordered table-sm align-middle mb-0">
                         <thead class="table-light">
                             <tr>
@@ -231,6 +232,32 @@
                             {% endif %}
                         </tbody>
                     </table>
+                </div>
+
+                <!-- SEÇÃO COM BOLETOS E COMPROVANTES DA FATURA -->
+                <div class="p-3 bg-light rounded border">
+                    <h6 class="fw-bold text-dark mb-2"><i class="bi bi-paperclip text-primary me-1"></i>Documentos Financeiros da Fatura</h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% set boletos_encontrados = [] %}
+                        {% for p in f.parcelas %}
+                            {% if p.arquivo_comprovante_boleto %}
+                                <a href="{{ url_for('download_file', filename=p.arquivo_comprovante_boleto) }}" target="_blank" class="btn btn-sm btn-outline-primary fw-bold">
+                                    <i class="bi bi-file-earmark-pdf me-1"></i>{{ p.descricao_parcela }} (Boleto/Comprovante)
+                                </a>
+                                {% set _ = boletos_encontrados.append(1) %}
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if f.arquivo_nf %}
+                            <a href="{{ url_for('download_file', filename=f.arquivo_nf) }}" target="_blank" class="btn btn-sm btn-outline-success fw-bold">
+                                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Nota Fiscal Eletrônica
+                            </a>
+                        {% endif %}
+
+                        {% if not boletos_encontrados and not f.arquivo_nf %}
+                            <span class="text-muted small">Nenhum boleto ou nota fiscal anexada a esta fatura ainda.</span>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
             <div class="modal-footer bg-light">
@@ -266,6 +293,7 @@
                                 <th>Valor</th>
                                 <th>Vencimento</th>
                                 <th>Status</th>
+                                <th class="text-center">Boleto / Anexo</th>
                                 <th class="text-center" style="width: 140px;">Ação</th>
                             </tr>
                         </thead>
@@ -278,6 +306,18 @@
                                 <td class="fw-bold text-dark">R$ {{ "%.2f"|format(p.valor) }}</td>
                                 <td>{{ p.data_vencimento.strftime('%d/%m/%Y') if p.data_vencimento else '--' }}</td>
                                 <td><span class="badge {{ 'bg-success' if p.status == 'Pago' else ('bg-danger' if vencida else 'bg-warning text-dark') }}">{{ p.status }}</span></td>
+                                
+                                <!-- DOWNLOAD DIRETO DO BOLETO DA PARCELA -->
+                                <td class="text-center">
+                                    {% if p.arquivo_comprovante_boleto %}
+                                        <a href="{{ url_for('download_file', filename=p.arquivo_comprovante_boleto) }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold" title="Baixar Boleto">
+                                            <i class="bi bi-file-earmark-pdf me-1"></i>Ver Boleto
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted" style="font-size: 0.75rem;">Sem arquivo</span>
+                                    {% endif %}
+                                </td>
+
                                 <td class="text-center">
                                     <button type="button" class="btn btn-sm btn-dark fw-bold" data-bs-toggle="collapse" data-bs-target="#boxEditParc{{ p.id }}">
                                         <i class="bi bi-pencil-square me-1"></i>Baixar
@@ -287,7 +327,7 @@
                             
                             <!-- FORMULÁRIO DE BAIXA DA PARCELA -->
                             <tr class="collapse bg-light" id="boxEditParc{{ p.id }}">
-                                <td colspan="6" class="p-3">
+                                <td colspan="7" class="p-3">
                                     <form action="{{ url_for('atualizar_cobranca_parcela', id=p.id) }}" method="POST" enctype="multipart/form-data" class="row g-2 align-items-end">
                                         <input type="hidden" name="filtro_retorno" value="{{ filtro_atual }}">
                                         <div class="col-md-3">
@@ -308,7 +348,7 @@
                                             </select>
                                         </div>
                                         <div class="col-md-4">
-                                            <label class="form-label small fw-bold">Anexar Comprovante</label>
+                                            <label class="form-label small fw-bold">Anexar Boleto / Comprovante (Máx 2 MB)</label>
                                             <input type="file" name="arquivo_comprovante_boleto" class="form-control form-control-sm">
                                         </div>
                                         <div class="col-md-2 text-end">
@@ -325,25 +365,25 @@
                 <!-- AJUSTES GERAIS DA FATURA -->
                 <div class="p-3 bg-light rounded border">
                     <h6 class="fw-bold text-dark mb-2"><i class="bi bi-file-earmark-text me-1 text-primary"></i>Ajuste Global da Fatura</h6>
-                    <form action="{{ url_for('atualizar_cobranca_fatura', id=f.id) }}" method="POST" enctype="multipart/form-data" class="row g-3">
+                    <form action="{{ url_for('atualizar_cobranca_fatura', id=f.id) }}" method="POST" enctype="multipart/form-data" class="row g-3 align-items-end">
                         <input type="hidden" name="filtro_retorno" value="{{ filtro_atual }}">
                         <div class="col-md-4">
                             <label class="form-label small fw-bold">Quitar Todas as Parcelas</label>
                             <select name="status_pagamento" class="form-select form-select-sm">
                                 <option value="">Manter status individuais</option>
-                                <option value="Pago" class="text-success fw-bold">✔ Marcar TODAS como Pagas</option>
+                                <option value="Pago">Marcar TODAS como Pagas</option>
+                                <option value="Boleto Emitido">Marcar TODAS como Boleto Emitido</option>
                             </select>
                         </div>
                         <div class="col-md-5">
-                            <label class="form-label small fw-bold">Anexar Nota Fiscal (NF-e)</label>
+                            <label class="form-label small fw-bold">Anexar Nota Fiscal (NF-e) (Máx 2 MB)</label>
                             <input type="file" name="arquivo_nf" class="form-control form-control-sm">
                         </div>
-                        <div class="col-md-3 d-flex align-items-end">
+                        <div class="col-md-3">
                             <button type="submit" class="btn btn-sm btn-primary fw-bold w-100">Salvar Ajuste</button>
                         </div>
                     </form>
                 </div>
-
             </div>
             <div class="modal-footer bg-light">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
@@ -352,5 +392,4 @@
     </div>
 </div>
 {% endfor %}
-
 {% endblock %}
