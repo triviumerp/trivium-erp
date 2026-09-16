@@ -142,11 +142,11 @@ class Cliente(db.Model):
 
     @property
     def total_concluido(self):
-        return sum((s.valor_cobrado or 0.0) for s in self.servicos if s.status == 'Concluido')
+        return sum(float(s.valor_cobrado or 0.0) for s in self.servicos if s.status == 'Concluido')
 
     @property
     def total_em_aberto(self):
-        return sum((s.valor_cobrado or 0.0) for s in self.servicos if s.status in ['Em Andamento', 'Pendente', 'Bloqueado'])
+        return sum(float(s.valor_cobrado or 0.0) for s in self.servicos if s.status in ['Em Andamento', 'Pendente', 'Bloqueado'])
 
 
 class Documento(db.Model):

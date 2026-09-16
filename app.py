@@ -623,16 +623,20 @@ def deletar_cliente(id):
 @app.route('/cliente/<int:id>')
 @login_required
 def detalhe_cliente(id):
-    cliente = Cliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
-    documentos = Documento.query.filter_by(cliente_id=id).order_by(Documento.data_upload.desc()).all()
-    contratos_gerados = ContratoGerado.query.filter_by(cliente_id=id, empresa_id=current_user.empresa_id).order_by(ContratoGerado.data_criacao.desc()).all()
-    
-    return render_template(
-        'detalhe_cliente.html', 
-        cliente=cliente, 
-        documentos=documentos, 
-        contratos_gerados=contratos_gerados
-    )
+    try:
+        cliente = Cliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+        documentos = Documento.query.filter_by(cliente_id=cliente.id).order_by(Documento.data_upload.desc()).all()
+        contratos_gerados = ContratoGerado.query.filter_by(cliente_id=cliente.id, empresa_id=current_user.empresa_id).order_by(ContratoGerado.data_criacao.desc()).all()
+        
+        return render_template(
+            'detalhe_cliente.html', 
+            cliente=cliente, 
+            documentos=documentos, 
+            contratos_gerados=contratos_gerados
+        )
+    except Exception as e:
+        flash(f'Erro ao carregar o cliente: {str(e)}', 'danger')
+        return redirect(url_for('listar_clientes'))
 
 @app.route('/cliente/<int:id>/upload', methods=['POST'])
 @login_required
