@@ -5,7 +5,7 @@ import urllib.error
 
 RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
 # Enquanto você não tiver domínio próprio configurado no Resend, use o remetente oficial de teste:
-DEFAULT_FROM = "Trivium ERP <onboarding@resend.dev>"
+DEFAULT_FROM = "Trivium ERP <suporte@triviumerp.com.br>"
 
 def _enviar_email(destinatario, assunto, html_conteudo):
     """Envia e-mail via API HTTPS do Resend (funciona 100% no plano gratuito do Render)."""

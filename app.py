@@ -1341,7 +1341,7 @@ def gerar_pdf_proposta(id):
         ('PADDING', (0,0), (-1,-1), 6),
     ]))
     elementos.append(tab_cond)
-    elementos.append(Spacer(1, 24))
+    elementos.append(Spacer(1, 45))
 
     cargo_resp = _limpar_texto(current_user.cargo or 'Responsável pela Proposta')
     nome_usuario = _limpar_texto(current_user.nome)
@@ -1743,7 +1743,7 @@ def gerar_pdf_ordem_servico(id):
     elementos.append(tab_det)
 
     if exibir_assinaturas:
-        elementos.append(Spacer(1, 30))
+        elementos.append(Spacer(1, 45))
         resp_assinatura = _limpar_texto(servico.responsavel_tecnico or 'Responsável pelo Atendimento')
         doc_resp_ass = f"<br/><font size='7.5' color='#64748b'>Reg/Doc: {_limpar_texto(servico.documento_responsavel)}</font>" if servico.documento_responsavel else ""
         assinaturas = [
@@ -2920,13 +2920,14 @@ def gerar_pdf_contrato(id):
     cor_primaria_hex = empresa.cor_primaria if empresa.cor_primaria and empresa.cor_primaria.startswith('#') else "#1e3a8a"
     cor_marca = colors.HexColor(cor_primaria_hex)
 
-    estilo_empresa_nome = ParagraphStyle('PDF_EmpresaNome', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=cor_marca)
-    estilo_empresa_sub = ParagraphStyle('PDF_EmpresaSub', parent=styles['Normal'], fontName='Helvetica', fontSize=7.5, leading=10, textColor=colors.HexColor("#475569"), alignment=2)
+    # Estilos idênticos aos da Proposta
+    estilo_empresa_nome = ParagraphStyle('PDF_EmpresaNome', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=13, leading=16, textColor=cor_marca)
+    estilo_empresa_sub = ParagraphStyle('PDF_EmpresaSub', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=11, textColor=colors.HexColor("#475569"))
     estilo_titulo_doc = ParagraphStyle('PDF_ContrTit', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, leading=15, textColor=cor_marca, alignment=1)
-    estilo_corpo = ParagraphStyle('PDF_ContrCorpo', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=13, textColor=colors.HexColor("#1e293b"), alignment=4)
     estilo_subtit = ParagraphStyle('PDF_ContrSubTit', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=cor_marca)
+    estilo_corpo = ParagraphStyle('PDF_ContrCorpo', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=13, textColor=colors.HexColor("#1e293b"), alignment=4)
 
-    logo_elemento = _obter_logo_reportlab(empresa.logo_filename, width=1.6*inch, height=0.6*inch)
+    logo_elemento = _obter_logo_reportlab(empresa.logo_filename, width=1.5*inch, height=0.6*inch)
 
     razao_empresa = _limpar_texto(empresa.razao_social or 'EMPRESA PRESTADORA')
     fantasia_empresa = _limpar_texto(empresa.nome_fantasia or '')
@@ -2944,6 +2945,7 @@ def gerar_pdf_contrato(id):
     {end_empresa}
     """.strip()
 
+    # Cabeçalho timbrado uniforme (1.8 in x 5.7 in)
     if logo_elemento:
         tab_topo = Table([[logo_elemento, Paragraph(info_empresa_html, estilo_empresa_sub)]], colWidths=[1.8*inch, 5.7*inch])
     else:
@@ -2954,13 +2956,15 @@ def gerar_pdf_contrato(id):
         ('ALIGN', (1,0), (1,0), 'RIGHT'),
     ]))
     elementos.append(tab_topo)
-    elementos.append(Spacer(1, 4))
+    elementos.append(Spacer(1, 6))
     elementos.append(HRFlowable(width="100%", thickness=1.5, color=cor_marca, spaceAfter=12))
 
+    # Título do Contrato e Documento
     elementos.append(Paragraph(f"<b>{_limpar_texto(contrato.titulo).upper()}</b>", estilo_titulo_doc))
     elementos.append(Paragraph(f"<font color='#64748b' size='8'>DOCUMENTO Nº {_limpar_texto(contrato.numero_documento)}</font>", estilo_titulo_doc))
-    elementos.append(Spacer(1, 10))
+    elementos.append(Spacer(1, 12))
 
+    # Conteúdo das Cláusulas
     texto_raw = contrato.conteudo_html or ""
     blocos = re.split(r'</?(?:p|h\d|div|li|tr)[^>]*>', texto_raw)
 
@@ -2979,12 +2983,14 @@ def gerar_pdf_contrato(id):
             elementos.append(Paragraph(bloco_fmt, estilo_corpo))
             elementos.append(Spacer(1, 4))
 
-    elementos.append(Spacer(1, 20))
+    # Espaçamento generoso antes das assinaturas
+    elementos.append(Spacer(1, 45))
+
     nome_cli = _limpar_texto(cliente.nome or 'CONTRATANTE')
     dados_assinaturas = [
         [
-            Paragraph(f"____________________________________________<br/><b>CONTRATADA:</b> {razao_empresa.upper()}", estilo_corpo),
-            Paragraph(f"____________________________________________<br/><b>CONTRATANTE:</b> {nome_cli.upper()}", estilo_corpo)
+            Paragraph(f"____________________________________________<br/><b>{razao_empresa.upper()}</b><br/>Contratada", estilo_corpo),
+            Paragraph(f"____________________________________________<br/><b>{nome_cli.upper()}</b><br/>Contratante", estilo_corpo)
         ]
     ]
     tab_ass = Table(dados_assinaturas, colWidths=[3.75*inch, 3.75*inch])

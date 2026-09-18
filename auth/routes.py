@@ -231,11 +231,13 @@ def esqueci_senha():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
 
+    email_enviado_mascarado = None
+    disparo_solicitado = False
+
     if request.method == 'POST':
         identificador = request.form.get('email', '').strip().lower()
         usuario = None
 
-        # 1. Procura por e-mail ou por CNPJ/CPF da empresa
         if '@' in identificador:
             usuario = Usuario.query.filter_by(email=identificador).first()
         else:
@@ -245,17 +247,26 @@ def esqueci_senha():
                 if empresa_alvo:
                     usuario = Usuario.query.filter_by(empresa_id=empresa_alvo.id).first()
 
-        # 2. Se localizou o utilizador, gera token e dispara o e-mail
         if usuario:
             token = gerar_token_recuperacao(usuario.email)
             link_reset = url_for('auth.redefinir_senha', token=token, _external=True)
             enviar_email_recuperacao_senha(usuario.email, usuario.nome, link_reset)
 
-        # Mensagem genérica por segurança (não expõe se a conta existe ou não)
-        flash('Se os dados informados estiverem registados, enviámos um link com instruções para o e-mail cadastrado.', 'info')
-        return redirect(url_for('auth.login'))
+            # Mascara o e-mail: sergio@gmail.com -> s***o@g***.com
+            partes = usuario.email.split('@')
+            user_parte = partes[0]
+            dom_parte = partes[1] if len(partes) > 1 else ""
+            
+            user_masc = user_parte[0] + "***" + (user_parte[-1] if len(user_parte) > 1 else "")
+            dom_masc = dom_parte[0] + "***." + dom_parte.split('.')[-1] if '.' in dom_parte else dom_parte
+            email_enviado_mascarado = f"{user_masc}@{dom_masc}"
 
-    return render_template('auth/esqueci_senha.html') if os.path.exists('templates/auth/esqueci_senha.html') else render_template('auth/login.html')
+        disparo_solicitado = True
+        return render_template('auth/esqueci_senha.html', 
+                               sucesso_envio=disparo_solicitado, 
+                               email_destino=email_enviado_mascarado)
+
+    return render_template('auth/esqueci_senha.html', sucesso_envio=False)
 
 
 @auth_bp.route('/redefinir-senha/<token>', methods=['GET', 'POST'])
