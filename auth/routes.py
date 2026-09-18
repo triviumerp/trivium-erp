@@ -6,6 +6,8 @@ from dateutil.relativedelta import relativedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, make_response
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from services.auth_token import gerar_token_recuperacao, validar_token_recuperacao
+from services.email_service import enviar_email_recuperacao_senha
 
 from extensions import db, limiter
 from models import Empresa, Usuario, CupomDesconto
@@ -230,22 +232,44 @@ def esqueci_senha():
         return redirect(url_for('index'))
 
     if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        usuario = Usuario.query.filter_by(email=email).first()
+        identificador = request.form.get('email', '').strip().lower()
+        usuario = None
 
-        if usuario:
-            flash('Se o e-mail estiver cadastrado, as instruções para redefinição foram enviadas.', 'info')
+        # 1. Procura por e-mail ou por CNPJ/CPF da empresa
+        if '@' in identificador:
+            usuario = Usuario.query.filter_by(email=identificador).first()
         else:
-            flash('Se o e-mail estiver cadastrado, as instruções para redefinição foram enviadas.', 'info')
+            doc_limpo = re.sub(r'\D', '', identificador)
+            if doc_limpo:
+                empresa_alvo = Empresa.query.filter_by(cnpj=doc_limpo).first()
+                if empresa_alvo:
+                    usuario = Usuario.query.filter_by(empresa_id=empresa_alvo.id).first()
 
+        # 2. Se localizou o utilizador, gera token e dispara o e-mail
+        if usuario:
+            token = gerar_token_recuperacao(usuario.email)
+            link_reset = url_for('auth.redefinir_senha', token=token, _external=True)
+            enviar_email_recuperacao_senha(usuario.email, usuario.nome, link_reset)
+
+        # Mensagem genérica por segurança (não expõe se a conta existe ou não)
+        flash('Se os dados informados estiverem registados, enviámos um link com instruções para o e-mail cadastrado.', 'info')
         return redirect(url_for('auth.login'))
 
     return render_template('auth/esqueci_senha.html') if os.path.exists('templates/auth/esqueci_senha.html') else render_template('auth/login.html')
+
 
 @auth_bp.route('/redefinir-senha/<token>', methods=['GET', 'POST'])
 def redefinir_senha(token):
     if current_user.is_authenticated:
         return redirect(url_for('index'))
+
+    # Valida o token criptográfico (tempo limite: 30 min)
+    email = validar_token_recuperacao(token, max_age_segundos=1800)
+    if not email:
+        flash('O link de recuperação é inválido ou expirou. Solicite um novo envio.', 'danger')
+        return redirect(url_for('auth.esqueci_senha'))
+
+    usuario = Usuario.query.filter_by(email=email).first_or_404()
 
     if request.method == 'POST':
         nova_senha = request.form.get('nova_senha', '')
@@ -257,10 +281,14 @@ def redefinir_senha(token):
             return redirect(request.url)
 
         if nova_senha != confirma_senha:
-            flash('A nova senha e a confirmação não conferem.', 'warning')
+            flash('A nova palavra-passe e a confirmação não conferem.', 'warning')
             return redirect(request.url)
 
-        flash('Senha alterada com sucesso! Faça login com a nova senha.', 'success')
+        # Grava a nova palavra-passe com hash seguro
+        usuario.set_senha(nova_senha)
+        db.session.commit()
+
+        flash('Palavra-passe atualizada com sucesso! Inicie sessão com os novos dados.', 'success')
         return redirect(url_for('auth.login'))
 
     return render_template('auth/redefinir_senha.html', token=token)
