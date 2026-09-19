@@ -39,6 +39,7 @@ from models import (
     ComissaoAfiliado, RepasseAfiliado, EvidenciaServico
 )
 from auth.routes import auth_bp
+from auth.routes import validar_senha_forte
 
 # Serviços Externos (Mercado Pago e Armazenamento Supabase S3)
 import mercadopago
@@ -2162,12 +2163,18 @@ def criar_usuario_equipe():
 
     nome = request.form.get('nome', '').strip()
     email = request.form.get('email', '').strip().lower()
-    senha_padrao = request.form.get('senha_padrao')
+    senha_padrao = request.form.get('senha_padrao', '')
     cargo = request.form.get('cargo', 'Colaborador').strip()
     perfil_selecionado = request.form.get('perfil_predefinido', 'personalizado')
 
     if not email or not senha_padrao:
         flash('E-mail e senha inicial são obrigatórios.', 'warning')
+        return redirect(url_for('perfil_empresa'))
+
+    # Validação de Senha Forte
+    senha_valida, msg_erro = validar_senha_forte(senha_padrao)
+    if not senha_valida:
+        flash(f'A senha não foi aceita: {msg_erro}', 'warning')
         return redirect(url_for('perfil_empresa'))
 
     if Usuario.query.filter_by(email=email).first():
@@ -2204,10 +2211,11 @@ def resetar_senha_equipe(id):
         return redirect(url_for('perfil_empresa'))
 
     usuario = Usuario.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
-    nova_senha = request.form.get('nova_senha')
+    nova_senha = request.form.get('nova_senha', '')
 
-    if not nova_senha or len(nova_senha) < 4:
-        flash('A senha deve ter no mínimo 4 caracteres.', 'warning')
+    senha_valida, msg_erro = validar_senha_forte(nova_senha)
+    if not senha_valida:
+        flash(f'Não foi possível redefinir: {msg_erro}', 'warning')
         return redirect(url_for('perfil_empresa'))
 
     usuario.set_senha(nova_senha)
@@ -2225,10 +2233,20 @@ def editar_usuario_equipe(id):
     usuario = Usuario.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
 
     nome = request.form.get('nome', '').strip()
+    email = request.form.get('email', '').strip().lower()
     cargo = request.form.get('cargo', '').strip()
     
     if nome:
         usuario.nome = nome
+
+    # Validação e alteração do e-mail no banco de dados
+    if email and email != usuario.email:
+        email_em_uso = Usuario.query.filter(Usuario.email == email, Usuario.id != usuario.id).first()
+        if email_em_uso:
+            flash(f'O e-mail "{email}" já está sendo utilizado por outro usuário no sistema.', 'danger')
+            return redirect(url_for('perfil_empresa'))
+        usuario.email = email
+
     if cargo:
         usuario.cargo = cargo
 
@@ -2242,7 +2260,7 @@ def editar_usuario_equipe(id):
         usuario.nivel_acesso = 'admin' if perm_conf else 'operador'
 
     db.session.commit()
-    flash(f'Permissões do usuário "{usuario.nome}" atualizadas com sucesso!', 'success')
+    flash(f'Dados e permissões do usuário "{usuario.nome}" atualizados com sucesso no banco de dados!', 'success')
     return redirect(url_for('perfil_empresa'))
 
 @app.route('/configuracoes/usuarios/excluir/<int:id>', methods=['POST'])
