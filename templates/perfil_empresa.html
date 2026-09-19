@@ -746,7 +746,13 @@
     </div>
 </div>
 
+<!-- Inclui o SDK do Mercado Pago JavaScript v2 -->
+<script src="https://sdk.mercadopago.com/js/v2"></script>
+
 <script>
+// Inicializa o SDK do Mercado Pago com a sua Public Key (substitua pela sua chave pública TEST ou PROD)
+const mp = new MercadoPago('APP_USR-sua-public-key-aqui'); 
+
 // Alterna campos entre Pessoa Jurídica e Pessoa Física no Perfil
 function alternarTipoPessoaPerfil(tipo) {
     const labelRazao = document.getElementById('labelRazaoSocial');
@@ -897,18 +903,12 @@ function validarCupomAoVivoPerfil() {
     });
 }
 
-function processarPagamentoPerfil(tipo) {
-    const cupomDigitado = document.getElementById('cupomCheckoutInputPerfil')?.value || '';
-    const payload = {
-        plano: planoPerfilEscolhido,
-        valor_total: valorTotalPerfil,
-        parcelas: parcelasPerfil,
-        forma_pagamento: tipo,
-        cupom: cupomDigitado
-    };
+// Processamento de Pagamento com Tokenização Segura para Cartão
+async function processarPagamentoPerfil(tipo) {
+    let dadosCartao = null;
 
     if (tipo === 'CREDIT_CARD') {
-        const num = document.getElementById('cc_numero_perfil')?.value || '';
+        const num = document.getElementById('cc_numero_perfil')?.value.replace(/\s+/g, '') || '';
         const nome = document.getElementById('cc_nome_perfil')?.value || '';
         const mes = document.getElementById('cc_mes_perfil')?.value || '';
         const ano = document.getElementById('cc_ano_perfil')?.value || '';
@@ -919,14 +919,49 @@ function processarPagamentoPerfil(tipo) {
             return;
         }
 
-        payload.cartao = {
-            holder_name: nome,
-            number: num,
-            expiry_month: mes,
-            expiry_year: ano,
-            ccv: cvv
-        };
+        const btnCartao = document.querySelector('#conteudo-cartao-perfil button');
+        if (btnCartao) {
+            btnCartao.disabled = true;
+            btnCartao.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processando Cartão...';
+        }
+
+        try {
+            // Gera o Token Seguro do Cartão via SDK do Mercado Pago
+            const cardToken = await mp.createCardToken({
+                cardNumber: num,
+                cardholderName: nome,
+                cardExpirationMonth: mes,
+                cardExpirationYear: ano,
+                securityCode: cvv
+            });
+
+            if (!cardToken || !cardToken.id) {
+                throw new Error('Não foi possível gerar o token de segurança do cartão. Verifique os dados preenchidos.');
+            }
+
+            dadosCartao = {
+                token: cardToken.id,
+                payment_method_id: cardToken.payment_method_id || 'visa'
+            };
+        } catch (error) {
+            if (btnCartao) {
+                btnCartao.disabled = false;
+                btnCartao.innerHTML = 'Confirmar e Assinar';
+            }
+            alert('Erro ao processar cartão: ' + (error.message || 'Dados inválidos'));
+            return;
+        }
     }
+
+    const cupomDigitado = document.getElementById('cupomCheckoutInputPerfil')?.value || '';
+    const payload = {
+        plano: planoPerfilEscolhido,
+        valor_total: valorTotalPerfil,
+        parcelas: parcelasPerfil,
+        forma_pagamento: tipo,
+        cupom: cupomDigitado,
+        cartao: dadosCartao
+    };
 
     const btnPix = document.querySelector('#conteudo-pix-perfil button');
     if (tipo === 'PIX' && btnPix) {
@@ -947,6 +982,11 @@ function processarPagamentoPerfil(tipo) {
     })
     .then(r => r.json())
     .then(res => {
+        const btnCartao = document.querySelector('#conteudo-cartao-perfil button');
+        if (btnCartao) {
+            btnCartao.disabled = false;
+            btnCartao.innerHTML = 'Confirmar e Assinar';
+        }
         if (tipo === 'PIX' && btnPix) {
             btnPix.disabled = false;
             btnPix.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX';
@@ -1005,6 +1045,11 @@ function processarPagamentoPerfil(tipo) {
         }
     })
     .catch(() => {
+        const btnCartao = document.querySelector('#conteudo-cartao-perfil button');
+        if (btnCartao) {
+            btnCartao.disabled = false;
+            btnCartao.innerHTML = 'Confirmar e Assinar';
+        }
         if (tipo === 'PIX' && btnPix) {
             btnPix.disabled = false;
             btnPix.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX';
