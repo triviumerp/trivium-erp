@@ -45,6 +45,7 @@ from auth.routes import validar_senha_forte
 import mercadopago
 from services.mercadopago_service import (
     criar_cobranca_mercadopago, 
+    criar_preferencia_mercado_pago,
     PLANOS_CONFIG
 )
 from services.storage_service import (
@@ -2062,10 +2063,12 @@ def perfil_empresa():
             def _so_numeros(valor):
                 return re.sub(r'\D', '', valor) if valor else ""
 
+            # Captura a razão social dependendo se é PF ou PJ (aceita ambos os nomes de input)
             if tipo_pessoa == 'PF':
-                empresa.razao_social = request.form.get('nome_profissional')
+                nome_pf = request.form.get('nome_profissional') or request.form.get('razao_social')
+                empresa.razao_social = nome_pf
                 empresa.nome_fantasia = "Profissional Autônomo"
-                empresa.cnpj = _so_numeros(request.form.get('cpf'))
+                empresa.cnpj = _so_numeros(request.form.get('cpf') or request.form.get('cnpj'))
             else:
                 empresa.razao_social = request.form.get('razao_social')
                 empresa.nome_fantasia = request.form.get('nome_fantasia')
@@ -2107,7 +2110,7 @@ def perfil_empresa():
 
             db.session.commit()
             flash('Dados cadastrais e identidade visual atualizados com sucesso!', 'success')
-            return redirect(url_for('perfil_empresa'))
+            return redirect(url_for('perfil_empresa') + '#tab-dados')
 
         elif form_type == 'dados_usuario':
             novo_nome = request.form.get('nome_usuario')
@@ -2468,78 +2471,30 @@ def webhook_mercadopago():
 # -----------------------------------------------------------------------------
 # ENDPOINT DE CHECKOUT TRANSPARENTE MERCADO PAGO
 # -----------------------------------------------------------------------------
-@app.route('/api/assinatura/checkout-transparente', methods=['POST'])
+@app.route('/api/assinatura/checkout-preferencia', methods=['POST'])
 @login_required
-def api_checkout_transparente():
+def api_checkout_preferencia():
     dados = request.get_json(silent=True) or {}
-    plano_nome = dados.get('plano', 'MENSAL')
-    valor_total = float(dados.get('valor_total', 39.90))
-    parcelas = int(dados.get('parcelas', 1))
-    forma_pagamento = dados.get('forma_pagamento', 'PIX')
-    cartao_dados = dados.get('cartao')
+    plano = dados.get('plano', 'MENSAL')
+    valor_total = dados.get('valor_total')
+    cupom = dados.get('cupom')
 
     empresa = getattr(current_user, 'empresa', None)
     if not empresa:
-        return jsonify({"status": "error", "mensagem": "Empresa não vinculada ao usuário logado."}), 400
+        return jsonify({"status": "error", "mensagem": "Empresa não vinculada."}), 400
 
-    cupom_cod = (dados.get('cupom') or '').strip().upper()
-    cupom_obj = None
-    if cupom_cod:
-        cupom_obj = CupomDesconto.query.filter_by(codigo=cupom_cod).first()
-        if cupom_obj and cupom_obj.is_valido:
-            fator = 1.0 - (cupom_obj.percentual_desconto / 100.0)
-            valor_total = max(1.0, round(valor_total * fator, 2))
-            cupom_obj.usos_atuais += 1
-            
-            empresa.cupom_utilizado = cupom_obj.codigo
-            empresa.afiliado_id = cupom_obj.id
-            
-            if 'ANUAL' in str(plano_nome).upper():
-                empresa.cupom_aplicavel_recorrente = True
-                empresa.data_expiracao_cupom = date.today() + relativedelta(years=1)
-            else:
-                empresa.cupom_aplicavel_recorrente = False
-                empresa.data_expiracao_cupom = date.today() + relativedelta(months=1)
-        else:
-            return jsonify({"status": "error", "mensagem": "Cupom de desconto inválido ou expirado."}), 400
+    resposta = criar_preferencia_mercado_pago(empresa, plano, valor_total, cupom)
 
-    ip_cliente = request.headers.get('X-Forwarded-For', request.remote_addr)
-    if ip_cliente and ',' in ip_cliente:
-        ip_cliente = ip_cliente.split(',')[0].strip()
-
-    resultado = criar_cobranca_mercadopago(
-        empresa=empresa,
-        nome_plano=plano_nome,
-        valor=valor_total,
-        forma_pagamento=forma_pagamento,
-        cartao_dados=cartao_dados,
-        remote_ip=ip_cliente,
-        parcelas=parcelas
-    )
-
-    if resultado.get('sucesso'):
-        cfg = resultado.get('plano_info', {})
-        
-        if forma_pagamento == 'CREDIT_CARD':
-            empresa.status_assinatura = 'ativo'
-            empresa.data_ultimo_pagamento = datetime.now().date()
-            dias = cfg.get('dias_validade', 30)
-            empresa.data_vencimento = datetime.now().date() + timedelta(days=dias)
-
-        db.session.commit()
+    if resposta.get('sucesso'):
         return jsonify({
-            "status": "success",
-            "mensagem": "Cobrança gerada com sucesso!",
-            "dados": resultado.get('dados'),
-            "pix": resultado.get('pix'),
-            "bankSlipUrl": resultado.get('bankSlipUrl'),
-            "invoiceUrl": resultado.get('invoiceUrl')
+            'status': 'success',
+            'init_point': resposta.get('init_point'),
+            'sandbox_init_point': resposta.get('sandbox_init_point')
         })
     else:
-        db.session.rollback()
         return jsonify({
-            "status": "error",
-            "mensagem": resultado.get('mensagem', 'Erro ao processar cobrança no Mercado Pago.')
+            'status': 'error',
+            'mensagem': resposta.get('mensagem', 'Erro ao gerar link de pagamento.')
         }), 400
 
 # -----------------------------------------------------------------------------

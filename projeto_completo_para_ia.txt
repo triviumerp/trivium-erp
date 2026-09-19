@@ -345,11 +345,13 @@ from models import (
     ComissaoAfiliado, RepasseAfiliado, EvidenciaServico
 )
 from auth.routes import auth_bp
+from auth.routes import validar_senha_forte
 
 # Serviços Externos (Mercado Pago e Armazenamento Supabase S3)
 import mercadopago
 from services.mercadopago_service import (
     criar_cobranca_mercadopago, 
+    criar_preferencia_mercado_pago,
     PLANOS_CONFIG
 )
 from services.storage_service import (
@@ -1647,7 +1649,7 @@ def gerar_pdf_proposta(id):
         ('PADDING', (0,0), (-1,-1), 6),
     ]))
     elementos.append(tab_cond)
-    elementos.append(Spacer(1, 24))
+    elementos.append(Spacer(1, 45))
 
     cargo_resp = _limpar_texto(current_user.cargo or 'Responsável pela Proposta')
     nome_usuario = _limpar_texto(current_user.nome)
@@ -2049,7 +2051,7 @@ def gerar_pdf_ordem_servico(id):
     elementos.append(tab_det)
 
     if exibir_assinaturas:
-        elementos.append(Spacer(1, 30))
+        elementos.append(Spacer(1, 45))
         resp_assinatura = _limpar_texto(servico.responsavel_tecnico or 'Responsável pelo Atendimento')
         doc_resp_ass = f"<br/><font size='7.5' color='#64748b'>Reg/Doc: {_limpar_texto(servico.documento_responsavel)}</font>" if servico.documento_responsavel else ""
         assinaturas = [
@@ -2367,10 +2369,12 @@ def perfil_empresa():
             def _so_numeros(valor):
                 return re.sub(r'\D', '', valor) if valor else ""
 
+            # Captura a razão social dependendo se é PF ou PJ (aceita ambos os nomes de input)
             if tipo_pessoa == 'PF':
-                empresa.razao_social = request.form.get('nome_profissional')
+                nome_pf = request.form.get('nome_profissional') or request.form.get('razao_social')
+                empresa.razao_social = nome_pf
                 empresa.nome_fantasia = "Profissional Autônomo"
-                empresa.cnpj = _so_numeros(request.form.get('cpf'))
+                empresa.cnpj = _so_numeros(request.form.get('cpf') or request.form.get('cnpj'))
             else:
                 empresa.razao_social = request.form.get('razao_social')
                 empresa.nome_fantasia = request.form.get('nome_fantasia')
@@ -2412,7 +2416,7 @@ def perfil_empresa():
 
             db.session.commit()
             flash('Dados cadastrais e identidade visual atualizados com sucesso!', 'success')
-            return redirect(url_for('perfil_empresa'))
+            return redirect(url_for('perfil_empresa') + '#tab-dados')
 
         elif form_type == 'dados_usuario':
             novo_nome = request.form.get('nome_usuario')
@@ -2468,12 +2472,18 @@ def criar_usuario_equipe():
 
     nome = request.form.get('nome', '').strip()
     email = request.form.get('email', '').strip().lower()
-    senha_padrao = request.form.get('senha_padrao')
+    senha_padrao = request.form.get('senha_padrao', '')
     cargo = request.form.get('cargo', 'Colaborador').strip()
     perfil_selecionado = request.form.get('perfil_predefinido', 'personalizado')
 
     if not email or not senha_padrao:
         flash('E-mail e senha inicial são obrigatórios.', 'warning')
+        return redirect(url_for('perfil_empresa'))
+
+    # Validação de Senha Forte
+    senha_valida, msg_erro = validar_senha_forte(senha_padrao)
+    if not senha_valida:
+        flash(f'A senha não foi aceita: {msg_erro}', 'warning')
         return redirect(url_for('perfil_empresa'))
 
     if Usuario.query.filter_by(email=email).first():
@@ -2510,10 +2520,11 @@ def resetar_senha_equipe(id):
         return redirect(url_for('perfil_empresa'))
 
     usuario = Usuario.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
-    nova_senha = request.form.get('nova_senha')
+    nova_senha = request.form.get('nova_senha', '')
 
-    if not nova_senha or len(nova_senha) < 4:
-        flash('A senha deve ter no mínimo 4 caracteres.', 'warning')
+    senha_valida, msg_erro = validar_senha_forte(nova_senha)
+    if not senha_valida:
+        flash(f'Não foi possível redefinir: {msg_erro}', 'warning')
         return redirect(url_for('perfil_empresa'))
 
     usuario.set_senha(nova_senha)
@@ -2531,10 +2542,20 @@ def editar_usuario_equipe(id):
     usuario = Usuario.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
 
     nome = request.form.get('nome', '').strip()
+    email = request.form.get('email', '').strip().lower()
     cargo = request.form.get('cargo', '').strip()
     
     if nome:
         usuario.nome = nome
+
+    # Validação e alteração do e-mail no banco de dados
+    if email and email != usuario.email:
+        email_em_uso = Usuario.query.filter(Usuario.email == email, Usuario.id != usuario.id).first()
+        if email_em_uso:
+            flash(f'O e-mail "{email}" já está sendo utilizado por outro usuário no sistema.', 'danger')
+            return redirect(url_for('perfil_empresa'))
+        usuario.email = email
+
     if cargo:
         usuario.cargo = cargo
 
@@ -2548,7 +2569,7 @@ def editar_usuario_equipe(id):
         usuario.nivel_acesso = 'admin' if perm_conf else 'operador'
 
     db.session.commit()
-    flash(f'Permissões do usuário "{usuario.nome}" atualizadas com sucesso!', 'success')
+    flash(f'Dados e permissões do usuário "{usuario.nome}" atualizados com sucesso no banco de dados!', 'success')
     return redirect(url_for('perfil_empresa'))
 
 @app.route('/configuracoes/usuarios/excluir/<int:id>', methods=['POST'])
@@ -2756,78 +2777,30 @@ def webhook_mercadopago():
 # -----------------------------------------------------------------------------
 # ENDPOINT DE CHECKOUT TRANSPARENTE MERCADO PAGO
 # -----------------------------------------------------------------------------
-@app.route('/api/assinatura/checkout-transparente', methods=['POST'])
+@app.route('/api/assinatura/checkout-preferencia', methods=['POST'])
 @login_required
-def api_checkout_transparente():
+def api_checkout_preferencia():
     dados = request.get_json(silent=True) or {}
-    plano_nome = dados.get('plano', 'MENSAL')
-    valor_total = float(dados.get('valor_total', 39.90))
-    parcelas = int(dados.get('parcelas', 1))
-    forma_pagamento = dados.get('forma_pagamento', 'PIX')
-    cartao_dados = dados.get('cartao')
+    plano = dados.get('plano', 'MENSAL')
+    valor_total = dados.get('valor_total')
+    cupom = dados.get('cupom')
 
     empresa = getattr(current_user, 'empresa', None)
     if not empresa:
-        return jsonify({"status": "error", "mensagem": "Empresa não vinculada ao usuário logado."}), 400
+        return jsonify({"status": "error", "mensagem": "Empresa não vinculada."}), 400
 
-    cupom_cod = (dados.get('cupom') or '').strip().upper()
-    cupom_obj = None
-    if cupom_cod:
-        cupom_obj = CupomDesconto.query.filter_by(codigo=cupom_cod).first()
-        if cupom_obj and cupom_obj.is_valido:
-            fator = 1.0 - (cupom_obj.percentual_desconto / 100.0)
-            valor_total = max(1.0, round(valor_total * fator, 2))
-            cupom_obj.usos_atuais += 1
-            
-            empresa.cupom_utilizado = cupom_obj.codigo
-            empresa.afiliado_id = cupom_obj.id
-            
-            if 'ANUAL' in str(plano_nome).upper():
-                empresa.cupom_aplicavel_recorrente = True
-                empresa.data_expiracao_cupom = date.today() + relativedelta(years=1)
-            else:
-                empresa.cupom_aplicavel_recorrente = False
-                empresa.data_expiracao_cupom = date.today() + relativedelta(months=1)
-        else:
-            return jsonify({"status": "error", "mensagem": "Cupom de desconto inválido ou expirado."}), 400
+    resposta = criar_preferencia_mercado_pago(empresa, plano, valor_total, cupom)
 
-    ip_cliente = request.headers.get('X-Forwarded-For', request.remote_addr)
-    if ip_cliente and ',' in ip_cliente:
-        ip_cliente = ip_cliente.split(',')[0].strip()
-
-    resultado = criar_cobranca_mercadopago(
-        empresa=empresa,
-        nome_plano=plano_nome,
-        valor=valor_total,
-        forma_pagamento=forma_pagamento,
-        cartao_dados=cartao_dados,
-        remote_ip=ip_cliente,
-        parcelas=parcelas
-    )
-
-    if resultado.get('sucesso'):
-        cfg = resultado.get('plano_info', {})
-        
-        if forma_pagamento == 'CREDIT_CARD':
-            empresa.status_assinatura = 'ativo'
-            empresa.data_ultimo_pagamento = datetime.now().date()
-            dias = cfg.get('dias_validade', 30)
-            empresa.data_vencimento = datetime.now().date() + timedelta(days=dias)
-
-        db.session.commit()
+    if resposta.get('sucesso'):
         return jsonify({
-            "status": "success",
-            "mensagem": "Cobrança gerada com sucesso!",
-            "dados": resultado.get('dados'),
-            "pix": resultado.get('pix'),
-            "bankSlipUrl": resultado.get('bankSlipUrl'),
-            "invoiceUrl": resultado.get('invoiceUrl')
+            'status': 'success',
+            'init_point': resposta.get('init_point'),
+            'sandbox_init_point': resposta.get('sandbox_init_point')
         })
     else:
-        db.session.rollback()
         return jsonify({
-            "status": "error",
-            "mensagem": resultado.get('mensagem', 'Erro ao processar cobrança no Mercado Pago.')
+            'status': 'error',
+            'mensagem': resposta.get('mensagem', 'Erro ao gerar link de pagamento.')
         }), 400
 
 # -----------------------------------------------------------------------------
@@ -3226,13 +3199,14 @@ def gerar_pdf_contrato(id):
     cor_primaria_hex = empresa.cor_primaria if empresa.cor_primaria and empresa.cor_primaria.startswith('#') else "#1e3a8a"
     cor_marca = colors.HexColor(cor_primaria_hex)
 
-    estilo_empresa_nome = ParagraphStyle('PDF_EmpresaNome', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=cor_marca)
-    estilo_empresa_sub = ParagraphStyle('PDF_EmpresaSub', parent=styles['Normal'], fontName='Helvetica', fontSize=7.5, leading=10, textColor=colors.HexColor("#475569"), alignment=2)
+    # Estilos idênticos aos da Proposta
+    estilo_empresa_nome = ParagraphStyle('PDF_EmpresaNome', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=13, leading=16, textColor=cor_marca)
+    estilo_empresa_sub = ParagraphStyle('PDF_EmpresaSub', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=11, textColor=colors.HexColor("#475569"))
     estilo_titulo_doc = ParagraphStyle('PDF_ContrTit', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, leading=15, textColor=cor_marca, alignment=1)
-    estilo_corpo = ParagraphStyle('PDF_ContrCorpo', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=13, textColor=colors.HexColor("#1e293b"), alignment=4)
     estilo_subtit = ParagraphStyle('PDF_ContrSubTit', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=cor_marca)
+    estilo_corpo = ParagraphStyle('PDF_ContrCorpo', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=13, textColor=colors.HexColor("#1e293b"), alignment=4)
 
-    logo_elemento = _obter_logo_reportlab(empresa.logo_filename, width=1.6*inch, height=0.6*inch)
+    logo_elemento = _obter_logo_reportlab(empresa.logo_filename, width=1.5*inch, height=0.6*inch)
 
     razao_empresa = _limpar_texto(empresa.razao_social or 'EMPRESA PRESTADORA')
     fantasia_empresa = _limpar_texto(empresa.nome_fantasia or '')
@@ -3250,6 +3224,7 @@ def gerar_pdf_contrato(id):
     {end_empresa}
     """.strip()
 
+    # Cabeçalho timbrado uniforme (1.8 in x 5.7 in)
     if logo_elemento:
         tab_topo = Table([[logo_elemento, Paragraph(info_empresa_html, estilo_empresa_sub)]], colWidths=[1.8*inch, 5.7*inch])
     else:
@@ -3260,13 +3235,15 @@ def gerar_pdf_contrato(id):
         ('ALIGN', (1,0), (1,0), 'RIGHT'),
     ]))
     elementos.append(tab_topo)
-    elementos.append(Spacer(1, 4))
+    elementos.append(Spacer(1, 6))
     elementos.append(HRFlowable(width="100%", thickness=1.5, color=cor_marca, spaceAfter=12))
 
+    # Título do Contrato e Documento
     elementos.append(Paragraph(f"<b>{_limpar_texto(contrato.titulo).upper()}</b>", estilo_titulo_doc))
     elementos.append(Paragraph(f"<font color='#64748b' size='8'>DOCUMENTO Nº {_limpar_texto(contrato.numero_documento)}</font>", estilo_titulo_doc))
-    elementos.append(Spacer(1, 10))
+    elementos.append(Spacer(1, 12))
 
+    # Conteúdo das Cláusulas
     texto_raw = contrato.conteudo_html or ""
     blocos = re.split(r'</?(?:p|h\d|div|li|tr)[^>]*>', texto_raw)
 
@@ -3285,12 +3262,14 @@ def gerar_pdf_contrato(id):
             elementos.append(Paragraph(bloco_fmt, estilo_corpo))
             elementos.append(Spacer(1, 4))
 
-    elementos.append(Spacer(1, 20))
+    # Espaçamento generoso antes das assinaturas
+    elementos.append(Spacer(1, 45))
+
     nome_cli = _limpar_texto(cliente.nome or 'CONTRATANTE')
     dados_assinaturas = [
         [
-            Paragraph(f"____________________________________________<br/><b>CONTRATADA:</b> {razao_empresa.upper()}", estilo_corpo),
-            Paragraph(f"____________________________________________<br/><b>CONTRATANTE:</b> {nome_cli.upper()}", estilo_corpo)
+            Paragraph(f"____________________________________________<br/><b>{razao_empresa.upper()}</b><br/>Contratada", estilo_corpo),
+            Paragraph(f"____________________________________________<br/><b>{nome_cli.upper()}</b><br/>Contratante", estilo_corpo)
         ]
     ]
     tab_ass = Table(dados_assinaturas, colWidths=[3.75*inch, 3.75*inch])
@@ -4845,6 +4824,8 @@ from dateutil.relativedelta import relativedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, make_response
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from services.auth_token import gerar_token_recuperacao, validar_token_recuperacao
+from services.email_service import enviar_email_recuperacao_senha
 
 from extensions import db, limiter
 from models import Empresa, Usuario, CupomDesconto
@@ -5068,23 +5049,56 @@ def esqueci_senha():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
 
+    email_enviado_mascarado = None
+    disparo_solicitado = False
+
     if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        usuario = Usuario.query.filter_by(email=email).first()
+        identificador = request.form.get('email', '').strip().lower()
+        usuario = None
+
+        if '@' in identificador:
+            usuario = Usuario.query.filter_by(email=identificador).first()
+        else:
+            doc_limpo = re.sub(r'\D', '', identificador)
+            if doc_limpo:
+                empresa_alvo = Empresa.query.filter_by(cnpj=doc_limpo).first()
+                if empresa_alvo:
+                    usuario = Usuario.query.filter_by(empresa_id=empresa_alvo.id).first()
 
         if usuario:
-            flash('Se o e-mail estiver cadastrado, as instruções para redefinição foram enviadas.', 'info')
-        else:
-            flash('Se o e-mail estiver cadastrado, as instruções para redefinição foram enviadas.', 'info')
+            token = gerar_token_recuperacao(usuario.email)
+            link_reset = url_for('auth.redefinir_senha', token=token, _external=True)
+            enviar_email_recuperacao_senha(usuario.email, usuario.nome, link_reset)
 
-        return redirect(url_for('auth.login'))
+            # Mascara o e-mail: sergio@gmail.com -> s***o@g***.com
+            partes = usuario.email.split('@')
+            user_parte = partes[0]
+            dom_parte = partes[1] if len(partes) > 1 else ""
+            
+            user_masc = user_parte[0] + "***" + (user_parte[-1] if len(user_parte) > 1 else "")
+            dom_masc = dom_parte[0] + "***." + dom_parte.split('.')[-1] if '.' in dom_parte else dom_parte
+            email_enviado_mascarado = f"{user_masc}@{dom_masc}"
 
-    return render_template('auth/esqueci_senha.html') if os.path.exists('templates/auth/esqueci_senha.html') else render_template('auth/login.html')
+        disparo_solicitado = True
+        return render_template('auth/esqueci_senha.html', 
+                               sucesso_envio=disparo_solicitado, 
+                               email_destino=email_enviado_mascarado)
+
+    return render_template('auth/esqueci_senha.html', sucesso_envio=False)
+
 
 @auth_bp.route('/redefinir-senha/<token>', methods=['GET', 'POST'])
 def redefinir_senha(token):
     if current_user.is_authenticated:
         return redirect(url_for('index'))
+
+    # Valida o token criptográfico (tempo limite: 30 min)
+    email = validar_token_recuperacao(token, max_age_segundos=1800)
+    if not email:
+        flash('O link de recuperação é inválido ou expirou. Solicite um novo envio.', 'danger')
+        return redirect(url_for('auth.esqueci_senha'))
+
+    usuario = Usuario.query.filter_by(email=email).first_or_404()
 
     if request.method == 'POST':
         nova_senha = request.form.get('nova_senha', '')
@@ -5096,10 +5110,14 @@ def redefinir_senha(token):
             return redirect(request.url)
 
         if nova_senha != confirma_senha:
-            flash('A nova senha e a confirmação não conferem.', 'warning')
+            flash('A nova palavra-passe e a confirmação não conferem.', 'warning')
             return redirect(request.url)
 
-        flash('Senha alterada com sucesso! Faça login com a nova senha.', 'success')
+        # Grava a nova palavra-passe com hash seguro
+        usuario.set_senha(nova_senha)
+        db.session.commit()
+
+        flash('Palavra-passe atualizada com sucesso! Inicie sessão com os novos dados.', 'success')
         return redirect(url_for('auth.login'))
 
     return render_template('auth/redefinir_senha.html', token=token)
@@ -5534,7 +5552,7 @@ import urllib.error
 
 RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
 # Enquanto você não tiver domínio próprio configurado no Resend, use o remetente oficial de teste:
-DEFAULT_FROM = "Trivium ERP <onboarding@resend.dev>"
+DEFAULT_FROM = "Trivium ERP <suporte@triviumerp.com.br>"
 
 def _enviar_email(destinatario, assunto, html_conteudo):
     """Envia e-mail via API HTTPS do Resend (funciona 100% no plano gratuito do Render)."""
@@ -5826,6 +5844,61 @@ def criar_cobranca_mercadopago(empresa, nome_plano, valor, forma_pagamento, cart
             return {"sucesso": False, "mensagem": f"Transação não autorizada: {msg}"}
 
     return {"sucesso": False, "mensagem": "Método de pagamento inválido."}
+
+def criar_preferencia_mercado_pago(empresa, plano, valor_total, cupom_codigo=None):
+    sdk = _get_sdk()
+    if not sdk:
+        return {"sucesso": False, "mensagem": "Credenciais do Mercado Pago não configuradas no servidor."}
+
+    chave_plano = str(plano).upper().replace("PLANO ", "").strip()
+    if 'ANUAL' in chave_plano:
+        cfg = PLANOS_CONFIG['ANUAL']
+    elif 'SEMESTRAL' in chave_plano:
+        cfg = PLANOS_CONFIG['SEMESTRAL']
+    else:
+        cfg = PLANOS_CONFIG['MENSAL']
+
+    # Se houver desconto de cupom validado no front, usa o valor com desconto
+    valor_final = float(valor_total) if valor_total else float(cfg['valor_total'])
+
+    base_url = "https://app.triviumerp.com.br" # Substitua se necessário pelo seu domínio em produção
+
+    preference_data = {
+        "items": [
+            {
+                "title": f"Assinatura Trivium ERP - Plano {cfg['nome']}",
+                "quantity": 1,
+                "unit_price": valor_final,
+                "currency_id": "BRL"
+            }
+        ],
+        "payer": {
+            "email": empresa.email or "contato@triviumerp.com.br",
+            "name": empresa.razao_social or "Cliente Trivium"
+        },
+        "back_urls": {
+            "success": f"{base_url}/configuracoes/perfil#tab-planos",
+            "failure": f"{base_url}/configuracoes/perfil#tab-planos",
+            "pending": f"{base_url}/configuracoes/perfil#tab-planos"
+        },
+        "auto_return": "approved",
+        "external_reference": f"emp_{empresa.id}_{cfg['nome']}"
+    }
+
+    try:
+        preference_response = sdk.preference().create(preference_data)
+        resultado = preference_response.get("response", {})
+        
+        if preference_response.get("status") in (200, 201) and "init_point" in resultado:
+            return {
+                "sucesso": True,
+                "init_point": resultado.get("init_point"),
+                "sandbox_init_point": resultado.get("sandbox_init_point")
+            }
+        else:
+            return {"sucesso": False, "mensagem": "Erro ao criar preferência de pagamento no Mercado Pago."}
+    except Exception as e:
+        return {"sucesso": False, "mensagem": str(e)}
 
 
 
@@ -8936,458 +9009,357 @@ ARQUIVO: .\templates\perfil_empresa.html
 --------------------------------------------------
 {% extends 'base.html' %}
 
-{% block title %}Configurações & Perfil - Trivium ERP{% endblock %}
+{% block title %}Configurações & Perfil da Empresa - Trivium ERP{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
     <div>
-        <h3 class="fw-bold mb-1 text-dark">Configurações & Perfil</h3>
-        <p class="text-muted mb-0 small">Gerencie os dados cadastrais da sua conta, identidade visual, faturamento e equipe</p>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-gear-wide-connected text-primary me-2"></i>Configurações da Empresa
+        </h2>
+        <p class="text-muted mb-0">Gerencie a identidade visual, dados cadastrais, plano de assinatura e os membros da sua equipe</p>
     </div>
 </div>
 
 <div class="row g-4">
-    <!-- Coluna da Esquerda: Navegação por Abas -->
+    <!-- COLUNA LATERAL ESQUERDA: MENU DE NAVEGAÇÃO VERTICAL -->
     <div class="col-lg-3">
-        <div class="card-custom p-3">
-            <div class="nav flex-column nav-pills gap-1" id="config-tabs" role="tablist">
-                <button class="nav-link active text-start fw-semibold py-2 px-3 rounded-3" id="tab-empresa-btn" data-bs-toggle="pill" data-bs-target="#tab-empresa" type="button" role="tab">
-                    <i class="bi bi-building me-2"></i> Dados Cadastrais
+        <div class="card border-0 shadow-sm rounded-4 p-3 bg-white sticky-top" style="top: 90px;">
+            <h6 class="fw-bold text-dark mb-3 px-2">Configurações</h6>
+            <div class="nav flex-column nav-pills gap-1" id="perfilTabs" role="tablist">
+                <button class="nav-link nav-link-custom text-start active fw-bold py-2 px-3 rounded-3" id="dados-tab" data-bs-toggle="pill" data-bs-target="#tab-dados" type="button" role="tab">
+                    <i class="bi bi-building me-2 text-primary"></i>Dados Cadastrais & Marca
                 </button>
-                <button class="nav-link text-start fw-semibold py-2 px-3 rounded-3" id="tab-usuario-btn" data-bs-toggle="pill" data-bs-target="#tab-usuario" type="button" role="tab">
-                    <i class="bi bi-person-badge me-2"></i> Minha Conta & Senha
+                <button class="nav-link nav-link-custom text-start fw-bold py-2 px-3 rounded-3" id="planos-tab" data-bs-toggle="pill" data-bs-target="#tab-planos" type="button" role="tab">
+                    <i class="bi bi-credit-card-2-front me-2 text-primary"></i>Planos & Assinatura
                 </button>
-                <button class="nav-link text-start fw-semibold py-2 px-3 rounded-3" id="tab-pagamento-btn" data-bs-toggle="pill" data-bs-target="#tab-pagamento" type="button" role="tab">
-                    <i class="bi bi-credit-card-2-front me-2"></i> Assinatura & Planos
+                <button class="nav-link nav-link-custom text-start fw-bold py-2 px-3 rounded-3" id="equipe-tab" data-bs-toggle="pill" data-bs-target="#tab-equipe" type="button" role="tab">
+                    <i class="bi bi-people me-2 text-primary"></i>Equipe & Acessos
                 </button>
-                <button class="nav-link text-start fw-semibold py-2 px-3 rounded-3" id="tab-equipe-btn" data-bs-toggle="pill" data-bs-target="#tab-equipe" type="button" role="tab">
-                    <i class="bi bi-people me-2"></i> Usuários & Equipe
+                <button class="nav-link nav-link-custom text-start fw-bold py-2 px-3 rounded-3" id="minha-conta-tab" data-bs-toggle="pill" data-bs-target="#tab-minhaconta" type="button" role="tab">
+                    <i class="bi bi-person-lock me-2 text-primary"></i>Minha Conta
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Coluna da Direita: Conteúdo das Abas -->
+    <!-- COLUNA DIREITA: CONTEÚDO DAS ABAS -->
     <div class="col-lg-9">
-        <div class="tab-content" id="config-tabContent">
+        <div class="tab-content" id="perfilTabsContent">
             
-            <!-- ABA 1: DADOS CADASTRAIS (EMPRESA / PROFISSIONAL + WHITE-LABEL) -->
-            <div class="tab-pane fade show active" id="tab-empresa" role="tabpanel">
-                <div class="card-custom p-4">
-                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-building-gear text-primary me-2"></i>Identidade & Dados Cadastrais</h5>
-                    
-                    <form method="POST" action="{{ url_for('perfil_empresa') }}" enctype="multipart/form-data">
+            <!-- ABA 1: DADOS CADASTRAIS & LOGOTIPO -->
+            <div class="tab-pane fade show active" id="tab-dados" role="tabpanel">
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+                    <form method="POST" enctype="multipart/form-data">
                         <input type="hidden" name="form_type" value="dados_empresa">
 
-                        <!-- SELETOR PF / PJ -->
-                        <div class="mb-4">
-                            <label class="fw-bold text-dark d-block mb-2">Tipo de Cadastro</label>
-                            <div class="btn-group w-100" role="group">
-                                <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pj" value="PJ" 
-                                    {% if not perfil.cnpj or (perfil.cnpj|replace('.', '')|replace('-', '')|replace('/', '')|length > 11) %}checked{% endif %} 
-                                    onchange="alternarTipoPessoa()">
-                                <label class="btn btn-outline-primary fw-bold py-2" for="tipo_pj">
-                                    <i class="bi bi-building me-1"></i> Pessoa Jurídica (PJ)
-                                </label>
-
-                                <input type="radio" class="btn-check" name="tipo_pessoa" id="tipo_pf" value="PF" 
-                                    {% if perfil.cnpj and (perfil.cnpj|replace('.', '')|replace('-', '')|replace('/', '')|length <= 11) %}checked{% endif %} 
-                                    onchange="alternarTipoPessoa()">
-                                <label class="btn btn-outline-primary fw-bold py-2" for="tipo_pf">
-                                    <i class="bi bi-person me-1"></i> Pessoa Física (Autônomo)
-                                </label>
+                        <!-- TIPO DE PESSOA: PJ OU PF -->
+                        <div class="mb-4 p-3 bg-light rounded-3 border d-flex gap-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_pessoa" id="tipoPJ" value="PJ" 
+                                       {% if not perfil.cnpj or perfil.cnpj|length > 11 %}checked{% endif %} 
+                                       onchange="alternarTipoPessoaPerfil('PJ')">
+                                <label class="form-check-label fw-bold text-dark" for="tipoPJ">Pessoa Jurídica (Empresa com CNPJ)</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_pessoa" id="tipoPF" value="PF" 
+                                       {% if perfil.cnpj and perfil.cnpj|length <= 11 %}checked{% endif %} 
+                                       onchange="alternarTipoPessoaPerfil('PF')">
+                                <label class="form-check-label fw-bold text-dark" for="tipoPF">Pessoa Física (Profissional Autônomo / CPF)</label>
                             </div>
                         </div>
-
-                        <div class="row g-3">
-                            <!-- CAMPOS PJ -->
-                            <div class="col-md-6 campo-pj">
-                                <label class="form-label small fw-bold text-dark">Razão Social *</label>
-                                <input type="text" name="razao_social" id="razao_social" class="form-control" 
-                                    value="{{ perfil.razao_social or '' }}" 
-                                    placeholder="Ex: Minha Empresa de Consultoria LTDA">
-                            </div>
-                            <div class="col-md-6 campo-pj">
-                                <label class="form-label small fw-bold text-dark">Nome Fantasia</label>
-                                <input type="text" name="nome_fantasia" id="nome_fantasia" class="form-control" 
-                                    value="{{ perfil.nome_fantasia if perfil.nome_fantasia != 'Profissional Autônomo' else '' }}" 
-                                    placeholder="Ex: Trivium Consultoria">
-                            </div>
-                            <div class="col-md-6 campo-pj">
-                                <label class="form-label small fw-bold text-dark">CNPJ *</label>
-                                <input type="text" name="cnpj" id="cnpj_input" class="form-control" 
-                                    value="{{ perfil.cnpj if (perfil.cnpj and (perfil.cnpj|replace('.', '')|replace('-', '')|replace('/', '')|length > 11)) else '' }}" 
-                                    placeholder="00.000.000/0000-00">
-                            </div>
-
-                            <!-- CAMPOS PF -->
-                            <div class="col-md-6 campo-pf d-none">
-                                <label class="form-label small fw-bold text-dark">Nome Completo do Profissional *</label>
-                                <input type="text" name="nome_profissional" id="nome_profissional" class="form-control" 
-                                    value="{{ perfil.razao_social or '' }}" 
-                                    placeholder="Ex: Carlos Eduardo Silva">
-                            </div>
-                            <div class="col-md-6 campo-pf d-none">
-                                <label class="form-label small fw-bold text-dark">CPF *</label>
-                                <input type="text" name="cpf" id="cpf_input" class="form-control" 
-                                    value="{{ perfil.cnpj if (perfil.cnpj and (perfil.cnpj|replace('.', '')|replace('-', '')|replace('/', '')|length <= 11)) else '' }}" 
-                                    placeholder="000.000.000-00">
-                            </div>
-
-                            <!-- CONTATOS -->
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold text-dark">Telefone / WhatsApp *</label>
-                                <input type="text" name="telefone" class="form-control" value="{{ perfil.telefone or '' }}" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold text-dark">E-mail Comercial *</label>
-                                <input type="email" name="email" class="form-control" value="{{ perfil.email or '' }}" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold text-dark">Site Oficial / Portfólio</label>
-                                <input type="text" name="site" class="form-control" value="{{ perfil.site or '' }}" placeholder="www.minhaempresa.com.br">
-                            </div>
-
-                            <hr class="my-4 text-muted">
-
-                            <!-- ENDEREÇO ESTRUTURADO COM VIA CEP -->
-                            <h6 class="fw-bold text-dark mb-2"><i class="bi bi-geo-alt text-primary me-2"></i>Endereço Comercial</h6>
-                            
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold text-dark">CEP</label>
-                                <div class="input-group">
-                                    <input type="text" name="cep" id="cep_empresa" class="form-control" value="{{ perfil.cep or '' }}" maxlength="9" placeholder="00000-000">
-                                    <button class="btn btn-outline-secondary" type="button" onclick="buscarCepEmpresa()"><i class="bi bi-search"></i></button>
-                                </div>
-                            </div>
-                            <div class="col-md-7">
-                                <label class="form-label small fw-bold text-dark">Logradouro (Rua, Avenida, etc.)</label>
-                                <input type="text" name="logradouro" id="logradouro_empresa" class="form-control" value="{{ perfil.logradouro or '' }}">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label small fw-bold text-dark">Número</label>
-                                <input type="text" name="numero" id="numero_empresa" class="form-control" value="{{ perfil.numero or '' }}">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold text-dark">Complemento</label>
-                                <input type="text" name="complemento" id="complemento_empresa" class="form-control" value="{{ perfil.complemento or '' }}" placeholder="Sala, Andar, Galpão...">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold text-dark">Bairro</label>
-                                <input type="text" name="bairro" id="bairro_empresa" class="form-control" value="{{ perfil.bairro or '' }}">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold text-dark">Cidade</label>
-                                <input type="text" name="cidade" id="cidade_empresa" class="form-control" value="{{ perfil.cidade or '' }}">
-                            </div>
-                            <div class="col-md-1">
-                                <label class="form-label small fw-bold text-dark">UF</label>
-                                <input type="text" name="estado" id="estado_empresa" class="form-control text-uppercase" maxlength="2" value="{{ perfil.estado or '' }}">
-                            </div>
-
-                            <hr class="my-4 text-muted">
-
-                            <!-- PERSONALIZAÇÃO VISUAL (WHITE-LABEL) -->
-                            <h6 class="fw-bold text-dark mb-2"><i class="bi bi-palette text-primary me-2"></i>Personalização Visual (White-label)</h6>
-                            
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold text-dark">Logotipo da Empresa</label>
-                                <input type="file" name="logo" class="form-control" accept="image/png, image/jpeg, image/webp">
-                                <small class="text-muted d-block mt-1">Recomendado: PNG com fundo transparente.</small>
-                                {% if perfil.logo_filename %}
-                                <div class="mt-2 p-2 bg-light border rounded text-center">
-                                    <img src="{{ url_for('download_file', filename=perfil.logo_filename) }}" alt="Logo" style="max-height: 50px; max-width: 100%;">
-                                </div>
-                                {% endif %}
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold text-dark">Cor Primária do Sistema & PDF</label>
-                                <div class="d-flex align-items-center gap-3 mt-1">
-                                    <input type="color" name="cor_primaria" class="form-control form-control-color" value="{{ perfil.cor_primaria or '#1e3a8a' }}">
-                                    <span class="small text-muted">Esta cor define os títulos dos seus relatórios em PDF.</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="text-end mt-4 pt-3 border-top">
-                            <button type="submit" class="btn btn-primary fw-bold px-4">Salvar Dados da Empresa</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- ABA 2: MINHA CONTA & SENHA -->
-            <div class="tab-pane fade" id="tab-usuario" role="tabpanel">
-                <div class="card-custom p-4">
-                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-shield-lock text-primary me-2"></i>Segurança & Dados de Acesso</h5>
-                    
-                    <form method="POST" action="{{ url_for('perfil_empresa') }}">
-                        <input type="hidden" name="form_type" value="dados_usuario">
 
                         <div class="row g-3 mb-4">
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold text-dark">Seu Nome</label>
-                                <input type="text" name="nome_usuario" class="form-control" value="{{ current_user.nome }}" required>
+                            <div class="col-md-6" id="boxRazaoSocial">
+                                <label class="form-label small fw-bold" id="labelRazaoSocial">Razão Social *</label>
+                                <input type="text" name="razao_social" id="inputRazaoSocial" class="form-control" value="{{ perfil.razao_social or '' }}" required>
+                            </div>
+                            <div class="col-md-6" id="boxNomeFantasia">
+                                <label class="form-label small fw-bold">Nome Fantasia</label>
+                                <input type="text" name="nome_fantasia" id="inputNomeFantasia" class="form-control" value="{{ perfil.nome_fantasia or '' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold" id="labelDocEmpresa">CNPJ *</label>
+                                <input type="text" name="cnpj" id="inputDocEmpresa" class="form-control font-monospace" value="{{ perfil.cnpj or '' }}" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Telefone / WhatsApp</label>
+                                <input type="text" name="telefone" class="form-control" value="{{ perfil.telefone or '' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">E-mail Comercial</label>
+                                <input type="email" name="email" class="form-control" value="{{ perfil.email or '' }}">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label small fw-bold text-dark">E-mail de Login</label>
-                                <input type="email" name="email_login" class="form-control" value="{{ current_user.email }}" required>
+                                <label class="form-label small fw-bold">Site / Link Principal</label>
+                                <input type="text" name="site" class="form-control" value="{{ perfil.site or '' }}" placeholder="www.suaempresa.com.br">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Cor Primária da Marca (Cabeçalhos e PDFs)</label>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="color" name="cor_primaria" id="corPrimariaInput" class="form-control form-control-color" value="{{ perfil.cor_primaria or '#1e3a8a' }}" oninput="atualizarCorPreview(this.value)">
+                                    <span class="small text-muted font-monospace" id="labelCorHex">{{ perfil.cor_primaria or '#1e3a8a' }}</span>
+                                </div>
                             </div>
                         </div>
 
-                        <hr class="my-4 text-muted">
-                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-key text-primary me-2"></i>Alterar Senha de Acesso</h6>
+                        <!-- SEÇÃO DE LOGOTIPO COM PREVIEW IMEDIATO -->
+                        <div class="p-3 bg-light rounded-3 border mb-4">
+                            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-2">
+                                <label class="form-label small fw-bold text-dark mb-0">
+                                    <i class="bi bi-image text-primary me-1"></i>Logotipo Oficial (Papel Timbrado e PDFs)
+                                </label>
+                                <button type="button" class="btn btn-sm btn-outline-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalPreviewTimbrado">
+                                    <i class="bi bi-eye-fill me-1"></i>Visualizar Papel Timbrado
+                                </button>
+                            </div>
 
-                        <div class="row g-3">
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold text-dark">Senha Atual</label>
-                                <input type="password" name="senha_atual" class="form-control" placeholder="••••••••">
+                            <div class="input-group input-group-sm mb-2">
+                                <input type="file" name="logo" id="inputLogoUpload" class="form-control" accept="image/png, image/jpeg, image/webp" onchange="atualizarPreviewAoVivo(this)">
+                            </div>
+
+                            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center small text-muted">
+                                <div>
+                                    <i class="bi bi-info-circle me-1 text-primary"></i>
+                                    Proporção recomendada: <strong>400 × 130 pixels</strong> (formato retangular <strong>3:1</strong> em <strong>PNG transparente</strong>).
+                                </div>
+                                <div>Tamanho máximo: <strong>2 MB</strong></div>
+                            </div>
+
+                            {% if perfil.logo_filename %}
+                            <div class="mt-3 p-2 bg-white border rounded text-center" style="max-width: 250px;">
+                                <small class="text-muted d-block mb-1" style="font-size: 0.72rem;">Logo Atual Cadastrada:</small>
+                                <img src="{{ url_for('download_file', filename=perfil.logo_filename) }}" alt="Logo Cadastrada" style="max-height: 50px; max-width: 100%; object-fit: contain;">
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- ENDEREÇO DA EMPRESA COM BUSCA CEP -->
+                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-geo-alt text-primary me-2"></i>Endereço Corporativo</h6>
+                        <div class="row g-2 mb-4">
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">CEP</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="text" name="cep" id="cepEmpresa" class="form-control" value="{{ perfil.cep or '' }}" placeholder="00000-000">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="consultarCepEmpresa()"><i class="bi bi-search"></i></button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Logradouro</label>
+                                <input type="text" name="logradouro" id="logradouroEmpresa" class="form-control form-control-sm" value="{{ perfil.logradouro or '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Número</label>
+                                <input type="text" name="numero" id="numeroEmpresa" class="form-control form-control-sm" value="{{ perfil.numero or '' }}">
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label small fw-bold text-dark">Nova Senha</label>
-                                <input type="password" name="nova_senha" class="form-control" placeholder="Mínimo 8 caracteres">
+                                <label class="form-label small fw-bold">Complemento</label>
+                                <input type="text" name="complemento" class="form-control form-control-sm" value="{{ perfil.complemento or '' }}">
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label small fw-bold text-dark">Confirmar Nova Senha</label>
-                                <input type="password" name="confirma_senha" class="form-control" placeholder="Repita a nova senha">
+                                <label class="form-label small fw-bold">Bairro</label>
+                                <input type="text" name="bairro" id="bairroEmpresa" class="form-control form-control-sm" value="{{ perfil.bairro or '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Cidade</label>
+                                <input type="text" name="cidade" id="cidadeEmpresa" class="form-control form-control-sm" value="{{ perfil.cidade or '' }}">
+                            </div>
+                            <div class="col-md-1">
+                                <label class="form-label small fw-bold">UF</label>
+                                <input type="text" name="estado" id="estadoEmpresa" class="form-control form-control-sm text-uppercase" maxlength="2" value="{{ perfil.estado or '' }}">
                             </div>
                         </div>
 
-                        <div class="text-end mt-4 pt-3 border-top">
-                            <button type="submit" class="btn btn-primary fw-bold px-4">Atualizar Meus Dados</button>
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-primary fw-bold px-4">
+                                <i class="bi bi-check2-circle me-1"></i> Salvar Dados da Empresa
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
 
-            <!-- ABA 3: ASSINATURA & PLANOS COM CHECKOUT INTEGRADO -->
-            <div class="tab-pane fade" id="tab-pagamento" role="tabpanel">
-                
-                <!-- CARD STATUS DA ASSINATURA ATUALIZADO -->
-                <div class="card border-0 shadow-sm p-4 rounded-4 bg-white mb-4">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="fw-bold text-dark mb-0">
-                            <i class="bi bi-credit-card-2-front text-primary me-2"></i>Status da Assinatura
-                        </h5>
-                        {% if perfil.status_assinatura == 'trial' %}
-                            <span class="badge bg-warning text-dark px-3 py-2 fw-bold">
-                                <i class="bi bi-clock-history me-1"></i>Período de Testes ({{ perfil.dias_restantes_trial }} dias restantes)
+            <!-- ABA 2: PLANOS & ASSINATURA -->
+            <div class="tab-pane fade" id="tab-planos" role="tabpanel">
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+                    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+                        <div>
+                            <h5 class="fw-bold text-dark mb-1"><i class="bi bi-shield-check text-primary me-2"></i>Gestão de Planos & Assinatura</h5>
+                            <p class="text-muted small mb-0">Escolha o ciclo ideal para a sua empresa. Sem burocracia e ativação imediata.</p>
+                        </div>
+                        <div>
+                            <span class="badge {{ 'bg-success' if perfil.status_assinatura == 'ativo' else ('bg-warning text-dark' if perfil.status_assinatura == 'trial' else 'bg-danger') }} px-3 py-2 fs-6">
+                                Status: {{ perfil.status_assinatura|upper }}
                             </span>
-                        {% elif perfil.status_assinatura == 'ativo' %}
-                            <span class="badge bg-success px-3 py-2 fw-bold">
-                                <i class="bi bi-check-circle me-1"></i>Assinatura Ativa
-                            </span>
-                        {% else %}
-                            <span class="badge bg-danger px-3 py-2 fw-bold">
-                                <i class="bi bi-x-circle me-1"></i>Acesso Suspenso
-                            </span>
-                        {% endif %}
+                        </div>
                     </div>
 
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <small class="text-muted d-block">Plano Atual:</small>
-                            <strong class="text-dark fs-6">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded-3 bg-light">
+                                <span class="small text-muted fw-bold d-block mb-1">PLANO ATUAL</span>
+                                <h5 class="fw-bold text-primary mb-1">{{ perfil.plano or 'Plano Flex Mensal' }}</h5>
+                                <small class="text-muted">Acesso completo liberado</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded-3 bg-light">
+                                <span class="small text-muted fw-bold d-block mb-1">VALOR ATUAL</span>
+                                <h5 class="fw-bold text-dark mb-1">
+                                    {% if perfil.valor_mensalidade and perfil.valor_mensalidade > 0 %}
+                                        R$ {{ "%.2f"|format(perfil.valor_mensalidade) }} <small class="text-muted fw-normal" style="font-size: 0.8rem;">/mês</small>
+                                    {% else %}
+                                        R$ 0,00 <small class="text-muted fw-normal" style="font-size: 0.8rem;">(Período de Testes)</small>
+                                    {% endif %}
+                                </h5>
+                                <small class="text-muted">Cobrança Mercado Pago</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded-3 bg-light">
+                                <span class="small text-muted fw-bold d-block mb-1">PRÓXIMO VENCIMENTO</span>
+                                <h5 class="fw-bold {% if perfil.dias_restantes_trial and perfil.dias_restantes_trial < 3 %}text-danger{% else %}text-dark{% endif %} mb-1">
+                                    {{ perfil.data_vencimento.strftime('%d/%m/%Y') if perfil.data_vencimento else '--' }}
+                                </h5>
                                 {% if perfil.status_assinatura == 'trial' %}
-                                    Período de Testes (Trial)
+                                    <small class="text-primary fw-bold">{{ perfil.dias_restantes_trial }} dia(s) restantes de avaliação</small>
                                 {% else %}
-                                    Plano {{ perfil.plano or 'Mensal' }}
+                                    <small class="text-muted">Renovação programada</small>
                                 {% endif %}
-                            </strong>
-                        </div>
-
-                        <div class="col-md-3">
-                            <small class="text-muted d-block">Valor Contratado:</small>
-                            <strong class="text-success fs-6">
-                                {% if perfil.status_assinatura == 'trial' or current_user.empresa.status_assinatura == 'trial' %}
-                                    R$ 0,00 (Gratuito)
-                                {% else %}
-                                    R$ {{ "%.2f"|format(perfil.valor_mensalidade or 0.0) }}/mês
-                                {% endif %}
-                            </strong>
-                        </div>
-
-                        <div class="col-md-3">
-                            <small class="text-muted d-block">
-                                {% if perfil.status_assinatura == 'trial' %}
-                                    Término do Trial (Bloqueio):
-                                {% else %}
-                                    Próximo Vencimento:
-                                {% endif %}
-                            </small>
-                            <strong class="text-dark fs-6">
-                                {{ perfil.data_vencimento.strftime('%d/%m/%Y') if perfil.data_vencimento else 'Não definido' }}
-                            </strong>
-                        </div>
-
-                        <div class="col-md-3">
-                            <small class="text-muted d-block">Forma de Pagamento:</small>
-                            <strong class="text-primary fs-6">
-                                {{ perfil.forma_pagamento_mp or perfil.forma_pagamento_asaas or 'Pix / Cartão' }}
-                            </strong>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- GRADE DE PLANOS PADRONIZADA (CONFIGURAÇÕES / PERFIL) -->
-                <div class="row g-4 text-start mb-4">
-                    
-                    <!-- PLANO MENSAL -->
-                    <div class="col-lg-4">
-                        <div class="card border rounded-4 p-4 h-100 d-flex flex-column bg-white shadow-sm">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="badge bg-light text-secondary border px-3 py-1 fw-bold">Mensal</span>
                             </div>
-                            <h4 class="fw-bold mb-1 text-dark">Plano Mensal</h4>
-                            <p class="text-muted small mb-3">Máxima flexibilidade para o seu dia a dia.</p>
-
-                            <div class="d-flex align-items-baseline gap-2 mb-1">
-                                <span class="fs-2 fw-bold text-dark">R$ 39,90</span>
-                                <span class="text-muted small fw-semibold">/mês</span>
-                            </div>
-                            <small class="text-muted d-block mb-3">Cobrança recorrente mensal</small>
-
-                            <ul class="list-unstyled small text-muted mb-4 flex-grow-1">
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Acesso irrestrito a todos os módulos do sistema</li>
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Gestão de clientes e catálogo de serviços</li>
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Propostas comerciais e minutas de contrato em PDF</li>
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Agenda de OS, etapas (Gantt) e fotos na nuvem</li>
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Controle financeiro de parcelas e faturamento</li>
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Sem fidelidade: cancele quando quiser</li>
-                            </ul>
-
-                            <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2 rounded-3 mt-auto" onclick="abrirCheckoutPerfil('MENSAL', 39.90, 1, 'R$ 39,90/mês')">
-                                <i class="bi bi-arrow-repeat me-1"></i> Assinar Mensal
-                            </button>
                         </div>
                     </div>
 
-                    <!-- PLANO SEMESTRAL -->
-                    <div class="col-lg-4">
-                        <div class="card border rounded-4 p-4 h-100 d-flex flex-column bg-white shadow-sm">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle px-3 py-1 fw-bold">Semestral</span>
-                                <span class="badge bg-success-subtle text-success small fw-bold">Economize 12%</span>
+                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-arrow-left-right text-primary me-2"></i>Alterar Ciclo / Mudar de Plano</h6>
+
+                    <div class="row g-3 mb-4">
+                        <!-- MENSAL -->
+                        <div class="col-md-4">
+                            <div class="card h-100 border rounded-4 p-3 shadow-none {% if 'MENSAL' in (perfil.plano or '')|upper %}border-primary bg-primary bg-opacity-10{% endif %}">
+                                <span class="badge bg-light text-secondary border px-2 py-1 fw-bold w-auto align-self-start mb-2">Flexibilidade</span>
+                                <h5 class="fw-bold text-dark mb-1">Mensal</h5>
+                                <div class="my-2">
+                                    <span class="fs-4 fw-bold text-dark">R$ 39,90</span>
+                                    <small class="text-muted">/mês</small>
+                                </div>
+                                <p class="small text-muted mb-3">Sem fidelidade, cancele quando quiser.</p>
+                                <ul class="list-unstyled small text-muted mb-3 flex-grow-1">
+                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Todos os módulos inclusos</li>
+                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Até 4 membros na equipe</li>
+                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>PDFs timbrados ilimitados</li>
+                                </ul>
+                                <button type="button" class="btn btn-outline-primary btn-sm fw-bold w-100 py-2 rounded-3" onclick="abrirCheckoutModalPerfil('MENSAL', 39.90, 1, 'R$ 39,90/mês')">
+                                    Assinar Mensal
+                                </button>
                             </div>
-                            <h4 class="fw-bold mb-1 text-dark">Plano Semestral</h4>
-                            <p class="text-muted small mb-3">Equilíbrio entre economia e previsibilidade.</p>
+                        </div>
 
-                            <div class="d-flex align-items-baseline gap-2 mb-1">
-                                <span class="fs-2 fw-bold text-dark">R$ 34,90</span>
-                                <span class="text-muted small fw-semibold">/mês</span>
+                        <!-- SEMESTRAL -->
+                        <div class="col-md-4">
+                            <div class="card h-100 border rounded-4 p-3 shadow-none {% if 'SEMESTRAL' in (perfil.plano or '')|upper %}border-primary bg-primary bg-opacity-10{% endif %}">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle px-2 py-1 fw-bold">Semestral</span>
+                                    <span class="badge bg-success-subtle text-success small fw-bold">12% OFF</span>
+                                </div>
+                                <h5 class="fw-bold text-dark mb-1">Semestral</h5>
+                                <div class="my-2">
+                                    <span class="fs-4 fw-bold text-dark">R$ 34,90</span>
+                                    <small class="text-muted">/mês</small>
+                                </div>
+                                <small class="text-success fw-bold d-block mb-2">Total: R$ 209,40 em até 6x</small>
+                                <ul class="list-unstyled small text-muted mb-3 flex-grow-1">
+                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Economia de 12%</li>
+                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Em até 6x no cartão</li>
+                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Suporte técnico ágil</li>
+                                </ul>
+                                <button type="button" class="btn btn-outline-primary btn-sm fw-bold w-100 py-2 rounded-3" onclick="abrirCheckoutModalPerfil('SEMESTRAL', 209.40, 6, '6x de R$ 34,90')">
+                                    Assinar Semestral
+                                </button>
                             </div>
-                            <small class="text-success fw-bold d-block mb-3">Total de R$ 209,40 em até 6x sem juros</small>
+                        </div>
 
-                            <ul class="list-unstyled small text-muted mb-4 flex-grow-1">
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong class="text-dark">Todos os recursos do Trivium ERP inclusos</strong></li>
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Economia de 12% em relação ao mensal</li>
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Cobrança única e renovação a cada 6 meses</li>
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Parcelamento no cartão em até 6x sem juros</li>
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Suporte técnico prioritário para a equipe</li>
-                            </ul>
-
-                            <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2 rounded-3 mt-auto" onclick="abrirCheckoutPerfil('SEMESTRAL', 209.40, 6, '6x de R$ 34,90')">
-                                <i class="bi bi-credit-card me-1"></i> Assinar Semestral
-                            </button>
+                        <!-- ANUAL -->
+                        <div class="col-md-4">
+                            <div class="card h-100 border border-primary rounded-4 p-3 shadow-sm bg-white position-relative">
+                                <span class="position-absolute top-0 end-0 translate-middle-y me-3 badge bg-primary px-2 py-1 small fw-bold">
+                                    25% OFF • Mais Escolhido
+                                </span>
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 fw-bold w-auto align-self-start mb-2">Anual Founder</span>
+                                <h5 class="fw-bold text-primary mb-1">Anual</h5>
+                                <div class="my-2">
+                                    <span class="fs-4 fw-bold text-primary">R$ 29,90</span>
+                                    <small class="text-muted">/mês</small>
+                                </div>
+                                <small class="text-primary fw-bold d-block mb-2">Total: R$ 358,80 em até 12x</small>
+                                <ul class="list-unstyled small text-muted mb-3 flex-grow-1">
+                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Preço travado por 1 ano</li>
+                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Em até 12x sem juros</li>
+                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Suporte VIP WhatsApp</li>
+                                </ul>
+                                <button type="button" class="btn btn-primary btn-sm fw-bold w-100 py-2 rounded-3 shadow-sm" onclick="abrirCheckoutModalPerfil('ANUAL', 358.80, 12, '12x de R$ 29,90')">
+                                    <i class="bi bi-lightning-charge-fill me-1"></i> Assinar Anual
+                                </button>
+                            </div>
                         </div>
                     </div>
-
-                    <!-- PLANO ANUAL -->
-                    <div class="col-lg-4">
-                        <div class="card border rounded-4 p-4 h-100 d-flex flex-column bg-white shadow-sm">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="badge bg-primary px-3 py-1 fw-bold">Anual</span>
-                                <span class="badge bg-success-subtle text-success small fw-bold">Economize 25%</span>
-                            </div>
-                            <h4 class="fw-bold mb-1 text-primary">Plano Anual</h4>
-                            <p class="text-muted small mb-3">Máxima economia para empresas consolidadas.</p>
-
-                            <div class="d-flex align-items-baseline gap-2 mb-1">
-                                <span class="fs-2 fw-bold text-primary">R$ 29,90</span>
-                                <span class="text-muted small fw-semibold">/mês</span>
-                            </div>
-                            <small class="text-primary fw-bold d-block mb-3">Total de R$ 358,80 em até 12x sem juros</small>
-
-                            <ul class="list-unstyled small text-muted mb-4 flex-grow-1">
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i><strong class="text-dark">Todos os recursos do Trivium ERP inclusos</strong></li>
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Economia máxima de 25% (R$ 29,90/mês equivalente)</li>
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Parcelamento no cartão em até 12x sem juros</li>
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Preço fixo garantido por 1 ano sem reajustes</li>
-                                <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i>Suporte VIP prioritário direto via WhatsApp</li>
-                            </ul>
-
-                            <button type="button" class="btn btn-primary fw-bold w-100 py-2 rounded-3 shadow-sm mt-auto" onclick="abrirCheckoutPerfil('ANUAL', 358.80, 12, '12x de R$ 29,90')">
-                                <i class="bi bi-lightning-charge-fill me-1"></i> Assinar Anual
-                            </button>
-                        </div>
-                    </div>
-
                 </div>
             </div>
 
-            <!-- ABA 4: USUÁRIOS & EQUIPE (PERMISSÕES MODULARES) -->
+            <!-- ABA 3: EQUIPE & ACESSOS -->
             <div class="tab-pane fade" id="tab-equipe" role="tabpanel">
-                <div class="card-custom p-4">
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
-                            <h5 class="fw-bold text-dark mb-0"><i class="bi bi-people text-primary me-2"></i>Equipe & Permissões</h5>
-                            <p class="text-muted small mb-0">Gerencie colaboradores e restrinja o acesso a módulos específicos.</p>
+                            <h6 class="fw-bold text-dark mb-0">Colaboradores da Empresa</h6>
+                            <small class="text-muted">Limite de até 4 colaboradores na equipe.</small>
                         </div>
-                        <button class="btn btn-primary btn-sm fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoUsuario">
-                            <i class="bi bi-person-plus me-1"></i>Novo Usuário
+                        {% if current_user.nivel_acesso in ['admin', 'master'] %}
+                        <button class="btn btn-sm btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalNovoUsuarioEquipe">
+                            <i class="bi bi-person-plus me-1"></i> Adicionar Membro
                         </button>
+                        {% endif %}
                     </div>
 
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0 small">
                             <thead class="table-light">
                                 <tr>
-                                    <th>NOME / E-MAIL</th>
+                                    <th>NOME</th>
+                                    <th>E-MAIL</th>
                                     <th>CARGO</th>
-                                    <th>NÍVEL</th>
-                                    <th>PERMISSÕES ATIVAS</th>
-                                    <th class="text-end pe-3">AÇÕES</th>
+                                    <th>PERFIL</th>
+                                    <th class="text-end pe-2">AÇÕES</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for u in usuarios_equipe %}
                                 <tr>
-                                    <td>
-                                        <strong class="text-dark d-block">{{ u.nome }}</strong>
-                                        <span class="text-muted">{{ u.email }}</span>
-                                    </td>
-                                    <td><span class="badge bg-light text-dark border">{{ u.cargo or 'Colaborador' }}</span></td>
+                                    <td class="fw-bold text-dark">{{ u.nome }}</td>
+                                    <td>{{ u.email }}</td>
+                                    <td>{{ u.cargo or '--' }}</td>
                                     <td>
                                         <span class="badge {{ 'bg-primary' if u.nivel_acesso in ['admin', 'master'] else 'bg-secondary' }}">
                                             {{ u.nivel_acesso|upper }}
                                         </span>
                                     </td>
-                                    <td>
-                                        {% if u.nivel_acesso in ['admin', 'master'] %}
-                                            <span class="badge bg-success">Acesso Total (Administrador)</span>
-                                        {% else %}
-                                            {% if u.perm_clientes %}<span class="badge bg-light text-dark border me-1">Clientes</span>{% endif %}
-                                            {% if u.perm_propostas %}<span class="badge bg-light text-dark border me-1">Propostas</span>{% endif %}
-                                            {% if u.perm_servicos %}<span class="badge bg-light text-dark border me-1">Serviços</span>{% endif %}
-                                            {% if u.perm_financeiro %}<span class="badge bg-light text-dark border me-1">Financeiro</span>{% endif %}
-                                            {% if u.perm_configuracoes %}<span class="badge bg-light text-dark border me-1">Configurações</span>{% endif %}
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-end pe-3">
+                                    <td class="text-end pe-2">
+                                        {% if current_user.nivel_acesso in ['admin', 'master'] %}
                                         <div class="btn-group btn-group-sm">
-                                            <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalResetSenha{{ u.id }}" title="Resetar Senha">
-                                                <i class="bi bi-key"></i>
-                                            </button>
-                                            <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditarUsuario{{ u.id }}" title="Editar Permissões">
+                                            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalEditarUsuario{{ u.id }}" title="Editar Acessos">
                                                 <i class="bi bi-pencil-square"></i>
                                             </button>
+                                            <button type="button" class="btn btn-outline-warning text-dark" data-bs-toggle="modal" data-bs-target="#modalResetarSenha{{ u.id }}" title="Redefinir Senha">
+                                                <i class="bi bi-key"></i>
+                                            </button>
                                             {% if u.id != current_user.id %}
-                                            <form action="{{ url_for('excluir_usuario_equipe', id=u.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Remover este usuário?')">
-                                                <button class="btn btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
+                                            <form action="{{ url_for('excluir_usuario_equipe', id=u.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Remover acesso deste colaborador?')">
+                                                <button type="submit" class="btn btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
                                             </form>
                                             {% endif %}
                                         </div>
+                                        {% else %}
+                                        <span class="text-muted">Sem permissão</span>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -9397,109 +9369,123 @@ ARQUIVO: .\templates\perfil_empresa.html
                 </div>
             </div>
 
+            <!-- ABA 4: MINHA CONTA -->
+            <div class="tab-pane fade" id="tab-minhaconta" role="tabpanel">
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white" style="max-width: 600px;">
+                    <h6 class="fw-bold text-dark mb-3">Meus Dados de Login</h6>
+                    <form method="POST">
+                        <input type="hidden" name="form_type" value="dados_usuario">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Meu Nome</label>
+                            <input type="text" name="nome_usuario" class="form-control" value="{{ current_user.nome }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">E-mail de Acesso</label>
+                            <input type="email" name="email_login" class="form-control" value="{{ current_user.email }}" required>
+                        </div>
+                        <hr class="my-4">
+                        <h6 class="fw-bold text-dark mb-2">Alterar Senha</h6>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Senha Atual</label>
+                            <input type="password" name="senha_atual" class="form-control" placeholder="Digite apenas se for trocar">
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label small fw-bold">Nova Senha</label>
+                                <input type="password" name="nova_senha" class="form-control" placeholder="Nova senha">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold">Confirmar Nova Senha</label>
+                                <input type="password" name="confirma_senha" class="form-control" placeholder="Confirme a senha">
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-primary fw-bold px-4">Atualizar Conta</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
         </div>
     </div>
 </div>
 
-<!-- ==================================================================== -->
-<!-- MODAL DE CHECKOUT TRANSPARENTE INTEGRADO NA TELA DE CONFIGURAÇÕES -->
-<!-- ==================================================================== -->
-<div class="modal fade" id="modalCheckoutTransparente" tabindex="-1" aria-hidden="true">
+<!-- MODAL DE CHECKOUT HÍBRIDO -->
+<div class="modal fade" id="modalCheckoutPerfil" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow">
             <div class="modal-header border-0 pb-0">
-                <h5 class="modal-title fw-bold" id="tituloModalPlano">Finalizar Assinatura</h5>
+                <h5 class="modal-title fw-bold" id="tituloModalPlanoPerfil">Finalizar Assinatura</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
 
-                <!-- CAMPO DE CUPOM COM VALIDAÇÃO E AUTO-PREENCHIMENTO -->
                 <div class="mb-3 p-3 bg-light rounded-3 border text-start">
                     <label class="small text-muted fw-bold d-block">Cupom Promocional de Desconto</label>
                     <div class="input-group input-group-sm mt-1">
-                        <input type="text" id="cupomCheckoutInput" class="form-control font-monospace fw-bold text-uppercase" 
-                               value="{{ current_user.empresa.cupom_utilizado or '' }}" placeholder="EX: LUCAS10">
-                        <button class="btn btn-outline-primary fw-bold" type="button" onclick="validarCupomAoVivo()">Validar</button>
+                        <input type="text" id="cupomCheckoutInputPerfil" class="form-control font-monospace fw-bold text-uppercase" 
+                               value="{{ perfil.cupom_utilizado or '' }}" placeholder="EX: PROMO10">
+                        <button class="btn btn-outline-primary fw-bold" type="button" onclick="validarCupomAoVivoPerfil()">Validar</button>
                     </div>
-                    <small id="statusCupomCheckout" class="text-muted d-block mt-1">
-                        {% if current_user.empresa.cupom_utilizado %}
-                            <span class="text-success"><i class="bi bi-check-circle me-1"></i>Cupom vinculado do seu cadastro</span>
+                    <small id="statusCupomCheckoutPerfil" class="text-muted d-block mt-1">
+                        {% if perfil.cupom_utilizado %}
+                            <span class="text-success"><i class="bi bi-check-circle me-1"></i>Cupom vinculado à empresa</span>
                         {% else %}
-                            Possui um código de parceiro? Digite acima.
+                            Possui um código promocional? Digite acima.
                         {% endif %}
                     </small>
                 </div>
 
                 <ul class="nav nav-pills nav-fill mb-3" id="pills-tab" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link active fw-bold" id="tab-cartao" data-bs-toggle="pill" data-bs-target="#conteudo-cartao" type="button" role="tab">
+                        <button class="nav-link active fw-bold" id="tab-cartao-perfil" data-bs-toggle="pill" data-bs-target="#conteudo-cartao-perfil" type="button" role="tab">
                             <i class="bi bi-credit-card me-1"></i> Cartão
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link fw-bold" id="tab-pix" data-bs-toggle="pill" data-bs-target="#conteudo-pix" type="button" role="tab">
+                        <button class="nav-link fw-bold" id="tab-pix-perfil" data-bs-toggle="pill" data-bs-target="#conteudo-pix-perfil" type="button" role="tab">
                             <i class="bi bi-qr-code me-1"></i> PIX
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link fw-bold" id="tab-boleto" data-bs-toggle="pill" data-bs-target="#conteudo-boleto" type="button" role="tab">
+                        <button class="nav-link fw-bold" id="tab-boleto-perfil" data-bs-toggle="pill" data-bs-target="#conteudo-boleto-perfil" type="button" role="tab">
                             <i class="bi bi-upc-scan me-1"></i> Boleto
                         </button>
                     </li>
                 </ul>
 
                 <div class="tab-content pt-2">
-                    <!-- CARTÃO DE CRÉDITO -->
-                    <div class="tab-pane fade show active" id="conteudo-cartao" role="tabpanel">
-                        <form id="formCartaoCheckout">
-                            <div class="mb-2 text-start">
-                                <label class="small text-muted fw-bold">Número do Cartão</label>
-                                <input type="text" id="cc_numero" class="form-control" placeholder="0000 0000 0000 0000" maxlength="19" required>
-                            </div>
-                            <div class="mb-2 text-start">
-                                <label class="small text-muted fw-bold">Nome Impresso no Cartão</label>
-                                <input type="text" id="cc_nome" class="form-control" placeholder="Ex: RODRIGO ANTUNES" required>
-                            </div>
-                            <div class="row g-2 mb-3 text-start">
-                                <div class="col-4">
-                                    <label class="small text-muted fw-bold">Mês</label>
-                                    <input type="text" id="cc_mes" class="form-control" placeholder="MM" maxlength="2" required>
-                                </div>
-                                <div class="col-4">
-                                    <label class="small text-muted fw-bold">Ano</label>
-                                    <input type="text" id="cc_ano" class="form-control" placeholder="AAAA" maxlength="4" required>
-                                </div>
-                                <div class="col-4">
-                                    <label class="small text-muted fw-bold">CVV</label>
-                                    <input type="text" id="cc_cvv" class="form-control" placeholder="123" maxlength="4" required>
-                                </div>
-                            </div>
-                            <button type="button" class="btn btn-primary fw-bold w-100 py-2 shadow-sm" onclick="processarPagamento('CREDIT_CARD')">
-                                Confirmar e Assinar
-                            </button>
-                        </form>
+                    <!-- CARTÃO DE CRÉDITO (REDIRECIONAMENTO EXTERNO SEGURO) -->
+                    <div class="tab-pane fade show active text-center py-3" id="conteudo-cartao-perfil" role="tabpanel">
+                        <div class="p-3 bg-light rounded-3 border mb-3 text-start">
+                            <i class="bi bi-shield-lock-fill text-success me-1"></i> <strong>Checkout Oficial Mercado Pago</strong>
+                            <p class="small text-muted mb-0 mt-1">Você será redirecionado para o ambiente seguro do Mercado Pago para preencher os dados do seu cartão com total segurança e parcelamento flexível.</p>
+                        </div>
+                        <button type="button" class="btn btn-primary fw-bold w-100 py-3 shadow-sm" onclick="processarPagamentoPerfil('CREDIT_CARD')">
+                            <i class="bi bi-box-arrow-up-right me-1"></i> Ir para Pagamento com Cartão
+                        </button>
                     </div>
 
                     <!-- PIX -->
-                    <div class="tab-pane fade text-center" id="conteudo-pix" role="tabpanel">
-                        <p class="text-muted small mb-3">Liberação instantânea assim que a transferência for confirmada.</p>
-                        <button type="button" class="btn btn-success fw-bold w-100 py-2 shadow-sm" onclick="processarPagamento('PIX')">
+                    <div class="tab-pane fade text-center" id="conteudo-pix-perfil" role="tabpanel">
+                        <p class="text-muted small mb-3">Liberação instantânea após confirmação.</p>
+                        <button type="button" class="btn btn-success fw-bold w-100 py-2 shadow-sm" onclick="processarPagamentoPerfil('PIX')">
                             <i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX
                         </button>
-                        <div id="resultadoPix" class="mt-3 d-none">
-                            <div class="alert alert-info small" id="msgPix">Carregando dados...</div>
+                        <div id="resultadoPixPerfil" class="mt-3 d-none">
+                            <div class="alert alert-info small" id="msgPixPerfil">Carregando dados...</div>
                         </div>
                     </div>
 
                     <!-- BOLETO -->
-                    <div class="tab-pane fade text-center" id="conteudo-boleto" role="tabpanel">
+                    <div class="tab-pane fade text-center" id="conteudo-boleto-perfil" role="tabpanel">
                         <div class="alert alert-light border small text-muted text-start mb-3">
-                            <i class="bi bi-info-circle text-primary me-1"></i> O boleto é emitido no valor integral com vencimento para 3 dias úteis. A liberação ocorre após compensação bancária.
+                            <i class="bi bi-info-circle text-primary me-1"></i> Vencimento para 3 dias úteis.
                         </div>
-                        <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2 shadow-sm" onclick="processarPagamento('BOLETO')">
+                        <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2 shadow-sm" onclick="processarPagamentoPerfil('BOLETO')">
                             <i class="bi bi-file-earmark-pdf me-1"></i> Gerar Boleto Bancário
                         </button>
-                        <div id="resultadoBoleto" class="mt-3 d-none"></div>
+                        <div id="resultadoBoletoPerfil" class="mt-3 d-none"></div>
                     </div>
                 </div>
             </div>
@@ -9507,363 +9493,237 @@ ARQUIVO: .\templates\perfil_empresa.html
     </div>
 </div>
 
-<!-- ==================================================================== -->
 <!-- MODAL: NOVO USUÁRIO DA EQUIPE -->
-<!-- ==================================================================== -->
-<div class="modal fade" id="modalNovoUsuario" tabindex="-1">
+<div class="modal fade" id="modalNovoUsuarioEquipe" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow rounded-4">
-            <form action="{{ url_for('criar_usuario_equipe') }}" method="POST">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form action="{{ url_for('criar_usuario_equipe') }}" method="POST" autocomplete="off">
                 <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-person-plus text-primary me-2"></i>Cadastrar Colaborador</h5>
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-person-plus text-primary me-2"></i>Novo Membro da Equipe
+                    </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
                     <div class="mb-3">
-                        <label class="form-label small fw-bold">Nome do Colaborador *</label>
-                        <input type="text" name="nome" class="form-control" placeholder="Ex: João da Silva" required>
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold">E-mail de Login *</label>
-                            <input type="email" name="email" class="form-control" placeholder="joao@empresa.com" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold">Senha Inicial *</label>
-                            <input type="password" name="senha_padrao" class="form-control" placeholder="Mínimo 6 dígitos" required>
-                        </div>
+                        <label class="form-label small fw-bold">Nome Completo *</label>
+                        <input type="text" name="nome" class="form-control" required placeholder="Ex: Lucas Ferreira">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-bold">Cargo / Função</label>
-                        <input type="text" name="cargo" class="form-control" placeholder="Ex: Técnico de Campo, Financeiro...">
+                        <label class="form-label small fw-bold">E-mail de Login *</label>
+                        <input type="email" name="email" class="form-control" required placeholder="lucas@suaempresa.com" autocomplete="off">
                     </div>
-                    
-                    <h6 class="fw-bold text-dark mb-2 mt-4"><i class="bi bi-shield-check text-primary me-1"></i>Permissões de Acesso aos Módulos</h6>
-                    <div class="p-3 bg-light rounded-3 border">
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_clientes" id="p_cli" checked>
-                            <label class="form-check-label small fw-bold" for="p_cli">Carteira de Clientes</label>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Cargo</label>
+                            <input type="text" name="cargo" class="form-control" placeholder="Ex: Técnico de Campo">
                         </div>
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_propostas" id="p_prop" checked>
-                            <label class="form-check-label small fw-bold" for="p_prop">Catálogo & Propostas Comerciais</label>
-                        </div>
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_servicos" id="p_serv" checked>
-                            <label class="form-check-label small fw-bold" for="p_serv">Agenda & Ordens de Serviço</label>
-                        </div>
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_financeiro" id="p_fin">
-                            <label class="form-check-label small fw-bold text-danger" for="p_fin">Financeiro & Faturamento</label>
-                        </div>
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" name="perm_configuracoes" id="p_conf">
-                            <label class="form-check-label small fw-bold text-danger" for="p_conf">Acesso Administrador (Configurações Gerais)</label>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Definir Senha Inicial *</label>
+                            <input type="password" name="senha_padrao" class="form-control" required placeholder="Ex: Equipe#2026" autocomplete="new-password">
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Criar Usuário</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Criar Acesso</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-
-<!-- ==================================================================== -->
-<!-- MODAIS DE RESET DE SENHA E EDIÇÃO DE USUÁRIOS DA EQUIPE -->
-<!-- ==================================================================== -->
-{% for u in usuarios_equipe %}
-<div class="modal fade" id="modalResetSenha{{ u.id }}" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-sm">
-        <div class="modal-content border-0 shadow rounded-4">
-            <form action="{{ url_for('resetar_senha_equipe', id=u.id) }}" method="POST">
-                <div class="modal-header bg-light">
-                    <h6 class="modal-title fw-bold text-dark"><i class="bi bi-key text-primary me-2"></i>Resetar Senha</h6>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-3">
-                    <p class="small text-muted mb-2">Defina uma nova senha para <b>{{ u.nome }}</b>:</p>
-                    <input type="password" name="nova_senha" class="form-control form-control-sm" placeholder="Nova senha" required>
-                </div>
-                <div class="modal-footer bg-light">
-                    <button type="submit" class="btn btn-primary btn-sm fw-bold w-100">Gravar Nova Senha</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<div class="modal fade" id="modalEditarUsuario{{ u.id }}" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow rounded-4">
-            <form action="{{ url_for('editar_usuario_equipe', id=u.id) }}" method="POST">
-                <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-person-gear text-primary me-2"></i>Editar {{ u.nome }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Nome</label>
-                        <input type="text" name="nome" class="form-control form-control-sm" value="{{ u.nome }}" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Cargo</label>
-                        <input type="text" name="cargo" class="form-control form-control-sm" value="{{ u.cargo or '' }}">
-                    </div>
-
-                    {% if u.id != current_user.id %}
-                    <h6 class="fw-bold text-dark mb-2 mt-3"><i class="bi bi-shield-lock text-primary me-1"></i>Permissões</h6>
-                    <div class="p-3 bg-light rounded-3 border">
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_clientes" id="pe_cli{{ u.id }}" {% if u.perm_clientes %}checked{% endif %}>
-                            <label class="form-check-label small fw-bold" for="pe_cli{{ u.id }}">Clientes</label>
-                        </div>
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_propostas" id="pe_prop{{ u.id }}" {% if u.perm_propostas %}checked{% endif %}>
-                            <label class="form-check-label small fw-bold" for="pe_prop{{ u.id }}">Propostas</label>
-                        </div>
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_servicos" id="pe_serv{{ u.id }}" {% if u.perm_servicos %}checked{% endif %}>
-                            <label class="form-check-label small fw-bold" for="pe_serv{{ u.id }}">Serviços</label>
-                        </div>
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_financeiro" id="pe_fin{{ u.id }}" {% if u.perm_financeiro %}checked{% endif %}>
-                            <label class="form-check-label small fw-bold text-danger" for="pe_fin{{ u.id }}">Financeiro</label>
-                        </div>
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" name="perm_configuracoes" id="pe_conf{{ u.id }}" {% if u.perm_configuracoes %}checked{% endif %}>
-                            <label class="form-check-label small fw-bold text-danger" for="pe_conf{{ u.id }}">Administrador</label>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-                <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Salvar Alterações</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-{% endfor %}
 
 <script>
-function alternarTipoPessoa() {
-    const isPj = document.getElementById('tipo_pj').checked;
-    const camposPJ = document.querySelectorAll('.campo-pj');
-    const camposPF = document.querySelectorAll('.campo-pf');
+function alternarTipoPessoaPerfil(tipo) {
+    const labelRazao = document.getElementById('labelRazaoSocial');
+    const boxFantasia = document.getElementById('boxFantasia');
+    const labelDoc = document.getElementById('labelDocEmpresa');
+    const inputDoc = document.getElementById('inputDocEmpresa');
 
-    if (isPj) {
-        camposPJ.forEach(el => el.classList.remove('d-none'));
-        camposPF.forEach(el => el.classList.add('d-none'));
+    if (tipo === 'PF') {
+        labelRazao.innerText = 'Nome do Profissional / Autônomo *';
+        boxFantasia.style.display = 'none';
+        labelDoc.innerText = 'CPF *';
+        inputDoc.placeholder = '000.000.000-00';
     } else {
-        camposPJ.forEach(el => el.classList.add('d-none'));
-        camposPF.forEach(el => el.classList.remove('d-none'));
+        labelRazao.innerText = 'Razão Social *';
+        boxFantasia.style.display = 'block';
+        labelDoc.innerText = 'CNPJ *';
+        inputDoc.placeholder = '00.000.000/0000-00';
     }
 }
 
-function buscarCepEmpresa() {
-    const cep = document.getElementById('cep_empresa').value.replace(/\D/g, '');
+function consultarCepEmpresa() {
+    const cep = document.getElementById('cepEmpresa').value.replace(/\D/g, '');
     if (cep.length === 8) {
         fetch(`https://viacep.com.br/ws/${cep}/json/`)
-            .then(r => r.json())
-            .then(dados => {
-                if (!dados.erro) {
-                    document.getElementById('logradouro_empresa').value = dados.logradouro || '';
-                    document.getElementById('bairro_empresa').value = dados.bairro || '';
-                    document.getElementById('cidade_empresa').value = dados.localidade || '';
-                    document.getElementById('estado_empresa').value = dados.uf || '';
-                    document.getElementById('numero_empresa').focus();
+            .then(res => res.json())
+            .then(data => {
+                if (!data.erro) {
+                    document.getElementById('logradouroEmpresa').value = data.logradouro || '';
+                    document.getElementById('bairroEmpresa').value = data.bairro || '';
+                    document.getElementById('cidadeEmpresa').value = data.localidade || '';
+                    document.getElementById('estadoEmpresa').value = data.uf || '';
                 }
             });
     }
 }
 
-document.addEventListener('DOMContentLoaded', alternarTipoPessoa);
-
-let planoEscolhido = 'MENSAL';
-let valorTotalEscolhido = 39.90;
-let parcelasEscolhidas = 1;
-
-function abrirCheckoutPerfil(plano, valorTotal, parcelas, rotulo) {
-    planoEscolhido = plano;
-    valorTotalEscolhido = valorTotal;
-    parcelasEscolhidas = parcelas;
-    
-    const tituloEl = document.getElementById('tituloModalPlano');
-    if (tituloEl) tituloEl.innerText = `Finalizar Assinatura: Plano ${plano.charAt(0) + plano.slice(1).toLowerCase()} (${rotulo})`;
-    
-    const areaPix = document.getElementById('resultadoPix');
-    if (areaPix) {
-        areaPix.classList.add('d-none');
-        areaPix.innerHTML = '<div class="alert alert-info small" id="msgPix">Carregando...</div>';
-    }
-
-    const areaBoleto = document.getElementById('resultadoBoleto');
-    if (areaBoleto) {
-        areaBoleto.classList.add('d-none');
-        areaBoleto.innerHTML = '';
-    }
-
-    const modalEl = document.getElementById('modalCheckoutTransparente');
-    if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
-
-    const cupomAtual = document.getElementById('cupomCheckoutInput')?.value;
-    if (cupomAtual) {
-        validarCupomAoVivo();
+function atualizarPreviewAoVivo(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const imgEl = document.getElementById('imgPreviewTimbrado');
+            const placeholder = document.getElementById('placeholderSemLogo');
+            if (imgEl) { imgEl.src = e.target.result; imgEl.classList.remove('d-none'); }
+            if (placeholder) { placeholder.classList.add('d-none'); }
+        };
+        reader.readAsDataURL(input.files[0]);
     }
 }
 
-function validarCupomAoVivo() {
-    const codigo = document.getElementById('cupomCheckoutInput')?.value.trim();
-    const statusEl = document.getElementById('statusCupomCheckout');
+function atualizarCorPreview(cor) {
+    document.getElementById('labelCorHex').innerText = cor;
+    const linha = document.getElementById('previewLinhaMarca');
+    const razao = document.getElementById('previewRazao');
+    if (linha) linha.style.backgroundColor = cor;
+    if (razao) razao.style.color = cor;
+}
 
-    if (!codigo) {
-        if (statusEl) statusEl.innerHTML = '<span class="text-muted">Nenhum cupom inserido.</span>';
-        return;
+document.addEventListener('DOMContentLoaded', () => {
+    const radioPF = document.getElementById('tipoPF');
+    if (radioPF && radioPF.checked) {
+        alternarTipoPessoaPerfil('PF');
     }
+
+    const corInicial = document.getElementById('corPrimariaInput')?.value || '#1e3a8a';
+    atualizarCorPreview(corInicial);
+
+    const hashAtual = window.location.hash;
+    const abaSalva = localStorage.getItem('trivium_perfil_active_tab');
+    const alvoAba = hashAtual || abaSalva;
+
+    if (alvoAba) {
+        const botaoAba = document.querySelector(`button[data-bs-target="${alvoAba}"]`);
+        if (botaoAba) {
+            const triggerEl = new bootstrap.Tab(botaoAba);
+            triggerEl.show();
+        }
+    }
+
+    const botoesAbas = document.querySelectorAll('#perfilTabs button[data-bs-toggle="pill"]');
+    botoesAbas.forEach(btn => {
+        btn.addEventListener('shown.bs.tab', (event) => {
+            const idAlvo = event.target.getAttribute('data-bs-target');
+            if (idAlvo) {
+                localStorage.setItem('trivium_perfil_active_tab', idAlvo);
+                history.replaceState(null, null, idAlvo);
+            }
+        });
+    });
+});
+
+let planoPerfilEscolhido = 'MENSAL';
+let valorTotalPerfil = 39.90;
+let parcelasPerfil = 1;
+
+function abrirCheckoutModalPerfil(plano, valorTotal, parcelas, rotulo) {
+    planoPerfilEscolhido = plano;
+    valorTotalPerfil = valorTotal;
+    parcelasPerfil = parcelas;
+    
+    const tituloEl = document.getElementById('tituloModalPlanoPerfil');
+    if (tituloEl) tituloEl.innerText = `Finalizar Assinatura: Plano ${plano} (${rotulo})`;
+    
+    const areaPix = document.getElementById('resultadoPixPerfil');
+    if (areaPix) { areaPix.classList.add('d-none'); }
+
+    const areaBoleto = document.getElementById('resultadoBoletoPerfil');
+    if (areaBoleto) { areaBoleto.classList.add('d-none'); }
+
+    const modalEl = document.getElementById('modalCheckoutPerfil');
+    if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+function validarCupomAoVivoPerfil() {
+    const codigo = document.getElementById('cupomCheckoutInputPerfil')?.value.trim();
+    const statusEl = document.getElementById('statusCupomCheckoutPerfil');
+
+    if (!codigo) { return; }
 
     fetch('/api/cupom/validar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codigo: codigo, plano: planoEscolhido })
+        body: JSON.stringify({ codigo: codigo, plano: planoPerfilEscolhido })
     })
     .then(r => r.json())
     .then(res => {
         if (res.valido) {
-            valorTotalEscolhido = res.valor_final;
-            if (statusEl) {
-                statusEl.innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle me-1"></i>${res.mensagem} Valor com desconto: R$ ${res.valor_final.toFixed(2)}</span>`;
-            }
+            valorTotalPerfil = res.valor_final;
+            if (statusEl) statusEl.innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle me-1"></i>${res.mensagem} R$ ${res.valor_final.toFixed(2)}</span>`;
         } else {
-            if (statusEl) {
-                statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${res.mensagem}</span>`;
-            }
+            if (statusEl) statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${res.mensagem}</span>`;
         }
-    })
-    .catch(() => {
-        if (statusEl) statusEl.innerHTML = '<span class="text-danger">Erro ao validar cupom.</span>';
     });
 }
 
-function processarPagamento(tipo) {
-    const cupomDigitado = document.getElementById('cupomCheckoutInput')?.value || '';
+function processarPagamentoPerfil(tipo) {
+    const cupomDigitado = document.getElementById('cupomCheckoutInputPerfil')?.value || '';
     const payload = {
-        plano: planoEscolhido,
-        valor_total: valorTotalEscolhido,
-        parcelas: parcelasEscolhidas,
+        plano: planoPerfilEscolhido,
+        valor_total: valorTotalPerfil,
+        parcelas: parcelasPerfil,
         forma_pagamento: tipo,
         cupom: cupomDigitado
     };
 
-    if (tipo === 'CREDIT_CARD') {
-        const num = document.getElementById('cc_numero')?.value || '';
-        const nome = document.getElementById('cc_nome')?.value || '';
-        const mes = document.getElementById('cc_mes')?.value || '';
-        const ano = document.getElementById('cc_ano')?.value || '';
-        const cvv = document.getElementById('cc_cvv')?.value || '';
+    const endpoint = (tipo === 'CREDIT_CARD') ? '/api/assinatura/checkout-preferencia' : '/api/assinatura/checkout-transparente';
 
-        if (!num || !nome || !mes || !ano || !cvv) {
-            alert('Por favor, preencha todos os campos do cartão.');
-            return;
-        }
-
-        payload.cartao = {
-            holder_name: nome,
-            number: num,
-            expiry_month: mes,
-            expiry_year: ano,
-            ccv: cvv
-        };
-    }
-
-    const btnPix = document.querySelector('#conteudo-pix button');
-    if (tipo === 'PIX' && btnPix) {
-        btnPix.disabled = true;
-        btnPix.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gerando Pix...';
-    }
-
-    const btnBoleto = document.querySelector('#conteudo-boleto button');
-    if (tipo === 'BOLETO' && btnBoleto) {
-        btnBoleto.disabled = true;
-        btnBoleto.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gerando Boleto...';
-    }
-
-    fetch('/api/assinatura/checkout-transparente', {
+    fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     })
     .then(r => r.json())
     .then(res => {
-        if (tipo === 'PIX' && btnPix) {
-            btnPix.disabled = false;
-            btnPix.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX';
-        }
-        if (tipo === 'BOLETO' && btnBoleto) {
-            btnBoleto.disabled = false;
-            btnBoleto.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i> Gerar Boleto Bancário';
-        }
-
         if (res.status === 'success') {
-            if (tipo === 'PIX') {
-                const areaPix = document.getElementById('resultadoPix');
+            if (tipo === 'CREDIT_CARD') {
+                const linkCheckout = res.init_point || res.sandbox_init_point;
+                if (linkCheckout) {
+                    window.location.href = linkCheckout;
+                } else {
+                    alert('Erro: Link externo de pagamento não gerado.');
+                }
+            } else if (tipo === 'PIX') {
+                const areaPix = document.getElementById('resultadoPixPerfil');
                 areaPix.classList.remove('d-none');
-
-                const copiaCola = (res.pix && res.pix.payload) ? res.pix.payload : '';
-                const encodedImg = (res.pix && res.pix.encodedImage) ? res.pix.encodedImage : '';
-
-                let imgTag = encodedImg 
-                    ? `<img src="data:image/png;base64,${encodedImg}" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">`
-                    : `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(copiaCola)}" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">`;
-
+                const copiaCola = res.pix?.payload || '';
+                const encodedImg = res.pix?.encodedImage || '';
+                let imgTag = encodedImg ? `<img src="data:image/png;base64,${encodedImg}" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 180px; width: 180px;">` : '';
                 areaPix.innerHTML = `
                     <div class="card p-3 border-success text-center shadow-sm mt-3">
-                        <h6 class="fw-bold text-success mb-2"><i class="bi bi-qr-code me-1"></i> QR Code Pix Gerado</h6>
-                        <div class="my-2 text-center">${imgTag}</div>
-                        <label class="small text-muted fw-bold d-block text-start mb-1">Código Pix Copia e Cola:</label>
-                        <div class="input-group mb-3">
-                            <input type="text" id="pixInput" class="form-control form-control-sm font-monospace" value="${copiaCola}" readonly>
-                            <button class="btn btn-outline-primary btn-sm fw-bold" type="button" onclick="navigator.clipboard.writeText(document.getElementById('pixInput').value); alert('Código copiado!');">
-                                Copiar
-                            </button>
-                        </div>
-                        <small class="text-muted">A liberação do sistema ocorrerá automaticamente após o pagamento.</small>
+                        <h6 class="fw-bold text-success mb-2">QR Code Pix Gerado</h6>
+                        <div class="my-2">${imgTag}</div>
+                        <input type="text" id="pixInputPerfil" class="form-control form-control-sm font-monospace mb-2" value="${copiaCola}" readonly>
+                        <button class="btn btn-outline-primary btn-sm fw-bold w-100" onclick="navigator.clipboard.writeText(document.getElementById('pixInputPerfil').value); alert('Copiado!');">Copiar Código Pix</button>
                     </div>
                 `;
             } else if (tipo === 'BOLETO') {
-                const areaBoleto = document.getElementById('resultadoBoleto');
+                const areaBoleto = document.getElementById('resultadoBoletoPerfil');
                 areaBoleto.classList.remove('d-none');
-                const linkBoleto = res.bankSlipUrl || res.invoiceUrl || (res.dados && (res.dados.bankSlipUrl || res.dados.invoiceUrl)) || '';
-
+                const linkBoleto = res.bankSlipUrl || res.invoiceUrl || '';
                 areaBoleto.innerHTML = `
                     <div class="card p-3 border-primary text-center shadow-sm mt-3">
-                        <h6 class="fw-bold text-primary mb-2"><i class="bi bi-file-earmark-check me-1"></i> Boleto Gerado</h6>
-                        <p class="small text-muted mb-3">Clique abaixo para visualizar o boleto:</p>
-                        <a href="${linkBoleto}" target="_blank" rel="noopener noreferrer" class="btn btn-primary fw-bold py-2">
-                            <i class="bi bi-printer me-1"></i> Visualizar Boleto
-                        </a>
+                        <h6 class="fw-bold text-primary mb-2">Boleto Gerado</h6>
+                        <a href="${linkBoleto}" target="_blank" class="btn btn-primary fw-bold py-2">Visualizar Boleto</a>
                     </div>
                 `;
-            } else {
-                alert('Assinatura ativada com sucesso via Cartão!');
-                window.location.reload();
             }
         } else {
             alert('Atenção: ' + res.mensagem);
         }
     })
     .catch(() => {
-        if (tipo === 'PIX' && btnPix) {
-            btnPix.disabled = false;
-            btnPix.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX';
-        }
-        if (tipo === 'BOLETO' && btnBoleto) {
-            btnBoleto.disabled = false;
-            btnBoleto.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i> Gerar Boleto Bancário';
-        }
         alert('Erro de comunicação com o servidor.');
     });
 }
@@ -12050,36 +11910,177 @@ ARQUIVO: .\templates\auth\esqueci_senha.html
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recuperar Senha - Trivium ERP</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .login-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 440px; padding: 2.5rem; }
-        .btn-brand { background-color: #1e3a8a; color: #fff; font-weight: 700; border-radius: 10px; padding: 12px; }
-        .btn-brand:hover { background-color: #2563eb; color: #fff; }
+        :root {
+            --brand-blue: #1e3a8a;
+            --brand-accent: #2563eb;
+            --bg-body: #f8fafc;
+            --border-color: #e2e8f0;
+        }
+
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background-color: var(--bg-body); 
+            min-height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            padding: 1.5rem;
+        }
+
+        .login-card { 
+            background: #ffffff; 
+            border: 1px solid var(--border-color); 
+            border-radius: 20px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05); 
+            width: 100%; 
+            max-width: 440px; 
+            padding: 2.5rem; 
+        }
+
+        .brand-logo-text {
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.8px;
+            color: var(--brand-blue);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            text-decoration: none;
+            margin-bottom: 1.25rem;
+        }
+        .brand-logo-text span {
+            color: var(--brand-accent);
+        }
+
+        .btn-brand { 
+            background-color: var(--brand-blue); 
+            color: #fff; 
+            font-weight: 700; 
+            border-radius: 10px; 
+            padding: 12px; 
+            transition: all 0.2s ease;
+        }
+        .btn-brand:hover { 
+            background-color: var(--brand-accent); 
+            color: #fff; 
+        }
+
+        .icon-box-sucesso {
+            width: 64px;
+            height: 64px;
+            background-color: #ecfdf5;
+            color: #059669;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            margin: 0 auto 1rem auto;
+        }
     </style>
 </head>
 <body>
+
     <div class="login-card">
-        <div class="text-center mb-4">
+        <div class="text-center">
+            <a href="{{ url_for('auth.login') }}" class="brand-logo-text">
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Trivium ERP" style="height: 32px;" onerror="this.style.display='none'">
+                Trivium <span>ERP</span>
+            </a>
             <h4 class="fw-bold text-dark mb-1">Recuperar Senha</h4>
-            <p class="text-muted small">Digite o e-mail da sua conta para enviarmos o link de recuperação</p>
+            <p class="text-muted small">Informe seu e-mail ou CNPJ/CPF para enviarmos o link de recuperação</p>
         </div>
 
-        <form method="POST">
+        <form method="POST" id="formRecuperacao" onsubmit="iniciarEnvio()">
             <div class="mb-4">
-                <label class="form-label small fw-bold">Seu E-mail Cadastrado</label>
-                <input type="email" name="email" class="form-control" placeholder="seu@email.com" required>
+                <label class="form-label small fw-bold text-dark">E-mail ou CNPJ/CPF</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light text-muted border-end-0">
+                        <i class="bi bi-person-badge"></i>
+                    </span>
+                    <input type="text" name="email" id="campoEmail" class="form-control border-start-0 ps-0" placeholder="seu@email.com ou documento" required autofocus>
+                </div>
             </div>
             
-            <button type="submit" class="btn btn-brand w-100 mb-3">Enviar Link de Recuperação</button>
+            <button type="submit" id="btnEnviar" class="btn btn-brand w-100 mb-3 shadow-sm">
+                <i class="bi bi-envelope-paper me-1"></i> Enviar Link de Recuperação
+            </button>
         </form>
 
-        <div class="text-center">
-            <a href="{{ url_for('auth.login') }}" class="small text-muted text-decoration-none"><i class="bi bi-arrow-left me-1"></i>Voltar ao Login</a>
+        <div class="text-center pt-2 border-top">
+            <a href="{{ url_for('auth.login') }}" class="small text-muted text-decoration-none fw-semibold">
+                <i class="bi bi-arrow-left me-1"></i> Voltar ao Login
+            </a>
         </div>
     </div>
+
+    <!-- POPUP / MODAL DE SUCESSO -->
+    <div class="modal fade" id="modalConfirmacaoEnvio" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow p-3">
+                <div class="modal-body text-center p-4">
+                    <div class="icon-box-sucesso">
+                        <i class="bi bi-send-check-fill"></i>
+                    </div>
+
+                    <h5 class="fw-bold text-dark mb-2">Instruções Enviadas!</h5>
+                    
+                    {% if email_destino %}
+                    <p class="text-muted small mb-3">
+                        Enviamos o link de redefinição para o endereço:<br>
+                        <strong class="text-dark fs-6">{{ email_destino }}</strong>
+                    </p>
+                    {% else %}
+                    <p class="text-muted small mb-3">
+                        Se os dados informados estiverem cadastrados em nossa base, enviamos o link de redefinição de senha.
+                    </p>
+                    {% endif %}
+
+                    <!-- ALERTA DE CAIXA DE SPAM -->
+                    <div class="alert alert-warning border-0 text-start small mb-4 py-2 px-3 rounded-3" style="background-color: #fffbeb; color: #b45309;">
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="bi bi-exclamation-triangle-fill fs-5 flex-shrink-0 mt-1"></i>
+                            <div>
+                                <strong>Verifique sua caixa de Spam:</strong><br>
+                                Como o e-mail é gerado automaticamente, ele pode cair no <b>Lixo Eletrônico</b> ou <b>Spam</b>. Caso esteja lá, marque como "Não é spam".
+                            </div>
+                        </div>
+                    </div>
+
+                    <a href="{{ url_for('auth.login') }}" class="btn btn-primary fw-bold w-100 py-2 rounded-3 shadow-sm">
+                        Entendi, Voltar para o Login
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function iniciarEnvio() {
+            const btn = document.getElementById('btnEnviar');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enviando instruções...';
+        }
+
+        {% if sucesso_envio %}
+        document.addEventListener('DOMContentLoaded', function() {
+            const modalEl = document.getElementById('modalConfirmacaoEnvio');
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+        });
+        {% endif %}
+    </script>
 </body>
 </html>
 

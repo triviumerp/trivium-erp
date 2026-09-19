@@ -170,3 +170,58 @@ def criar_cobranca_mercadopago(empresa, nome_plano, valor, forma_pagamento, cart
             return {"sucesso": False, "mensagem": f"Transação não autorizada: {msg}"}
 
     return {"sucesso": False, "mensagem": "Método de pagamento inválido."}
+
+def criar_preferencia_mercado_pago(empresa, plano, valor_total, cupom_codigo=None):
+    sdk = _get_sdk()
+    if not sdk:
+        return {"sucesso": False, "mensagem": "Credenciais do Mercado Pago não configuradas no servidor."}
+
+    chave_plano = str(plano).upper().replace("PLANO ", "").strip()
+    if 'ANUAL' in chave_plano:
+        cfg = PLANOS_CONFIG['ANUAL']
+    elif 'SEMESTRAL' in chave_plano:
+        cfg = PLANOS_CONFIG['SEMESTRAL']
+    else:
+        cfg = PLANOS_CONFIG['MENSAL']
+
+    # Se houver desconto de cupom validado no front, usa o valor com desconto
+    valor_final = float(valor_total) if valor_total else float(cfg['valor_total'])
+
+    base_url = "https://app.triviumerp.com.br" # Substitua se necessário pelo seu domínio em produção
+
+    preference_data = {
+        "items": [
+            {
+                "title": f"Assinatura Trivium ERP - Plano {cfg['nome']}",
+                "quantity": 1,
+                "unit_price": valor_final,
+                "currency_id": "BRL"
+            }
+        ],
+        "payer": {
+            "email": empresa.email or "contato@triviumerp.com.br",
+            "name": empresa.razao_social or "Cliente Trivium"
+        },
+        "back_urls": {
+            "success": f"{base_url}/configuracoes/perfil#tab-planos",
+            "failure": f"{base_url}/configuracoes/perfil#tab-planos",
+            "pending": f"{base_url}/configuracoes/perfil#tab-planos"
+        },
+        "auto_return": "approved",
+        "external_reference": f"emp_{empresa.id}_{cfg['nome']}"
+    }
+
+    try:
+        preference_response = sdk.preference().create(preference_data)
+        resultado = preference_response.get("response", {})
+        
+        if preference_response.get("status") in (200, 201) and "init_point" in resultado:
+            return {
+                "sucesso": True,
+                "init_point": resultado.get("init_point"),
+                "sandbox_init_point": resultado.get("sandbox_init_point")
+            }
+        else:
+            return {"sucesso": False, "mensagem": "Erro ao criar preferência de pagamento no Mercado Pago."}
+    except Exception as e:
+        return {"sucesso": False, "mensagem": str(e)}
