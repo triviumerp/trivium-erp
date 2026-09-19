@@ -2497,6 +2497,59 @@ def api_checkout_preferencia():
             'mensagem': resposta.get('mensagem', 'Erro ao gerar link de pagamento.')
         }), 400
 
+@app.route('/api/assinatura/checkout-transparente', methods=['POST'])
+@login_required
+def api_checkout_transparente():
+    dados = request.get_json(silent=True) or {}
+    plano_nome = dados.get('plano', 'MENSAL')
+    valor_total = float(dados.get('valor_total', 39.90))
+    parcelas = int(dados.get('parcelas', 1))
+    forma_pagamento = dados.get('forma_pagamento', 'PIX')
+    cartao_dados = dados.get('cartao')
+
+    empresa = getattr(current_user, 'empresa', None)
+    if not empresa:
+        return jsonify({"status": "error", "mensagem": "Empresa não vinculada ao usuário logado."}), 400
+
+    cupom_cod = (dados.get('cupom') or '').strip().upper()
+    if cupom_cod:
+        cupom_obj = CupomDesconto.query.filter_by(codigo=cupom_cod).first()
+        if cupom_obj and cupom_obj.is_valido:
+            fator = 1.0 - (cupom_obj.percentual_desconto / 100.0)
+            valor_total = max(1.0, round(valor_total * fator, 2))
+            empresa.cupom_utilizado = cupom_obj.codigo
+            empresa.afiliado_id = cupom_obj.id
+
+    ip_cliente = request.headers.get('X-Forwarded-For', request.remote_addr)
+    if ip_cliente and ',' in ip_cliente:
+        ip_cliente = ip_cliente.split(',')[0].strip()
+
+    resultado = criar_cobranca_mercadopago(
+        empresa=empresa,
+        nome_plano=plano_nome,
+        valor=valor_total,
+        forma_pagamento=forma_pagamento,
+        cartao_dados=cartao_dados,
+        remote_ip=ip_cliente,
+        parcelas=parcelas
+    )
+
+    if resultado.get('sucesso'):
+        db.session.commit()
+        return jsonify({
+            "status": "success",
+            "mensagem": "Cobrança gerada com sucesso!",
+            "dados": resultado.get('dados'),
+            "pix": resultado.get('pix'),
+            "bankSlipUrl": resultado.get('bankSlipUrl'),
+            "invoiceUrl": resultado.get('invoiceUrl')
+        })
+    else:
+        db.session.rollback()
+        return jsonify({
+            "status": "error",
+            "mensagem": resultado.get('mensagem', 'Erro ao processar cobrança no Mercado Pago.')
+        }), 400
 # -----------------------------------------------------------------------------
 # GESTÃO DE CUPONS E AFILIADOS (PAINEL MASTER)
 # -----------------------------------------------------------------------------
