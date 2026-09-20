@@ -52,7 +52,8 @@ from services.storage_service import (
     salvar_arquivo_supabase,
     excluir_arquivo_supabase,
     gerar_url_temporaria,
-    obter_arquivo_bytes
+    obter_arquivo_bytes,
+    excluir_pasta_empresa_supabase
 )
 
 # -----------------------------------------------------------------------------
@@ -364,6 +365,38 @@ def admin_atualizar_gestao_empresa(id):
 
     db.session.commit()
     flash(f'Gestão da empresa "{empresa.razao_social}" atualizada com sucesso!', 'success')
+    return redirect(url_for('admin_master_dashboard'))
+
+@app.route('/admin/master/empresa/<int:id>/excluir-definitivo', methods=['POST'])
+@login_required
+@master_required
+def admin_excluir_empresa_definitiva(id):
+    empresa = Empresa.query.get_or_404(id)
+    nome_empresa = empresa.razao_social
+    empresa_id = empresa.id
+
+    try:
+        # 1. Remove anexos e ficheiros do Storage Supabase S3
+        excluir_pasta_empresa_supabase(empresa_id)
+
+        # 2. Apaga chamados de suporte e mensagens vinculadas explicitamente
+        chamados_empresa = ChamadoSuporte.query.filter_by(empresa_id=empresa_id).all()
+        for chamado in chamados_empresa:
+            db.session.delete(chamado)
+
+        # 3. Remove comissões de afiliados e contratos gerados vinculados à empresa
+        ComissaoAfiliado.query.filter_by(empresa_id=empresa_id).delete()
+        ContratoGerado.query.filter_by(empresa_id=empresa_id).delete()
+
+        # 4. Exclui a empresa e todas as restantes entidades em cascata
+        db.session.delete(empresa)
+        db.session.commit()
+
+        flash(f'Empresa "{nome_empresa}" (ID: {empresa_id}) e todos os seus ficheiros/registos foram removidos permanentemente!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao excluir empresa permanentemente: {str(e)}', 'danger')
+
     return redirect(url_for('admin_master_dashboard'))
 
 @app.route('/admin/master/usuario/<int:id>/redefinir-senha', methods=['POST'])

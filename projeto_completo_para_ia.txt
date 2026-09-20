@@ -2803,6 +2803,59 @@ def api_checkout_preferencia():
             'mensagem': resposta.get('mensagem', 'Erro ao gerar link de pagamento.')
         }), 400
 
+@app.route('/api/assinatura/checkout-transparente', methods=['POST'])
+@login_required
+def api_checkout_transparente():
+    dados = request.get_json(silent=True) or {}
+    plano_nome = dados.get('plano', 'MENSAL')
+    valor_total = float(dados.get('valor_total', 39.90))
+    parcelas = int(dados.get('parcelas', 1))
+    forma_pagamento = dados.get('forma_pagamento', 'PIX')
+    cartao_dados = dados.get('cartao')
+
+    empresa = getattr(current_user, 'empresa', None)
+    if not empresa:
+        return jsonify({"status": "error", "mensagem": "Empresa não vinculada ao usuário logado."}), 400
+
+    cupom_cod = (dados.get('cupom') or '').strip().upper()
+    if cupom_cod:
+        cupom_obj = CupomDesconto.query.filter_by(codigo=cupom_cod).first()
+        if cupom_obj and cupom_obj.is_valido:
+            fator = 1.0 - (cupom_obj.percentual_desconto / 100.0)
+            valor_total = max(1.0, round(valor_total * fator, 2))
+            empresa.cupom_utilizado = cupom_obj.codigo
+            empresa.afiliado_id = cupom_obj.id
+
+    ip_cliente = request.headers.get('X-Forwarded-For', request.remote_addr)
+    if ip_cliente and ',' in ip_cliente:
+        ip_cliente = ip_cliente.split(',')[0].strip()
+
+    resultado = criar_cobranca_mercadopago(
+        empresa=empresa,
+        nome_plano=plano_nome,
+        valor=valor_total,
+        forma_pagamento=forma_pagamento,
+        cartao_dados=cartao_dados,
+        remote_ip=ip_cliente,
+        parcelas=parcelas
+    )
+
+    if resultado.get('sucesso'):
+        db.session.commit()
+        return jsonify({
+            "status": "success",
+            "mensagem": "Cobrança gerada com sucesso!",
+            "dados": resultado.get('dados'),
+            "pix": resultado.get('pix'),
+            "bankSlipUrl": resultado.get('bankSlipUrl'),
+            "invoiceUrl": resultado.get('invoiceUrl')
+        })
+    else:
+        db.session.rollback()
+        return jsonify({
+            "status": "error",
+            "mensagem": resultado.get('mensagem', 'Erro ao processar cobrança no Mercado Pago.')
+        }), 400
 # -----------------------------------------------------------------------------
 # GESTÃO DE CUPONS E AFILIADOS (PAINEL MASTER)
 # -----------------------------------------------------------------------------
@@ -9263,13 +9316,12 @@ ARQUIVO: .\templates\perfil_empresa.html
                                 </div>
                                 <h5 class="fw-bold text-dark mb-1">Semestral</h5>
                                 <div class="my-2">
-                                    <span class="fs-4 fw-bold text-dark">R$ 34,90</span>
-                                    <small class="text-muted">/mês</small>
+                                    <span class="fs-4 fw-bold text-dark">R$ 209,40</span>
+                                    <small class="text-muted">por semestre</small>
                                 </div>
-                                <small class="text-success fw-bold d-block mb-2">Total: R$ 209,40 em até 6x</small>
+                                <small class="text-success fw-bold d-block mb-2">média: R$ 34,90</small>
                                 <ul class="list-unstyled small text-muted mb-3 flex-grow-1">
-                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Economia de 12%</li>
-                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Em até 6x no cartão</li>
+                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Economia de 12%</li>  
                                     <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Suporte técnico ágil</li>
                                 </ul>
                                 <button type="button" class="btn btn-outline-primary btn-sm fw-bold w-100 py-2 rounded-3" onclick="abrirCheckoutModalPerfil('SEMESTRAL', 209.40, 6, '6x de R$ 34,90')">
@@ -9284,17 +9336,16 @@ ARQUIVO: .\templates\perfil_empresa.html
                                 <span class="position-absolute top-0 end-0 translate-middle-y me-3 badge bg-primary px-2 py-1 small fw-bold">
                                     25% OFF • Mais Escolhido
                                 </span>
-                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 fw-bold w-auto align-self-start mb-2">Anual Founder</span>
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 fw-bold w-auto align-self-start mb-2">Anual</span>
                                 <h5 class="fw-bold text-primary mb-1">Anual</h5>
                                 <div class="my-2">
-                                    <span class="fs-4 fw-bold text-primary">R$ 29,90</span>
-                                    <small class="text-muted">/mês</small>
+                                    <span class="fs-4 fw-bold text-primary">R$ 358,80</span>
+                                    <small class="text-muted">por ano</small>
                                 </div>
-                                <small class="text-primary fw-bold d-block mb-2">Total: R$ 358,80 em até 12x</small>
+                                <small class="text-primary fw-bold d-block mb-2">Média: R$ 29,90 por mês</small>
                                 <ul class="list-unstyled small text-muted mb-3 flex-grow-1">
                                     <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Preço travado por 1 ano</li>
-                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Em até 12x sem juros</li>
-                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Suporte VIP WhatsApp</li>
+                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Economia de 25%</li>
                                 </ul>
                                 <button type="button" class="btn btn-primary btn-sm fw-bold w-100 py-2 rounded-3 shadow-sm" onclick="abrirCheckoutModalPerfil('ANUAL', 358.80, 12, '12x de R$ 29,90')">
                                     <i class="bi bi-lightning-charge-fill me-1"></i> Assinar Anual
@@ -9677,6 +9728,8 @@ function processarPagamentoPerfil(tipo) {
         cupom: cupomDigitado
     };
 
+    // Se for Cartão, chama a rota de Preferência (Checkout Pro Externo)
+    // Se for Pix ou Boleto, chama a rota de Checkout Transparente
     const endpoint = (tipo === 'CREDIT_CARD') ? '/api/assinatura/checkout-preferencia' : '/api/assinatura/checkout-transparente';
 
     fetch(endpoint, {
@@ -9690,7 +9743,7 @@ function processarPagamentoPerfil(tipo) {
             if (tipo === 'CREDIT_CARD') {
                 const linkCheckout = res.init_point || res.sandbox_init_point;
                 if (linkCheckout) {
-                    window.location.href = linkCheckout;
+                    window.location.href = linkCheckout; // Redireciona para o Mercado Pago
                 } else {
                     alert('Erro: Link externo de pagamento não gerado.');
                 }

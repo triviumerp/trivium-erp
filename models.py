@@ -50,6 +50,7 @@ class Empresa(db.Model):
     contratos = db.relationship('ContratoRecorrente', backref='empresa', lazy=True, cascade="all, delete-orphan")
     faturas = db.relationship('Fatura', backref='empresa', lazy=True, cascade="all, delete-orphan")
     parcelas = db.relationship('ParcelaFatura', backref='empresa', lazy=True, cascade="all, delete-orphan")
+    chamados = db.relationship('ChamadoSuporte', back_populates='empresa', lazy=True, cascade="all, delete-orphan")
 
     cupom_utilizado = db.Column(db.String(30), nullable=True)
     afiliado_id = db.Column(db.Integer, db.ForeignKey('cupons_desconto.id'), nullable=True)
@@ -484,7 +485,7 @@ class ChamadoSuporte(db.Model):
     data_abertura = db.Column(db.DateTime, default=datetime.utcnow)
     data_fechamento = db.Column(db.DateTime, nullable=True)
 
-    empresa = db.relationship('Empresa', backref='chamados')
+    empresa = db.relationship('Empresa', back_populates='chamados')
     usuario = db.relationship('Usuario', backref='chamados_abertos')
     mensagens = db.relationship('MensagemChamado', backref='chamado', lazy=True, cascade="all, delete-orphan")
 

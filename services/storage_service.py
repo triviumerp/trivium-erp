@@ -99,3 +99,24 @@ def obter_arquivo_bytes(chave_bucket):
     except Exception as e:
         print(f"[ERRO AO BAIXAR BYTES S3]: {e}")
         return None
+
+def excluir_pasta_empresa_supabase(empresa_id):
+    """
+    Remove todos os arquivos e anexos pertencentes à empresa no bucket Supabase.
+    Identifica todos os objetos com o prefixo emp_<empresa_id>/
+    """
+    try:
+        bucket = os.getenv('SUPABASE_BUCKET_NAME', 'trivium-documentos')
+        s3 = obter_cliente_s3()
+        prefixo = f"emp_{empresa_id}/"
+
+        # Lista todos os objetos no bucket sob o prefixo da empresa
+        paginator = s3.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefixo):
+            if 'Contents' in page:
+                objetos = [{'Key': obj['Key']} for obj in page['Contents']]
+                s3.delete_objects(Bucket=bucket, Delete={'Objects': objetos})
+        return True
+    except Exception as e:
+        print(f"[ERRO AO LIMPAR ARQUIVOS DA EMPRESA NO S3]: {e}")
+        return False
