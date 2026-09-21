@@ -1,147 +1,396 @@
 {% extends 'base.html' %}
-{% block title %}Gestão de Cupons & Parceiros - Trivium ERP{% endblock %}
+
+{% block title %}Gestão de Cupons & Afiliados - Master Trivium ERP{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
     <div>
-        <h2 class="fw-bold text-dark mb-0"><i class="bi bi-tag-fill text-danger me-2"></i>Cupons & Parceiros</h2>
-        <p class="text-muted mb-0">Gestão de afiliados, moderação de contas e controle de cupons promocionais</p>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-tags-fill text-danger me-2"></i>Cupons & Programa de Afiliados
+        </h2>
+        <p class="text-muted mb-0">Controle de códigos de desconto institucionais, comissões de parceiros e moderação cadastral</p>
     </div>
-    <button class="btn btn-danger fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoCupom">
-        <i class="bi bi-plus-circle me-1"></i> Criar Cupom Geral
-    </button>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoCupomMaster">
+            <i class="bi bi-plus-circle me-1"></i> Criar Cupom Geral
+        </button>
+    </div>
 </div>
 
-<div class="card border-0 shadow-sm">
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0 small">
-                <thead class="table-light">
-                    <tr>
-                        <th>CÓDIGO</th>
-                        <th>PARCEIRO / CONTATO</th>
-                        <th>CANAL / REDE SOCIAL</th>
-                        <th>CHAVE PIX / CPF/CNPJ</th>
-                        <th>DESCONTO / REPASSE</th>
-                        <th>USOS / LIMITE</th>
-                        <th>STATUS</th>
-                        <th class="text-end pe-3">AÇÕES</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for c in cupons %}
-                    <tr>
-                        <td class="fw-bold fs-6 text-primary">{{ c.codigo }}</td>
-                        <td>
-                            {% if c.parceiro %}
-                                <strong class="text-dark d-block">{{ c.parceiro.nome }}</strong>
-                                <span class="text-muted">{{ c.parceiro.email }}</span>
+<!-- NAVEGAÇÃO ENTRE ABAS -->
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body p-2">
+        <ul class="nav nav-pills gap-2" id="abaCuponsAfiliados" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active fw-bold px-4 py-2 rounded-3" 
+                        id="tab-afiliados-btn" 
+                        data-bs-toggle="pill" 
+                        data-bs-target="#tab-afiliados-conteudo" 
+                        type="button" 
+                        role="tab" 
+                        aria-controls="tab-afiliados-conteudo" 
+                        aria-selected="true">
+                    <i class="bi bi-people-fill me-2"></i>Parceiros Afiliados
+                    <span class="badge bg-light text-dark ms-2 border">{{ parceiros|length }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-bold px-4 py-2 rounded-3" 
+                        id="tab-cupons-btn" 
+                        data-bs-toggle="pill" 
+                        data-bs-target="#tab-cupons-conteudo" 
+                        type="button" 
+                        role="tab" 
+                        aria-controls="tab-cupons-conteudo" 
+                        aria-selected="false">
+                    <i class="bi bi-ticket-perforated-fill me-2"></i>Cupons de Desconto
+                    <span class="badge bg-light text-dark ms-2 border">{{ cupons|length }}</span>
+                </button>
+            </li>
+        </ul>
+    </div>
+</div>
+
+<!-- CONTEÚDO DAS ABAS -->
+<div class="tab-content" id="conteudoAbasMaster">
+    
+    <!-- ========================================================================= -->
+    <!-- ABA 1: PARCEIROS AFILIADOS                                                -->
+    <!-- ========================================================================= -->
+    <div class="tab-pane fade show active" id="tab-afiliados-conteudo" role="tabpanel" aria-labelledby="tab-afiliados-btn">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h6 class="fw-bold text-dark mb-0">Parceiros Cadastrados no Programa</h6>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="small text-muted">Filtrar:</span>
+                    <input type="text" id="filtroAfiliados" class="form-control form-control-sm" placeholder="Buscar parceiro, PIX, e-mail..." onkeyup="filtrarTabelaAfiliados()">
+                </div>
+            </div>
+
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 small" id="tabelaAfiliados">
+                        <thead class="table-light text-muted">
+                            <tr>
+                                <th>PARCEIRO</th>
+                                <th>CONTATO / PIX</th>
+                                <th>CUPOM PRIMÁRIO</th>
+                                <th>STATUS MODERAÇÃO</th>
+                                <th>TERMOS</th>
+                                <th class="text-end pe-3">AÇÕES</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in parceiros %}
+                            <tr>
+                                <td>
+                                    <strong class="text-dark d-block fs-6">{{ p.nome }}</strong>
+                                    <span class="text-muted">{{ p.email }}</span>
+                                    {% if p.cpf_cnpj %}
+                                        <div class="text-muted" style="font-size: 0.75rem;">Doc: {{ p.cpf_cnpj }}</div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div><i class="bi bi-whatsapp text-success me-1"></i>{{ p.whatsapp or '--' }}</div>
+                                    <span class="text-muted d-block" style="font-size: 0.75rem;">PIX: {{ p.chave_pix or 'Não cadastrado' }}</span>
+                                </td>
+                                <td>
+                                    {% if p.cupons %}
+                                        <span class="badge bg-light text-primary border border-primary font-monospace fw-bold">
+                                            {{ p.cupons[0].codigo }}
+                                        </span>
+                                        <small class="text-muted d-block">{{ p.cupons[0].percentual_comissao }}% comissão</small>
+                                    {% else %}
+                                        <span class="text-muted">Sem cupom ativo</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if p.status_aprovacao == 'aprovado' %}
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                            <i class="bi bi-check-circle me-1"></i>Aprovado
+                                        </span>
+                                    {% elif p.status_aprovacao == 'rejeitado' %}
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                                            <i class="bi bi-x-circle me-1"></i>Rejeitado
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">
+                                            <i class="bi bi-clock-history me-1"></i>Em Moderação
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if p.aceitou_termos_afiliado %}
+                                        <span class="badge bg-light text-success border border-success"><i class="bi bi-check2"></i> Aceite Ok</span>
+                                    {% else %}
+                                        <span class="badge bg-light text-secondary border">Pendente</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-3">
+                                    <div class="d-flex justify-content-end gap-1">
+                                        <!-- ABRE O PAINEL DE AUDITORIA, REPASSES E GESTÃO FINANCEIRA -->
+                                        <a href="{{ url_for('admin_auditoria_parceiro', id=p.id) }}" class="btn btn-sm btn-primary fw-bold" title="Gerenciar Afiliado, Comissões e Empresas">
+                                            <i class="bi bi-wallet2 me-1"></i> Gerenciar
+                                        </a>
+
+                                        <!-- MODERAR STATUS DO CADASTRO -->
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalModerar{{ p.id }}" title="Moderar Cadastro">
+                                            <i class="bi bi-shield-check"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
                             {% else %}
-                                <span class="badge bg-secondary">Cupom Geral / Sem Vínculo</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if c.parceiro %}
-                                <span class="fw-semibold text-dark d-block">{{ c.parceiro.tipo_parceiro or 'Parceiro' }}</span>
-                                <small class="text-muted">{{ c.parceiro.rede_social_principal or '--' }}</small>
+                            <tr>
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <i class="bi bi-person-x fs-2 d-block mb-2 text-secondary"></i>
+                                    Nenhum parceiro afiliado registrado até o momento.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- ABA 2: CUPONS DE DESCONTO GERAIS E VINCULADOS                             -->
+    <!-- ========================================================================= -->
+    <div class="tab-pane fade" id="tab-cupons-conteudo" role="tabpanel" aria-labelledby="tab-cupons-btn">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h6 class="fw-bold text-dark mb-0">Cupons Cadastrados na Plataforma</h6>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="small text-muted">Filtrar:</span>
+                    <input type="text" id="filtroCupons" class="form-control form-control-sm" placeholder="Buscar código, titular..." onkeyup="filtrarTabelaCupons()">
+                </div>
+            </div>
+
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 small" id="tabelaCupons">
+                        <thead class="table-light text-muted">
+                            <tr>
+                                <th>CÓDIGO</th>
+                                <th>TIPO / TITULAR</th>
+                                <th>DESCONTO</th>
+                                <th>COMISSÃO</th>
+                                <th>USOS (UTILIZAÇÕES)</th>
+                                <th>VALIDADE</th>
+                                <th>STATUS</th>
+                                <th class="text-end pe-3">AÇÕES</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in cupons %}
+                            <tr>
+                                <td>
+                                    <span class="font-monospace fw-bold text-primary fs-6">{{ c.codigo }}</span>
+                                </td>
+                                <td>
+                                    {% if c.parceiro %}
+                                        <strong class="text-dark d-block">{{ c.parceiro.nome }}</strong>
+                                        <span class="badge bg-info-subtle text-info border border-info-subtle">Afiliado Parceiro</span>
+                                    {% else %}
+                                        <span class="badge bg-light text-secondary border">Cupom Geral / Plataforma</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-success-subtle text-success fw-bold border border-success-subtle">
+                                        {{ c.percentual_desconto }}% OFF
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if c.usuario_id %}
+                                        <span class="text-dark fw-semibold">{{ c.percentual_comissao }}%</span>
+                                        <small class="text-muted d-block">{{ c.meses_comissao_limite }} meses limite</small>
+                                    {% else %}
+                                        <span class="text-muted">--</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="fw-bold text-dark">{{ c.usos_atuais or 0 }} / {{ c.limite_usos or '∞' }}</div>
+                                    <div class="progress mt-1" style="height: 4px; max-width: 90px;">
+                                        {% set pct_uso = ((c.usos_atuais or 0) / (c.limite_usos or 100)) * 100 %}
+                                        <div class="progress-bar bg-primary" style="width: {{ pct_uso }}%;"></div>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if c.data_validade %}
+                                        <span class="{% if hoje and c.data_validade < hoje %}text-danger fw-bold{% else %}text-muted{% endif %}">
+                                            {{ c.data_validade.strftime('%d/%m/%Y') }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">Sem expiração</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if c.ativo %}
+                                        <span class="badge bg-success p-1">Ativo</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary p-1">Pausado</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-3">
+                                    <div class="d-flex justify-content-end gap-1">
+                                        {% if c.usuario_id %}
+                                            <a href="{{ url_for('admin_auditoria_parceiro', id=c.usuario_id) }}" class="btn btn-sm btn-outline-primary" title="Abrir Auditoria do Parceiro">
+                                                <i class="bi bi-box-arrow-up-right"></i>
+                                            </a>
+                                        {% endif %}
+                                        <form action="{{ url_for('admin_toggle_cupom', id=c.id) }}" method="POST" class="d-inline">
+                                            <button type="submit" class="btn btn-sm {% if c.ativo %}btn-outline-warning text-dark{% else %}btn-outline-success{% endif %}" title="Ativar / Pausar Cupom">
+                                                <i class="bi {% if c.ativo %}bi-pause-fill{% else %}bi-play-fill{% endif %}"></i>
+                                            </button>
+                                        </form>
+                                        <form action="{{ url_for('admin_excluir_cupom', id=c.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Deseja realmente remover o cupom {{ c.codigo }} definitivamente do banco de dados?')">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Cupom">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+
+                                    </div>
+                                </td>
+                            </tr>
                             {% else %}
-                                <span class="text-muted">Campanha Geral</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if c.parceiro %}
-                                <code>{{ c.parceiro.chave_pix or 'Sem PIX' }}</code>
-                                <small class="text-muted d-block">Doc: {{ c.parceiro.cpf_cnpj or '--' }}</small>
-                            {% else %}
-                                --
-                            {% endif %}
-                        </td>
-                        <td>
-                            <span class="badge bg-success">{{ c.percentual_desconto }}% OFF</span>
-                            <span class="badge bg-info text-dark">{{ c.percentual_comissao }}% Repasse</span>
-                        </td>
-                        <td>
-                            <strong>{{ c.usos_atuais }}</strong> / {{ c.limite_usos }}
-                            <div class="progress mt-1" style="height: 4px;">
-                                {% set porcentagem = ((c.usos_atuais / c.limite_usos) * 100)|round|int if c.limite_usos and c.limite_usos > 0 else 0 %}
-                                <div class="progress-bar bg-primary" style="width: {{ porcentagem }}%;"></div>
-                            </div>
-                        </td>
-                        <td>
-                            {% if c.parceiro %}
-                                {% if c.parceiro.status_aprovacao == 'aprovado' and c.ativo %}
-                                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Ativo</span>
-                                {% elif c.parceiro.status_aprovacao == 'rejeitado' or not c.ativo %}
-                                    <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Cancelado / Inativo</span>
-                                {% else %}
-                                    <span class="badge bg-warning text-dark"><i class="bi bi-clock-history me-1"></i>Aguardando Liberação</span>
-                                {% endif %}
-                            {% else %}
-                                <span class="badge {{ 'bg-success' if c.ativo else 'bg-secondary' }}">{{ 'Ativo' if c.ativo else 'Inativo' }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-end pe-3">
-                            {% if c.parceiro %}
-                                <a href="{{ url_for('admin_auditoria_parceiro', id=c.parceiro.id) }}" class="btn btn-sm btn-primary fw-bold px-3">
-                                    <i class="bi bi-sliders me-1"></i> Gerenciar
-                                </a>
-                            {% else %}
-                                <form action="{{ url_for('admin_toggle_cupom', id=c.id) }}" method="POST" class="d-inline">
-                                    <button class="btn btn-sm {% if c.ativo %}btn-outline-danger{% else %}btn-outline-success{% endif %} fw-bold">
-                                        {{ 'Desativar' if c.ativo else 'Ativar' }}
-                                    </button>
-                                </form>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="8" class="text-center py-4 text-muted">Nenhum cupom cadastrado.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                            <tr>
+                                <td colspan="8" class="text-center py-5 text-muted">
+                                    <i class="bi bi-ticket-detailed fs-2 d-block mb-2 text-secondary"></i>
+                                    Nenhum cupom cadastrado.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- MODAL NOVO CUPOM GERAL -->
-<div class="modal fade" id="modalNovoCupom" tabindex="-1">
+<!-- ========================================================================= -->
+<!-- MODAIS: MODERAR CADA PARCEIRO                                            -->
+<!-- ========================================================================= -->
+{% for p in parceiros %}
+<div class="modal fade" id="modalModerar{{ p.id }}" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <form method="POST">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('admin_moderar_parceiro', user_id=p.id) }}" method="POST">
                 <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-tag text-danger me-2"></i>Cadastrar Cupom Geral</h5>
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-shield-check text-primary me-2"></i>Moderação: {{ p.nome }}
+                    </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Decisão de Acesso</label>
+                        <select name="status_aprovacao" class="form-select form-select-sm" required>
+                            <option value="aprovado" {% if p.status_aprovacao == 'aprovado' %}selected{% endif %}>Aprovar Parceiro (Libera cupons e comissões)</option>
+                            <option value="rejeitado" {% if p.status_aprovacao == 'rejeitado' %}selected{% endif %}>Rejeitar Cadastro</option>
+                            <option value="pendente" {% if p.status_aprovacao == 'pendente' %}selected{% endif %}>Manter em Análise</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Motivo da Rejeição (Caso rejeitado)</label>
+                        <textarea name="motivo_rejeicao" class="form-control form-control-sm" rows="2" placeholder="Descreva os motivos que serão apresentados ao parceiro...">{{ p.motivo_rejeicao or '' }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Salvar Decisão</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- ========================================================================= -->
+<!-- MODAL: CRIAR NOVO CUPOM GERAL / INSTITUCIONAL                             -->
+<!-- ========================================================================= -->
+<div class="modal fade" id="modalNovoCupomMaster" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('admin_master_cupons') }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-plus-circle text-primary me-2"></i>Criar Novo Cupom
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Código do Cupom *</label>
+                        <input type="text" name="codigo" class="form-control font-monospace text-uppercase" placeholder="EX: TRIVIUM20" required>
+                    </div>
+
                     <div class="row g-2 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold">Código do Cupom *</label>
-                            <input type="text" name="codigo" class="form-control text-uppercase font-monospace" placeholder="EX: NATAL2026" required>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Desconto do Cliente (%)</label>
+                            <input type="number" step="0.5" name="percentual_desconto" class="form-control" value="10.0" required>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold">Desconto (%) *</label>
-                            <input type="number" step="1" min="1" max="100" name="percentual_desconto" class="form-control" value="10" required>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Comissão Parceiro (%)</label>
+                            <input type="number" step="0.5" name="percentual_comissao" class="form-control" value="0.0">
                         </div>
                     </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-6">
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Vincular a um Afiliado (Opcional)</label>
+                        <select name="usuario_id" class="form-select form-select-sm">
+                            <option value="">Nenhum (Cupom Geral da Plataforma)</option>
+                            {% for p in parceiros %}
+                            <option value="{{ p.id }}">{{ p.nome }} ({{ p.email }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
                             <label class="form-label small fw-bold">Limite de Usos</label>
                             <input type="number" name="limite_usos" class="form-control" value="100">
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold">Data de Validade</label>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Validade</label>
                             <input type="date" name="data_validade" class="form-control">
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-danger btn-sm fw-bold px-3">Criar Cupom</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">Cadastrar Cupom</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+<script>
+function filtrarTabelaAfiliados() {
+    const input = document.getElementById("filtroAfiliados");
+    const filtro = input.value.toLowerCase();
+    const tabela = document.getElementById("tabelaAfiliados");
+    const linhas = tabela.getElementsByTagName("tr");
+
+    for (let i = 1; i < linhas.length; i++) {
+        const texto = linhas[i].textContent.toLowerCase();
+        linhas[i].style.display = texto.includes(filtro) ? "" : "none";
+    }
+}
+
+function filtrarTabelaCupons() {
+    const input = document.getElementById("filtroCupons");
+    const filtro = input.value.toLowerCase();
+    const tabela = document.getElementById("tabelaCupons");
+    const linhas = tabela.getElementsByTagName("tr");
+
+    for (let i = 1; i < linhas.length; i++) {
+        const texto = linhas[i].textContent.toLowerCase();
+        linhas[i].style.display = texto.includes(filtro) ? "" : "none";
+    }
+}
+</script>
 {% endblock %}

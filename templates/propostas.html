@@ -6,9 +6,9 @@
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
     <div>
         <h2 class="fw-bold text-dark mb-0"><i class="bi bi-file-earmark-text text-primary me-2"></i>Propostas Comerciais</h2>
-        <p class="text-muted mb-0">Emissão de orçamentos, termos aditivos e exportação de cartas timbradas em PDF</p>
+        <p class="text-muted mb-0">Emissão de orçamentos e exportação de cartas timbradas em PDF</p>
     </div>
-    <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovaProposta">
+    <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovaProposta" onclick="prepararModalNovaProposta()">
         <i class="bi bi-plus-circle me-1"></i>Nova Proposta
     </button>
 </div>
@@ -79,9 +79,7 @@
                     <tr>
                         <td>
                             <strong class="text-dark d-block">{{ p.numero_proposta }}</strong>
-                            {% if p.tipo_documento == 'aditivo' %}
-                                <span class="badge bg-info text-dark">Aditivo #{{ p.numero_aditivo }}</span>
-                            {% elif p.tipo_cobranca == 'recorrente' %}
+                            {% if p.tipo_cobranca == 'recorrente' %}
                                 <span class="badge bg-primary">Mensalista</span>
                             {% else %}
                                 <span class="badge bg-light text-muted border">Avulso</span>
@@ -136,26 +134,52 @@
                         </td>
 
                         <td class="text-end pe-3">
-                            <div class="d-flex gap-1 justify-content-end">
+                            <div class="d-flex gap-1 justify-content-end align-items-center">
                                 <a href="{{ url_for('gerar_pdf_proposta', id=p.id) }}" target="_blank" class="btn btn-sm btn-outline-primary" title="Exportar PDF Timbrado">
                                     <i class="bi bi-file-earmark-pdf"></i>
                                 </a>
 
                                 {% if p.status == 'Aguardando Aprovação' %}
+                                    <!-- Botão Aprovar -->
                                     <form action="{{ url_for('atualizar_status_proposta', id=p.id) }}" method="POST" class="d-inline">
                                         <input type="hidden" name="novo_status" value="Aprovado">
-                                        <button type="submit" class="btn btn-sm btn-success fw-bold" onclick="return confirm('Deseja aprovar e faturar esta proposta?')">
+                                        <button type="submit" class="btn btn-sm btn-success fw-bold" onclick="return confirm('Deseja aprovar e faturar a proposta {{ p.numero_proposta }}?')">
                                             <i class="bi bi-check2"></i> Aprovar
                                         </button>
                                     </form>
-                                {% endif %}
 
-                                {% if p.status == 'Aprovado' %}
-                                    <form action="{{ url_for('gerar_aditivo_proposta', id=p.id) }}" method="POST" class="d-inline">
-                                        <button type="submit" class="btn btn-sm btn-outline-dark" title="Gerar Termo Aditivo">
-                                            <i class="bi bi-node-plus"></i>
-                                        </button>
-                                    </form>
+                                    <!-- Botão Editar Proposta -->
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-secondary" 
+                                            title="Editar Proposta"
+                                            onclick='abrirModalEditarProposta({{ p.id }}, {{ {
+                                                "cliente_id": p.cliente_id,
+                                                "validade_dias": p.validade_dias or 15,
+                                                "tipo_cobranca": p.tipo_cobranca or "pontual",
+                                                "periodicidade": p.periodicidade or "mensal",
+                                                "dia_vencimento": p.dia_vencimento or 10,
+                                                "condicoes_pagamento": p.condicoes_pagamento or "",
+                                                "observacoes": p.observacoes or "",
+                                                "exige_entrada": p.exige_entrada or false,
+                                                "valor_entrada": p.valor_entrada or 0.0,
+                                                "forma_pagamento_entrada": p.forma_pagamento_entrada or "PIX",
+                                                "qtd_parcelas": p.qtd_parcelas or 1,
+                                                "forma_pagamento_parcelas": p.forma_pagamento_parcelas or "Boleto Bancário",
+                                                "intervalo_dias": p.intervalo_dias or 30,
+                                                "numero_proposta": p.numero_proposta
+                                            }|tojson }}, [
+                                                {% for item in p.itens %}
+                                                {
+                                                    "tipo_servico_id": {{ item.tipo_servico_id }},
+                                                    "quantidade": {{ item.quantidade or 1.0 }},
+                                                    "unidade": "{{ item.unidade or 'un' }}",
+                                                    "valor_unitario": {{ item.valor_unitario or 0.0 }},
+                                                    "descricao": "{{ (item.descricao_personalizada or '')|replace('\n', ' ')|replace('\r', '')|replace('\"', '\\\"') }}"
+                                                }{% if not loop.last %},{% endif %}
+                                                {% endfor %}
+                                            ])'>
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
                                 {% endif %}
 
                                 {% if not p.faturas %}
@@ -177,20 +201,22 @@
     </div>
 </div>
 
-<!-- MODAL NOVA PROPOSTA -->
+<!-- MODAL PROPOSTA (CRIAÇÃO & EDIÇÃO) -->
 <div class="modal fade" id="modalNovaProposta" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content border-0 shadow rounded-4">
-            <form action="{{ url_for('criar_proposta') }}" method="POST">
+            <form id="formPropostaModal" action="{{ url_for('criar_proposta') }}" method="POST">
                 <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-file-earmark-plus text-primary me-2"></i>Nova Proposta Comercial</h5>
+                    <h5 class="modal-title fw-bold text-dark" id="tituloModalProposta">
+                        <i class="bi bi-file-earmark-plus text-primary me-2"></i>Nova Proposta Comercial
+                    </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
                             <label class="form-label small fw-bold">Cliente *</label>
-                            <select name="cliente_id" class="form-select form-select-sm" required>
+                            <select name="cliente_id" id="prop_cliente_id" class="form-select form-select-sm" required>
                                 <option value="">Selecione o Cliente...</option>
                                 {% for c in clientes %}
                                 <option value="{{ c.id }}">{{ c.nome }} ({{ c.cnpj_cpf }})</option>
@@ -205,8 +231,8 @@
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small fw-bold">Validade da Proposta</label>
-                            <input type="number" name="validade_dias" class="form-control form-control-sm" value="15">
+                            <label class="form-label small fw-bold">Validade da Proposta (Dias)</label>
+                            <input type="number" name="validade_dias" id="prop_validade_dias" class="form-control form-control-sm" value="15">
                         </div>
                     </div>
 
@@ -227,17 +253,17 @@
                         <div class="row g-3 align-items-center">
                             <div class="col-md-3">
                                 <div class="form-check form-switch mt-3">
-                                    <input class="form-check-input" type="checkbox" name="exige_entrada" id="exige_entrada" onchange="alternarEntrada()">
-                                    <label class="form-check-label fw-bold small" for="exige_entrada">Exigir Sinal de Entrada</label>
+                                    <input class="form-check-input" type="checkbox" name="exige_entrada" id="prop_exige_entrada" onchange="alternarEntrada()">
+                                    <label class="form-check-label fw-bold small" for="prop_exige_entrada">Exigir Sinal de Entrada</label>
                                 </div>
                             </div>
                             <div class="col-md-3" id="col_valor_entrada" style="display: none;">
                                 <label class="form-label small fw-bold">Valor do Sinal (R$)</label>
-                                <input type="number" step="0.01" name="valor_entrada" class="form-control form-control-sm" placeholder="0.00">
+                                <input type="number" step="0.01" name="valor_entrada" id="prop_valor_entrada" class="form-control form-control-sm" placeholder="0.00">
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label small fw-bold">Parcelar Restante em</label>
-                                <select name="qtd_parcelas" class="form-select form-select-sm">
+                                <select name="qtd_parcelas" id="prop_qtd_parcelas" class="form-select form-select-sm">
                                     {% for i in range(1, 13) %}
                                     <option value="{{ i }}">{{ i }}x título(s)</option>
                                     {% endfor %}
@@ -245,19 +271,22 @@
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label small fw-bold">Intervalo de Dias</label>
-                                <input type="number" name="intervalo_dias" class="form-control form-control-sm" value="30">
+                                <input type="number" name="intervalo_dias" id="prop_intervalo_dias" class="form-control form-control-sm" value="30">
                             </div>
                         </div>
                     </div>
 
                     <div class="mb-2">
+                        <label class="form-label small fw-bold">Termos Gerais de Pagamento</label>
+                        <input type="text" name="condicoes_pagamento" id="prop_condicoes" class="form-control form-control-sm mb-2" placeholder="Ex: Faturamento 30 dias após emissão da NF">
+                        
                         <label class="form-label small fw-bold">Observações Gerais</label>
-                        <textarea name="observacoes" class="form-control form-control-sm" rows="2" placeholder="Informações adicionais que constarão na proposta impressa..."></textarea>
+                        <textarea name="observacoes" id="prop_observacoes" class="form-control form-control-sm" rows="2" placeholder="Informações adicionais que constarão na proposta impressa..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">Gerar Proposta</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-4" id="btnSubmitPropostaModal">Gerar Proposta</button>
                 </div>
             </form>
         </div>
@@ -271,52 +300,61 @@ const catalogoServicos = [
     {% endfor %}
 ];
 
-function adicionarItemProposta() {
-    const container = document.getElementById('container-itens-proposta');
-    const div = document.createElement('div');
-    div.className = 'row g-2 align-items-center bg-white p-2 rounded border';
-    
+function gerarHtmlLinhaServico(item = null) {
     let options = '<option value="">Selecione o serviço do catálogo...</option>';
     catalogoServicos.forEach(s => {
-        options += `<option value="${s.id}" data-valor="${s.valor}" data-und="${s.und}">${s.nome} (R$ ${s.valor.toFixed(2)})</option>`;
+        const selected = (item && String(item.tipo_servico_id) === String(s.id)) ? 'selected' : '';
+        options += `<option value="${s.id}" data-valor="${s.valor}" data-und="${s.und}" ${selected}>${s.nome} (R$ ${s.valor.toFixed(2)})</option>`;
     });
 
-    div.innerHTML = `
+    const desc = item ? (item.descricao || '') : '';
+    const qtd = item ? (item.quantidade || 1.0) : 1.0;
+    const und = item ? (item.unidade || 'un') : 'un';
+    const val = item ? (parseFloat(item.valor_unitario).toFixed(2)) : '';
+
+    return `
         <div class="col-md-4">
             <select name="tipo_servico_id[]" class="form-select form-select-sm select-servico" required onchange="aoSelecionarServico(this)">
                 ${options}
             </select>
         </div>
         <div class="col-md-4">
-            <input type="text" name="descricao[]" class="form-control form-control-sm" placeholder="Detalhamento do escopo">
+            <input type="text" name="descricao[]" class="form-control form-control-sm" value="${desc}" placeholder="Detalhamento do escopo">
         </div>
         <div class="col-md-1">
-            <input type="number" step="0.1" name="quantidade[]" class="form-control form-control-sm" value="1" placeholder="Qtd">
+            <input type="number" step="0.1" name="quantidade[]" class="form-control form-control-sm" value="${qtd}" placeholder="Qtd">
         </div>
         <div class="col-md-1">
-            <input type="text" name="unidade[]" class="form-control form-control-sm input-und" value="un" placeholder="Und">
+            <input type="text" name="unidade[]" class="form-control form-control-sm input-und" value="${und}" placeholder="Und">
         </div>
         <div class="col-md-1">
-            <input type="number" step="0.01" name="valor_unitario[]" class="form-control form-control-sm input-val" placeholder="0.00" required>
+            <input type="number" step="0.01" name="valor_unitario[]" class="form-control form-control-sm input-val" value="${val}" placeholder="0.00" required>
         </div>
         <div class="col-md-1 text-end">
             <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.row').remove()"><i class="bi bi-trash"></i></button>
         </div>
     `;
+}
+
+function adicionarItemProposta(item = null) {
+    const container = document.getElementById('container-itens-proposta');
+    const div = document.createElement('div');
+    div.className = 'row g-2 align-items-center bg-white p-2 rounded border';
+    div.innerHTML = gerarHtmlLinhaServico(item);
     container.appendChild(div);
 }
 
 function aoSelecionarServico(selectEl) {
     const opt = selectEl.selectedOptions[0];
     const row = selectEl.closest('.row');
-    if (opt) {
-        row.querySelector('.input-val').value = opt.getAttribute('data-valor') || '';
+    if (opt && opt.value) {
+        row.querySelector('.input-val').value = parseFloat(opt.getAttribute('data-valor') || 0).toFixed(2);
         row.querySelector('.input-und').value = opt.getAttribute('data-und') || 'un';
     }
 }
 
 function alternarEntrada() {
-    const check = document.getElementById('exige_entrada').checked;
+    const check = document.getElementById('prop_exige_entrada').checked;
     document.getElementById('col_valor_entrada').style.display = check ? 'block' : 'none';
 }
 
@@ -325,8 +363,65 @@ function alternarModoCobranca() {
     document.getElementById('box-condicoes-pontual').style.display = (tipo === 'pontual') ? 'block' : 'none';
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function prepararModalNovaProposta() {
+    const form = document.getElementById('formPropostaModal');
+    form.action = "{{ url_for('criar_proposta') }}";
+    
+    document.getElementById('tituloModalProposta').innerHTML = '<i class="bi bi-file-earmark-plus text-primary me-2"></i>Nova Proposta Comercial';
+    document.getElementById('btnSubmitPropostaModal').innerText = 'Gerar Proposta';
+
+    form.reset();
+    document.getElementById('container-itens-proposta').innerHTML = '';
     adicionarItemProposta();
+    alternarEntrada();
+    alternarModoCobranca();
+}
+
+function abrirModalEditarProposta(id, dados, itens) {
+    const form = document.getElementById('formPropostaModal');
+    form.action = `/propostas/${id}/editar`;
+
+    document.getElementById('tituloModalProposta').innerHTML = `<i class="bi bi-pencil-square text-primary me-2"></i>Editar: ${dados.numero_proposta}`;
+    document.getElementById('btnSubmitPropostaModal').innerText = 'Atualizar Proposta';
+
+    document.getElementById('prop_cliente_id').value = dados.cliente_id;
+    document.getElementById('prop_tipo_cobranca').value = dados.tipo_cobranca;
+    document.getElementById('prop_validade_dias').value = dados.validade_dias;
+    document.getElementById('prop_condicoes').value = dados.condicoes_pagamento || '';
+    document.getElementById('prop_observacoes').value = dados.observacoes || '';
+
+    const chkEntrada = document.getElementById('prop_exige_entrada');
+    chkEntrada.checked = Boolean(dados.exige_entrada);
+    document.getElementById('prop_valor_entrada').value = dados.valor_entrada || '';
+    document.getElementById('prop_qtd_parcelas').value = dados.qtd_parcelas || 1;
+    document.getElementById('prop_intervalo_dias').value = dados.intervalo_dias || 30;
+
+    alternarEntrada();
+    alternarModoCobranca();
+
+    const container = document.getElementById('container-itens-proposta');
+    container.innerHTML = '';
+
+    if (itens && itens.length > 0) {
+        itens.forEach(item => adicionarItemProposta(item));
+    } else {
+        adicionarItemProposta();
+    }
+
+    const modalEl = document.getElementById('modalNovaProposta');
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('abrir_modal') === 'true') {
+        prepararModalNovaProposta();
+        const cliId = params.get('cliente_id');
+        if (cliId) {
+            document.getElementById('prop_cliente_id').value = cliId;
+        }
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalNovaProposta')).show();
+    }
 });
 </script>
 {% endblock %}

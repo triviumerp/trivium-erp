@@ -127,39 +127,56 @@
 
                         <!-- ENDEREÇO DA EMPRESA COM BUSCA CEP -->
                         <h6 class="fw-bold text-dark mb-3"><i class="bi bi-geo-alt text-primary me-2"></i>Endereço Corporativo</h6>
-                        <div class="row g-2 mb-4">
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold">CEP</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" name="cep" id="cepEmpresa" class="form-control" value="{{ perfil.cep or '' }}" placeholder="00000-000">
-                                    <button class="btn btn-outline-secondary" type="button" onclick="consultarCepEmpresa()"><i class="bi bi-search"></i></button>
+                            <div class="row g-2">
+                                <!-- Campo CEP com o botão de busca -->
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">CEP</label>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" name="cep" id="empCep" class="form-control" 
+                                            value="{{ perfil.cep or '' }}" placeholder="00000-000" maxlength="9" onblur="consultarCepEmpresa()">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="consultarCepEmpresa()">
+                                            <i class="bi bi-search"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Demais campos com seus respectivos IDs -->
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">Logradouro</label>
+                                    <input type="text" name="logradouro" id="empLogradouro" class="form-control form-control-sm" 
+                                        value="{{ perfil.logradouro or '' }}" placeholder="Rua, Av, etc.">
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Número</label>
+                                    <input type="text" name="numero" id="empNumero" class="form-control form-control-sm" 
+                                        value="{{ perfil.numero or '' }}" placeholder="123">
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">Complemento</label>
+                                    <input type="text" name="complemento" id="empComplemento" class="form-control form-control-sm" 
+                                        value="{{ perfil.complemento or '' }}" placeholder="Sala, Bloco...">
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">Bairro</label>
+                                    <input type="text" name="bairro" id="empBairro" class="form-control form-control-sm" 
+                                        value="{{ perfil.bairro or '' }}">
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Cidade</label>
+                                    <input type="text" name="cidade" id="empCidade" class="form-control form-control-sm" 
+                                        value="{{ perfil.cidade or '' }}">
+                                </div>
+
+                                <div class="col-md-1">
+                                    <label class="form-label small fw-bold">UF</label>
+                                    <input type="text" name="estado" id="empEstado" class="form-control form-control-sm text-uppercase" 
+                                        maxlength="2" value="{{ perfil.estado or '' }}">
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold">Logradouro</label>
-                                <input type="text" name="logradouro" id="logradouroEmpresa" class="form-control form-control-sm" value="{{ perfil.logradouro or '' }}">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold">Número</label>
-                                <input type="text" name="numero" id="numeroEmpresa" class="form-control form-control-sm" value="{{ perfil.numero or '' }}">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold">Complemento</label>
-                                <input type="text" name="complemento" class="form-control form-control-sm" value="{{ perfil.complemento or '' }}">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold">Bairro</label>
-                                <input type="text" name="bairro" id="bairroEmpresa" class="form-control form-control-sm" value="{{ perfil.bairro or '' }}">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold">Cidade</label>
-                                <input type="text" name="cidade" id="cidadeEmpresa" class="form-control form-control-sm" value="{{ perfil.cidade or '' }}">
-                            </div>
-                            <div class="col-md-1">
-                                <label class="form-label small fw-bold">UF</label>
-                                <input type="text" name="estado" id="estadoEmpresa" class="form-control form-control-sm text-uppercase" maxlength="2" value="{{ perfil.estado or '' }}">
-                            </div>
-                        </div>
 
                         <div class="text-end">
                             <button type="submit" class="btn btn-primary fw-bold px-4">
@@ -543,18 +560,35 @@ function alternarTipoPessoaPerfil(tipo) {
 }
 
 function consultarCepEmpresa() {
-    const cep = document.getElementById('cepEmpresa').value.replace(/\D/g, '');
+    const inputCep = document.getElementById('empCep');
+    if (!inputCep) return;
+
+    const cep = inputCep.value.replace(/\D/g, '');
+
     if (cep.length === 8) {
+        // Mostra indicador visual simples de carregamento
+        inputCep.disabled = true;
+
         fetch(`https://viacep.com.br/ws/${cep}/json/`)
             .then(res => res.json())
             .then(data => {
+                inputCep.disabled = false;
                 if (!data.erro) {
-                    document.getElementById('logradouroEmpresa').value = data.logradouro || '';
-                    document.getElementById('bairroEmpresa').value = data.bairro || '';
-                    document.getElementById('cidadeEmpresa').value = data.localidade || '';
-                    document.getElementById('estadoEmpresa').value = data.uf || '';
+                    document.getElementById('empLogradouro').value = data.logradouro || '';
+                    document.getElementById('empBairro').value = data.bairro || '';
+                    document.getElementById('empCidade').value = data.localidade || '';
+                    document.getElementById('empEstado').value = data.uf || '';
+                    document.getElementById('empNumero').focus();
+                } else {
+                    alert('CEP não encontrado.');
                 }
+            })
+            .catch(() => {
+                inputCep.disabled = false;
+                alert('Erro ao consultar o CEP. Verifique sua conexão.');
             });
+    } else if (cep.length > 0) {
+        alert('Por favor, informe um CEP válido com 8 dígitos.');
     }
 }
 
@@ -719,4 +753,69 @@ function processarPagamentoPerfil(tipo) {
     });
 }
 </script>
+<!-- MODAL: PRÉ-VISUALIZAÇÃO DE PAPEL TIMBRADO -->
+<div class="modal fade" id="modalPreviewTimbrado" tabindex="-1" aria-labelledby="modalPreviewTimbradoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header bg-light border-bottom py-3">
+                <div>
+                    <h6 class="modal-title fw-bold text-dark mb-0" id="modalPreviewTimbradoLabel">
+                        <i class="bi bi-file-earmark-richtext text-primary me-2"></i>Modelo de Cabeçalho Oficial (PDF)
+                    </h6>
+                    <small class="text-muted">Simulação da impressão de orçamentos, contratos e ordens de serviço</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+
+            <div class="modal-body p-4 bg-secondary bg-opacity-10 d-flex justify-content-center">
+                <!-- Folha Timbrada Simulada -->
+                <div class="bg-white p-4 shadow-sm border rounded-3 w-100" style="max-width: 720px; min-height: 380px;">
+                    
+                    <!-- Cabeçalho idêntico ao ReportLab dos PDFs -->
+                    <div class="d-flex justify-content-between align-items-center pb-3">
+                        <div style="max-width: 260px;">
+                            {% if perfil.logo_filename %}
+                                <img src="{{ url_for('download_file', filename=perfil.logo_filename) }}" 
+                                     alt="Logotipo" 
+                                     class="img-fluid" 
+                                     style="max-height: 65px; object-fit: contain;">
+                            {% else %}
+                                <h4 class="fw-extrabold mb-0" style="color: {{ perfil.cor_primaria or '#1e3a8a' }};">
+                                    {{ perfil.razao_social or 'SUA EMPRESA' }}
+                                </h4>
+                            {% endif %}
+                        </div>
+
+                        <div class="text-end small text-muted" style="font-size: 0.78rem; line-height: 1.4;">
+                            <strong class="d-block text-uppercase" style="color: {{ perfil.cor_primaria or '#1e3a8a' }}; font-size: 0.9rem;">
+                                {{ perfil.razao_social or 'Razão Social da Empresa' }}
+                            </strong>
+                            {% if perfil.nome_fantasia %}
+                                <span class="d-block">{{ perfil.nome_fantasia }}</span>
+                            {% endif %}
+                            <span>CNPJ/CPF: {{ perfil.cnpj or '--' }} | Tel: {{ perfil.telefone or '--' }}</span><br>
+                            <span>{{ perfil.email or '' }} {% if perfil.site %}• {{ perfil.site }}{% endif %}</span><br>
+                            <span>{{ perfil.endereco_completo or 'Endereço Comercial Cadastrado' }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Linha divisória da Cor Primária da Marca -->
+                    <div class="my-2" style="height: 2px; width: 100%; background-color: {{ perfil.cor_primaria or '#1e3a8a' }};"></div>
+
+                    <!-- Esboço do corpo simulado -->
+                    <div class="mt-4 pt-2 text-center text-muted" style="opacity: 0.5;">
+                        <span class="badge bg-light text-secondary border mb-2">Área de Conteúdo do Documento</span>
+                        <p class="small mb-1">Os seus relatórios técnicos, propostas e contratos serão impressos utilizando este cabeçalho oficial.</p>
+                        <p class="small">A imagem é dimensionada mantendo a proporção original de forma nítida.</p>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="modal-footer bg-light border-top py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

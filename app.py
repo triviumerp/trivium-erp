@@ -856,9 +856,7 @@ def criar_proposta():
             forma_pagamento_entrada=forma_pagamento_entrada,
             qtd_parcelas=qtd_parcelas,
             forma_pagamento_parcelas=forma_pagamento_parcelas,
-            intervalo_dias=intervalo_dias,
-            tipo_documento='proposta',
-            numero_aditivo=0
+            intervalo_dias=intervalo_dias
         )
         db.session.add(nova_prop)
         db.session.flush()
@@ -913,33 +911,6 @@ def criar_proposta():
         flash(f'Erro ao salvar proposta: {str(e)}', 'danger')
         return redirect(url_for('listar_propostas'))
 
-@app.route('/propostas/<int:id>/aditivo', methods=['POST'])
-@login_required
-def gerar_aditivo_proposta(id):
-    proposta_pai = Proposta.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
-    
-    total_aditivos = Proposta.query.filter_by(proposta_origem_id=proposta_pai.id).count() + 1
-    numero_aditivo_str = f"{proposta_pai.numero_proposta}-ADIT{total_aditivos:02d}"
-
-    novo_aditivo = Proposta(
-        empresa_id=current_user.empresa_id,
-        numero_proposta=numero_aditivo_str,
-        cliente_id=proposta_pai.cliente_id,
-        proposta_origem_id=proposta_pai.id,
-        tipo_documento='aditivo',
-        numero_aditivo=total_aditivos,
-        validade_dias=15,
-        condicoes_pagamento=f"Termo Aditivo #{total_aditivos} referente à {proposta_pai.numero_proposta}",
-        status='Aguardando Aprovação',
-        tipo_cobranca='pontual',
-        periodicidade=proposta_pai.periodicidade,
-        dia_vencimento=proposta_pai.dia_vencimento
-    )
-    db.session.add(novo_aditivo)
-    db.session.commit()
-
-    flash(f'Termo Aditivo {novo_aditivo.numero_proposta} criado! Adicione os serviços complementares.', 'info')
-    return redirect(url_for('listar_propostas'))
 
 @app.route('/propostas/<int:id>/status', methods=['POST'])
 @login_required
@@ -2670,6 +2641,37 @@ def admin_master_afiliados():
     cupons = CupomDesconto.query.all()
     return render_template('admin/master_afiliados.html', cupons=cupons)
 
+@app.route('/admin/master/cupons/<int:id>/excluir', methods=['POST'])
+@login_required
+@master_required
+def admin_excluir_cupom(id):
+    cupom = CupomDesconto.query.get_or_404(id)
+    codigo_removido = cupom.codigo
+    usuario_origem_id = cupom.usuario_id
+
+    try:
+        # Desvincula empresas que guardavam o ID deste cupom como FK
+        Empresa.query.filter_by(afiliado_id=cupom.id).update({'afiliado_id': None})
+        
+        # Desvincula comissões associadas a este ID de cupom
+        ComissaoAfiliado.query.filter_by(cupom_id=cupom.id).update({'cupom_id': None})
+
+        # Remove o cupom definitivamente do PostgreSQL
+        db.session.delete(cupom)
+        db.session.commit()
+
+        flash(f'Cupom "{codigo_removido}" excluído permanentemente do banco de dados!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao excluir cupom: {str(e)}', 'danger')
+
+    # Se a exclusão veio de dentro da tela de auditoria de um parceiro, retorna para ela
+    retorno = request.form.get('origem_retorno')
+    if retorno == 'auditoria' and usuario_origem_id:
+        return redirect(url_for('admin_auditoria_parceiro', id=usuario_origem_id))
+
+    return redirect(url_for('admin_master_cupons'))
+
 @app.route('/admin/master/afiliado/<int:id>/status', methods=['POST'])
 @login_required
 def admin_alterar_status_afiliado(id):
@@ -2730,8 +2732,40 @@ def admin_auditoria_parceiro(id):
         saldo_liberado=saldo_liberado,
         total_ja_pago=total_ja_pago,
         total_usos_cupons=total_usos_cupons,
-        link_indicacao=link_indicacao
+        link_indicacao=link_indicacao,
+        hoje=date.today()
     )
+
+@app.route('/admin/master/parceiro/<int:id>/atualizar-cadastro', methods=['POST'])
+@login_required
+def admin_atualizar_cadastro_parceiro(id):
+    if current_user.nivel_acesso != 'master':
+        return redirect(url_for('index'))
+
+    parceiro = Usuario.query.get_or_404(id)
+    
+    parceiro.nome = request.form.get('nome', parceiro.nome).strip()
+    parceiro.email = request.form.get('email', parceiro.email).strip().lower()
+    parceiro.whatsapp = request.form.get('whatsapp', '').strip()
+    parceiro.cpf_cnpj = request.form.get('cpf_cnpj', '').strip()
+    parceiro.chave_pix = request.form.get('chave_pix', '').strip()
+    parceiro.rede_social_principal = request.form.get('rede_social_principal', '').strip()
+    parceiro.tipo_parceiro = request.form.get('tipo_parceiro', parceiro.tipo_parceiro or 'Outros')
+    
+    novo_status = request.form.get('status_aprovacao', parceiro.status_aprovacao)
+    parceiro.status_aprovacao = novo_status
+    if novo_status == 'rejeitado':
+        parceiro.motivo_rejeicao = request.form.get('motivo_rejeicao', '')
+    else:
+        parceiro.motivo_rejeicao = None
+
+    # Sincroniza a ativação dos cupons com a aprovação
+    for c in parceiro.cupons:
+        c.ativo = (novo_status == 'aprovado' and parceiro.aceitou_termos_afiliado)
+
+    db.session.commit()
+    flash(f'Ficha cadastral de "{parceiro.nome}" atualizada com sucesso!', 'success')
+    return redirect(url_for('admin_auditoria_parceiro', id=parceiro.id))
 
 @app.route('/admin/master/parceiro/<int:id>/liquidar-repasse', methods=['POST'])
 @login_required

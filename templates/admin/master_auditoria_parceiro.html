@@ -1,135 +1,517 @@
 {% extends 'base.html' %}
 
-{% block title %}Auditoria do Parceiro - Trivium Master{% endblock %}
+{% block title %}Ficha do Afiliado: {{ parceiro.nome }} - Master Trivium ERP{% endblock %}
 
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+<!-- TOPO: IDENTIFICAÇÃO DO PARCEIRO -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
     <div>
         <a href="{{ url_for('admin_master_cupons') }}" class="text-decoration-none small text-muted mb-1 d-inline-block">
-            <i class="bi bi-arrow-left"></i> Voltar à Gestão de Cupons
+            <i class="bi bi-arrow-left"></i> Voltar para Cupons & Afiliados
         </a>
-        <h2 class="fw-bold text-dark mb-0">
-            <i class="bi bi-person-check-fill text-primary me-2"></i>Auditoria: {{ parceiro.nome }}
-        </h2>
-        <span class="text-muted small">{{ parceiro.email }} • PIX: <b>{{ parceiro.chave_pix or 'Não cadastrada' }}</b></span>
+        <div class="d-flex align-items-center gap-2">
+            <h2 class="fw-bold text-dark mb-0">{{ parceiro.nome }}</h2>
+            {% if parceiro.status_aprovacao == 'aprovado' %}
+                <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-1">
+                    <i class="bi bi-check-circle me-1"></i>Aprovado
+                </span>
+            {% elif parceiro.status_aprovacao == 'rejeitado' %}
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-1">
+                    <i class="bi bi-x-circle me-1"></i>Rejeitado
+                </span>
+            {% else %}
+                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-1">
+                    <i class="bi bi-clock-history me-1"></i>Em Análise
+                </span>
+            {% endif %}
+        </div>
+        <span class="text-muted small">ID do Parceiro: #{{ parceiro.id }} • {{ parceiro.email }} • Tipo: {{ parceiro.tipo_parceiro or 'Geral' }}</span>
     </div>
+
     <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalCriarCupom">
-            <i class="bi bi-plus-circle me-1"></i> Criar Novo Cupom
+        <button type="button" class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoCupomParceiro">
+            <i class="bi bi-tag-fill me-1"></i> Novo Cupom
         </button>
-        <button class="btn btn-sm btn-success fw-bold" data-bs-toggle="modal" data-bs-target="#modalLiquidarRepasse">
-            <i class="bi bi-cash-stack me-1"></i> Liquidar Repasse
+        <button type="button" class="btn btn-success fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalLiquidarRepasse">
+            <i class="bi bi-cash-stack me-1"></i> Liquidar Repasse Pix
         </button>
     </div>
 </div>
 
-<!-- CARDS DE MÉTRICAS DO AFILIADO -->
+<!-- CARDS RESUMO DE MÉTRICAS -->
 <div class="row g-3 mb-4">
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3 bg-white rounded-4">
-            <span class="small text-muted fw-bold">TOTAL DE INDICADOS</span>
-            <h3 class="fw-bold text-dark my-1">{{ empresas|length }}</h3>
-            <small class="text-muted">Empresas cadastradas</small>
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-4 border-start border-primary border-4">
+            <span class="small fw-bold text-muted">SALDO LIBERADO PARA REPASSE</span>
+            <h3 class="fw-bold my-1 text-primary">R$ {{ "%.2f"|format(saldo_liberado or 0.0) }}</h3>
+            <small class="text-muted">Aguardando liquidação</small>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3 bg-white rounded-4">
-            <span class="small text-muted fw-bold">USOS DE CUPOM</span>
-            <h3 class="fw-bold text-primary my-1">{{ total_usos_cupons }}</h3>
-            <small class="text-muted">Assinaturas convertidas</small>
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-4 border-start border-success border-4">
+            <span class="small fw-bold text-muted">TOTAL JÁ REPASSADO</span>
+            <h3 class="fw-bold my-1 text-success">R$ {{ "%.2f"|format(total_ja_pago or 0.0) }}</h3>
+            <small class="text-muted">{{ repasses|length }} repasse(s) pago(s)</small>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3 bg-success bg-opacity-10 border-start border-success border-4 rounded-4">
-            <span class="small text-muted fw-bold">SALDO A REPASSAR</span>
-            <h3 class="fw-bold text-success my-1">R$ {{ "%.2f"|format(saldo_liberado) }}</h3>
-            <small class="text-muted">Comissões liberadas</small>
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-4 border-start border-info border-4">
+            <span class="small fw-bold text-muted">EMPRESAS INDICADAS</span>
+            <h3 class="fw-bold my-1 text-dark">{{ empresas|length }}</h3>
+            <small class="text-muted">Cadastros vinculados</small>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm p-3 bg-white rounded-4">
-            <span class="small text-muted fw-bold">TOTAL JÁ PAGO</span>
-            <h3 class="fw-bold text-muted my-1">R$ {{ "%.2f"|format(total_ja_pago) }}</h3>
-            <small class="text-muted">Histórico de repasses</small>
+        <div class="card border-0 shadow-sm p-3 bg-white rounded-4 border-start border-warning border-4">
+            <span class="small fw-bold text-muted">USOS DE CUPONS</span>
+            <h3 class="fw-bold my-1 text-dark">{{ total_usos_cupons or 0 }}</h3>
+            <small class="text-muted">{{ cupons|length }} cupom(ns) criados</small>
         </div>
     </div>
 </div>
 
-<!-- TABELA DE EMPRESAS INDICADAS (ITEM 5) -->
+<!-- LINK EXCLUSIVO DE INDICAÇÃO -->
+<div class="card border-0 shadow-sm rounded-4 mb-4 bg-light border">
+    <div class="card-body p-3 d-flex flex-column flex-md-row align-items-center justify-content-between gap-3">
+        <div>
+            <strong class="text-dark d-block"><i class="bi bi-link-45deg text-primary me-1 fs-5"></i>Link Exclusivo de Indicação do Afiliado:</strong>
+            <small class="text-muted">As empresas que utilizarem este link ou o cupom padrão <b>{{ cupons[0].codigo if cupons else 'PADRAO' }}</b> serão vinculadas automaticamente a este parceiro.</small>
+        </div>
+        <div class="input-group" style="max-width: 480px;">
+            <input type="text" id="inputLinkAfiliado" class="form-control form-control-sm font-monospace bg-white" value="{{ link_indicacao }}" readonly>
+            <button class="btn btn-outline-primary btn-sm fw-bold" type="button" onclick="navigator.clipboard.writeText(document.getElementById('inputLinkAfiliado').value); alert('Link copiado!');">
+                <i class="bi bi-clipboard me-1"></i> Copiar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- NAVEGAÇÃO DAS ABAS DA FICHA COMPLETA -->
 <div class="card border-0 shadow-sm rounded-4 mb-4">
-    <div class="card-header bg-white py-3">
-        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-buildings text-primary me-2"></i>Empresas Cadastradas pelo Parceiro</h6>
+    <div class="card-body p-2">
+        <ul class="nav nav-pills gap-2" id="fichaAfiliadoTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active fw-bold px-3 py-2 rounded-3" id="tab-cadastro-btn" data-bs-toggle="pill" data-bs-target="#tab-cadastro" type="button" role="tab">
+                    <i class="bi bi-person-lines-fill me-1"></i> Dados Cadastrais & Repasse
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-bold px-3 py-2 rounded-3" id="tab-empresas-btn" data-bs-toggle="pill" data-bs-target="#tab-empresas" type="button" role="tab">
+                    <i class="bi bi-buildings-fill me-1"></i> Empresas Indicadas
+                    <span class="badge bg-light text-dark ms-1 border">{{ empresas|length }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-bold px-3 py-2 rounded-3" id="tab-comissoes-btn" data-bs-toggle="pill" data-bs-target="#tab-comissoes" type="button" role="tab">
+                    <i class="bi bi-cash-coin me-1"></i> Extrato de Comissões & Repasses
+                    <span class="badge bg-light text-dark ms-1 border">{{ comissoes|length }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-bold px-3 py-2 rounded-3" id="tab-cupons-btn" data-bs-toggle="pill" data-bs-target="#tab-cupons" type="button" role="tab">
+                    <i class="bi bi-ticket-perforated-fill me-1"></i> Cupons Vinculados
+                    <span class="badge bg-light text-dark ms-1 border">{{ cupons|length }}</span>
+                </button>
+            </li>
+        </ul>
     </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0 small">
-                <thead class="table-light text-muted">
-                    <tr>
-                        <th>EMPRESA / RAZÃO SOCIAL</th>
-                        <th>CNPJ / CPF</th>
-                        <th>DATA CADASTRO</th>
-                        <th>PLANO CONTRATADO</th>
-                        <th>MENSALIDADE</th>
-                        <th>STATUS ASSINATURA</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for emp in empresas %}
-                    <tr>
-                        <td>
-                            <strong class="text-dark d-block">{{ emp.razao_social }}</strong>
-                            <span class="text-muted">{{ emp.email }}</span>
-                        </td>
-                        <td>{{ emp.cnpj or '--' }}</td>
-                        <td>{{ emp.data_criacao.strftime('%d/%m/%Y') if emp.data_criacao else '--' }}</td>
-                        <td><span class="badge bg-light text-dark border">{{ emp.plano or 'Trial' }}</span></td>
-                        <td class="fw-bold text-success">R$ {{ "%.2f"|format(emp.valor_mensalidade or 0.0) }}</td>
-                        <td>
-                            {% if emp.status_assinatura == 'ativo' %}
-                                <span class="badge bg-success">Ativo</span>
-                            {% elif emp.status_assinatura == 'trial' %}
-                                <span class="badge bg-warning text-dark">Trial ({{ emp.dias_restantes_trial }} dias)</span>
+</div>
+
+<!-- CORPO DAS ABAS -->
+<div class="tab-content" id="fichaAfiliadoContent">
+
+    <!-- ===================================================================== -->
+    <!-- ABA 1: DADOS CADASTRAIS & CONFIGURAÇÕES DE REPASSE                    -->
+    <!-- ===================================================================== -->
+    <div class="tab-pane fade show active" id="tab-cadastro" role="tabpanel">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h6 class="fw-bold text-dark mb-0">Informações Pessoais & Configuração de Pagamento</h6>
+            </div>
+            <div class="card-body p-4">
+                <form action="{{ url_for('admin_atualizar_cadastro_parceiro', id=parceiro.id) }}" method="POST">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Nome Completo *</label>
+                            <input type="text" name="nome" class="form-control form-control-sm" value="{{ parceiro.nome }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">E-mail de Acesso *</label>
+                            <input type="email" name="email" class="form-control form-control-sm" value="{{ parceiro.email }}" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">CPF ou CNPJ</label>
+                            <input type="text" name="cpf_cnpj" class="form-control form-control-sm" value="{{ parceiro.cpf_cnpj or '' }}" placeholder="000.000.000-00">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">WhatsApp / Telefone</label>
+                            <input type="text" name="whatsapp" class="form-control form-control-sm" value="{{ parceiro.whatsapp or '' }}" placeholder="(11) 99999-9999">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Perfil / Tipo de Afiliado</label>
+                            <select name="tipo_parceiro" class="form-select form-select-sm">
+                                <option value="Influenciador" {% if parceiro.tipo_parceiro == 'Influenciador' %}selected{% endif %}>Influenciador Digital / Conteúdo</option>
+                                <option value="Consultor" {% if parceiro.tipo_parceiro == 'Consultor' %}selected{% endif %}>Consultor / Empresa de SST</option>
+                                <option value="Contador" {% if parceiro.tipo_parceiro == 'Contador' %}selected{% endif %}>Escritório de Contabilidade</option>
+                                <option value="Cliente Promotor" {% if parceiro.tipo_parceiro == 'Cliente Promotor' %}selected{% endif %}>Cliente Promotor / Indicação</option>
+                                <option value="Outros" {% if parceiro.tipo_parceiro == 'Outros' or not parceiro.tipo_parceiro %}selected{% endif %}>Outros</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3 p-3 bg-light rounded-3 border">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-success"><i class="bi bi-cash me-1"></i>Chave PIX Oficial para Repasse *</label>
+                            <input type="text" name="chave_pix" class="form-control form-control-sm fw-bold" value="{{ parceiro.chave_pix or '' }}" placeholder="Chave Pix (CPF, CNPJ, Telefone, E-mail ou Aleatória)">
+                            <small class="text-muted">Utilizada no comprovante de repasse de comissões.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold"><i class="bi bi-globe me-1"></i>Canal / Rede Social Principal</label>
+                            <input type="text" name="rede_social_principal" class="form-control form-control-sm" value="{{ parceiro.rede_social_principal or '' }}" placeholder="@perfil, Canal do YouTube ou Site">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Status de Moderação</label>
+                            <select name="status_aprovacao" class="form-select form-select-sm" id="selectStatusMod">
+                                <option value="aprovado" {% if parceiro.status_aprovacao == 'aprovado' %}selected{% endif %}>Aprovado (Ativo com comissões liberadas)</option>
+                                <option value="pendente" {% if parceiro.status_aprovacao == 'pendente' %}selected{% endif %}>Em Análise / Pendente</option>
+                                <option value="rejeitado" {% if parceiro.status_aprovacao == 'rejeitado' %}selected{% endif %}>Rejeitado / Bloqueado</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Aceite dos Termos de Afiliado</label>
+                            <input type="text" class="form-control form-control-sm bg-light" 
+                                   value="{% if parceiro.aceitou_termos_afiliado %}Confirmado em {{ parceiro.data_aceite_termos_afiliado.strftime('%d/%m/%Y às %H:%M') if parceiro.data_aceite_termos_afiliado else 'Sim' }}{% else %}Pendente de Aceite{% endif %}" readonly>
+                        </div>
+                        <div class="col-12" id="boxMotivoRejeicao" style="display: {% if parceiro.status_aprovacao == 'rejeitado' %}block{% else %}none{% endif %};">
+                            <label class="form-label small fw-bold text-danger">Motivo da Rejeição</label>
+                            <textarea name="motivo_rejeicao" class="form-control form-control-sm" rows="2" placeholder="Motivo que será informado ao parceiro...">{{ parceiro.motivo_rejeicao or '' }}</textarea>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary fw-bold px-4">
+                            <i class="bi bi-save me-1"></i> Salvar Alterações Cadastrais
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- ABA 2: EMPRESAS INDICADAS                                             -->
+    <!-- ===================================================================== -->
+    <div class="tab-pane fade" id="tab-empresas" role="tabpanel">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold text-dark mb-0">Empresas Cadastradas via Indicação do Afiliado</h6>
+                <span class="badge bg-light text-dark border">{{ empresas|length }} empresas</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 small">
+                        <thead class="table-light text-muted">
+                            <tr>
+                                <th>EMPRESA / RAZÃO</th>
+                                <th>CNPJ / CPF</th>
+                                <th>DATA CADASTRO</th>
+                                <th>PLANO ATUAL</th>
+                                <th>MENSALIDADE</th>
+                                <th>STATUS ASSINATURA</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for e in empresas %}
+                            <tr>
+                                <td>
+                                    <strong class="text-dark d-block">{{ e.razao_social }}</strong>
+                                    <span class="text-muted">{{ e.email or '--' }}</span>
+                                </td>
+                                <td>{{ e.cnpj or '--' }}</td>
+                                <td>{{ e.data_criacao.strftime('%d/%m/%Y') if e.data_criacao else '--' }}</td>
+                                <td><span class="badge bg-light text-dark border">{{ e.plano }}</span></td>
+                                <td class="fw-bold text-success">R$ {{ "%.2f"|format(e.valor_mensalidade or 0.0) }}</td>
+                                <td>
+                                    {% if e.status_assinatura == 'ativo' %}
+                                        <span class="badge bg-success p-1 px-2">Ativo</span>
+                                    {% elif e.status_assinatura == 'trial' %}
+                                        <span class="badge bg-info text-dark p-1 px-2">Trial</span>
+                                    {% else %}
+                                        <span class="badge bg-danger p-1 px-2">{{ e.status_assinatura|capitalize }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
                             {% else %}
-                                <span class="badge bg-danger">{{ emp.status_assinatura|capitalize }}</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="6" class="text-center py-4 text-muted">Nenhuma empresa cadastrada por este parceiro até o momento.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                            <tr>
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    Nenhuma empresa cadastrada utilizando os links ou cupons deste afiliado.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- ABA 3: EXTRATO DE COMISSÕES & REPASSES LIQUIDADOS                     -->
+    <!-- ===================================================================== -->
+    <div class="tab-pane fade" id="tab-comissoes" role="tabpanel">
+        <div class="row g-4">
+            <!-- HISTÓRICO DE REPASSES PAGOS -->
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-check2-all text-success me-1"></i>Repasses Já Liquidados (Pagos)</h6>
+                        <span class="badge bg-success-subtle text-success">{{ repasses|length }} registros</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0 small">
+                                <thead class="table-light text-muted">
+                                    <tr>
+                                        <th>COMPETÊNCIA</th>
+                                        <th>VALOR PAGO</th>
+                                        <th>DATA PAGTO</th>
+                                        <th>COMPROVANTE</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for r in repasses %}
+                                    <tr>
+                                        <td><strong class="text-dark">{{ r.mes_competencia }}</strong></td>
+                                        <td class="fw-bold text-success">R$ {{ "%.2f"|format(r.valor_total_pago) }}</td>
+                                        <td>{{ r.data_pagamento.strftime('%d/%m/%Y %H:%M') if r.data_pagamento else '--' }}</td>
+                                        <td>
+                                            {% if r.arquivo_comprovante %}
+                                                <a href="{{ url_for('download_file', filename=r.arquivo_comprovante) }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2 fw-bold">
+                                                    <i class="bi bi-paperclip me-1"></i>Ver Comprovante
+                                                </a>
+                                            {% else %}
+                                                <span class="text-muted">Sem anexo</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr><td colspan="4" class="text-center py-4 text-muted">Nenhum repasse efetuado até o momento.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EXTRATO DE COMISSÕES ACUMULADAS -->
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-clock-history text-primary me-1"></i>Comissões por Assinatura</h6>
+                        <span class="badge bg-light text-dark border">{{ comissoes|length }} itens</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0 small">
+                                <thead class="table-light text-muted">
+                                    <tr>
+                                        <th>EMPRESA</th>
+                                        <th>PARCELA</th>
+                                        <th>COMISSÃO</th>
+                                        <th>STATUS</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for c in comissoes %}
+                                    <tr>
+                                        <td>
+                                            <strong class="text-dark d-block">{{ c.empresa.razao_social if c.empresa else 'Empresa #' ~ c.empresa_id }}</strong>
+                                            <span class="text-muted">{{ c.mes_competencia }}</span>
+                                        </td>
+                                        <td>{{ c.numero_parcela_parceiro }} de {{ c.total_parcelas_permitidas }}</td>
+                                        <td class="fw-bold text-primary">R$ {{ "%.2f"|format(c.valor_comissao) }}</td>
+                                        <td>
+                                            {% if c.status == 'pago' %}
+                                                <span class="badge bg-success">Pago</span>
+                                            {% elif c.status == 'liberado' %}
+                                                <span class="badge bg-primary">Liberado</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">{{ c.status|capitalize }}</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr><td colspan="4" class="text-center py-4 text-muted">Nenhuma comissão apurada ainda.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- ABA 4: CUPONS VINCULADOS AO PARCEIRO                                  -->
+    <!-- ===================================================================== -->
+    <div class="tab-pane fade" id="tab-cupons" role="tabpanel">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold text-dark mb-0">Cupons Exclusivos deste Parceiro</h6>
+                <button type="button" class="btn btn-sm btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalNovoCupomParceiro">
+                    <i class="bi bi-plus-circle me-1"></i> Criar Cupom para {{ parceiro.nome.split()[0] }}
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 small">
+                        <thead class="table-light text-muted">
+                            <tr>
+                                <th>CÓDIGO</th>
+                                <th>DESCONTO CLIENTE</th>
+                                <th>COMISSÃO AFILIADO</th>
+                                <th>MESES LIMITE</th>
+                                <th>UTILIZAÇÕES</th>
+                                <th>VALIDADE</th>
+                                <th>STATUS</th>
+                                <th class="text-end pe-3">AÇÕES</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in cupons %}
+                            <tr>
+                                <td><span class="font-monospace fw-bold text-primary fs-6">{{ c.codigo }}</span></td>
+                                <td><span class="badge bg-success-subtle text-success fw-bold">{{ c.percentual_desconto }}% OFF</span></td>
+                                <td class="fw-bold text-dark">{{ c.percentual_comissao }}%</td>
+                                <td>{{ c.meses_comissao_limite }} mensalidade(s)</td>
+                                <td>{{ c.usos_atuais or 0 }} / {{ c.limite_usos or '∞' }}</td>
+                                <td>
+                                    {% if c.data_validade %}
+                                        <span class="{% if hoje and c.data_validade < hoje %}text-danger fw-bold{% else %}text-muted{% endif %}">
+                                            {{ c.data_validade.strftime('%d/%m/%Y') }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">Sem expiração</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if c.ativo %}
+                                        <span class="badge bg-success p-1">Ativo</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary p-1">Inativo</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-3">
+                                    <div class="d-flex justify-content-end align-items-center gap-1">
+                                        <!-- Pausar / Ativar Cupom -->
+                                        <form action="{{ url_for('admin_toggle_cupom', id=c.id) }}" method="POST" class="d-inline">
+                                            <button type="submit" class="btn btn-sm {% if c.ativo %}btn-outline-warning text-dark{% else %}btn-outline-success{% endif %}" title="Ativar / Pausar Cupom">
+                                                <i class="bi {% if c.ativo %}bi-pause-fill{% else %}bi-play-fill{% endif %}"></i>
+                                            </button>
+                                        </form>
+
+                                        <!-- Excluir Cupom do Banco -->
+                                        <form action="{{ url_for('admin_excluir_cupom', id=c.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Deseja realmente apagar o cupom {{ c.codigo }} do banco de dados?')">
+                                            <input type="hidden" name="origem_retorno" value="auditoria">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Cupom">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="8" class="text-center py-4 text-muted">Nenhum cupom gerado para este parceiro.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- MODAL: CRIAR CUPOM PARA O PARCEIRO -->
-<div class="modal fade" id="modalCriarCupom" tabindex="-1">
+<!-- ========================================================================= -->
+<!-- MODAL: LIQUIDAR REPASSE PIX (COM COMPROVANTE)                             -->
+<!-- ========================================================================= -->
+<div class="modal fade" id="modalLiquidarRepasse" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('admin_liquidar_repasse', id=parceiro.id) }}" method="POST" enctype="multipart/form-data">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-cash-stack text-success me-2"></i>Liquidar Repasse de Comissões</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-light border small text-muted mb-3">
+                        <b>Chave PIX do Afiliado:</b> <code>{{ parceiro.chave_pix or 'NÃO CADASTRADA' }}</code><br>
+                        <b>Saldo Disponível:</b> <span class="fw-bold text-success">R$ {{ "%.2f"|format(saldo_liberado or 0.0) }}</span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Mês de Competência</label>
+                        <input type="text" name="mes_competencia" class="form-control form-control-sm font-monospace" value="{{ hoje.strftime('%Y-%m') if hoje else '2026-09' }}" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Valor Efetivamente Pago (R$) *</label>
+                        <input type="number" step="0.01" name="valor_pago" class="form-control form-control-sm fw-bold border-success text-success fs-5" value="{{ '%.2f'|format(saldo_liberado or 0.0) }}" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Anexar Comprovante do PIX (PDF ou Imagem) *</label>
+                        <input type="file" name="comprovante" class="form-control form-control-sm" required>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Observações Internas</label>
+                        <textarea name="observacoes" class="form-control form-control-sm" rows="2" placeholder="Ex: Transferência autorizada e liquidada pelo financeiro..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success btn-sm fw-bold px-4">Confirmar Liquidação</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: NOVO CUPOM PARA ESTE PARCEIRO                                      -->
+<!-- ========================================================================= -->
+<div class="modal fade" id="modalNovoCupomParceiro" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow rounded-4">
             <form action="{{ url_for('admin_criar_cupom_parceiro', id=parceiro.id) }}" method="POST">
                 <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-tag-fill text-primary me-2"></i>Novo Cupom para {{ parceiro.nome }}</h5>
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-tag-fill text-primary me-2"></i>Gerar Cupom para {{ parceiro.nome.split()[0] }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-4">
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Código do Cupom *</label>
-                        <input type="text" name="codigo" class="form-control text-uppercase font-monospace fw-bold" placeholder="EX: PARCEIRO20" required>
+                        <input type="text" name="codigo" class="form-control font-monospace text-uppercase" placeholder="EX: PARCEIRO10" required>
                     </div>
                     <div class="row g-2 mb-3">
                         <div class="col-6">
-                            <label class="form-label small fw-bold">Desconto (%)</label>
+                            <label class="form-label small fw-bold">Desconto do Cliente (%)</label>
                             <input type="number" step="0.5" name="percentual_desconto" class="form-control" value="10.0" required>
                         </div>
                         <div class="col-6">
-                            <label class="form-label small fw-bold">Comissão (%)</label>
+                            <label class="form-label small fw-bold">Comissão do Afiliado (%)</label>
                             <input type="number" step="0.5" name="percentual_comissao" class="form-control" value="20.0" required>
                         </div>
                     </div>
-                    <div class="row g-2">
+                    <div class="row g-2 mb-2">
                         <div class="col-6">
                             <label class="form-label small fw-bold">Limite de Usos</label>
                             <input type="number" name="limite_usos" class="form-control" value="100">
@@ -142,52 +524,22 @@
                 </div>
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Criar Cupom</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">Gerar e Vincular</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- MODAL: LIQUIDAR REPASSE -->
-<div class="modal fade" id="modalLiquidarRepasse" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow rounded-4">
-            <form action="{{ url_for('admin_liquidar_repasse', id=parceiro.id) }}" method="POST" enctype="multipart/form-data">
-                <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-cash-stack text-success me-2"></i>Liquidar Repasse PIX</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Chave PIX do Parceiro</label>
-                        <input type="text" class="form-control bg-light font-monospace" value="{{ parceiro.chave_pix or 'Não cadastrada' }}" readonly>
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <label class="form-label small fw-bold">Mês de Competência</label>
-                            <input type="month" name="mes_competencia" class="form-control" required>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-bold">Valor a Pagar (R$)</label>
-                            <input type="number" step="0.01" name="valor_pago" class="form-control fw-bold text-success" value="{{ '%.2f'|format(saldo_liberado) }}" required>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Comprovante de Transferência</label>
-                        <input type="file" name="comprovante" class="form-control form-control-sm">
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label small fw-bold">Observações</label>
-                        <textarea name="observacoes" class="form-control form-control-sm" rows="2" placeholder="Informações da liquidação..."></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success btn-sm fw-bold px-3">Confirmar Liquidação</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const selectMod = document.getElementById('selectStatusMod');
+    const boxMotivo = document.getElementById('boxMotivoRejeicao');
+    if (selectMod && boxMotivo) {
+        selectMod.addEventListener('change', () => {
+            boxMotivo.style.display = (selectMod.value === 'rejeitado') ? 'block' : 'none';
+        });
+    }
+});
+</script>
 {% endblock %}
