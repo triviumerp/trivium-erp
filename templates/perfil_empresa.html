@@ -312,68 +312,168 @@
             </div>
 
             <!-- ABA 3: EQUIPE & ACESSOS -->
-            <div class="tab-pane fade" id="tab-equipe" role="tabpanel">
-                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <div>
-                            <h6 class="fw-bold text-dark mb-0">Colaboradores da Empresa</h6>
-                            <small class="text-muted">Limite de até 4 colaboradores na equipe.</small>
-                        </div>
-                        {% if current_user.nivel_acesso in ['admin', 'master'] %}
-                        <button class="btn btn-sm btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalNovoUsuarioEquipe">
-                            <i class="bi bi-person-plus me-1"></i> Adicionar Membro
-                        </button>
-                        {% endif %}
-                    </div>
+            <!-- TABELA DE COLABORADORES DA EMPRESA -->
+<div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h5 class="fw-bold text-dark mb-0">Colaboradores da Empresa</h5>
+            <small class="text-muted">Limite de até 4 colaboradores na equipe.</small>
+        </div>
+        {% if usuarios_equipe|length < 4 %}
+        <button class="btn btn-primary fw-bold btn-sm rounded-3" data-bs-toggle="modal" data-bs-target="#modalNovoColaborador">
+            <i class="bi bi-person-plus-fill me-1"></i> Adicionar Membro
+        </button>
+        {% endif %}
+    </div>
 
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0 small">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>NOME</th>
-                                    <th>E-MAIL</th>
-                                    <th>CARGO</th>
-                                    <th>PERFIL</th>
-                                    <th class="text-end pe-2">AÇÕES</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for u in usuarios_equipe %}
-                                <tr>
-                                    <td class="fw-bold text-dark">{{ u.nome }}</td>
-                                    <td>{{ u.email }}</td>
-                                    <td>{{ u.cargo or '--' }}</td>
-                                    <td>
-                                        <span class="badge {{ 'bg-primary' if u.nivel_acesso in ['admin', 'master'] else 'bg-secondary' }}">
-                                            {{ u.nivel_acesso|upper }}
-                                        </span>
-                                    </td>
-                                    <td class="text-end pe-2">
-                                        {% if current_user.nivel_acesso in ['admin', 'master'] %}
-                                        <div class="btn-group btn-group-sm">
-                                            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalEditarUsuario{{ u.id }}" title="Editar Acessos">
-                                                <i class="bi bi-pencil-square"></i>
-                                            </button>
-                                            <button type="button" class="btn btn-outline-warning text-dark" data-bs-toggle="modal" data-bs-target="#modalResetarSenha{{ u.id }}" title="Redefinir Senha">
-                                                <i class="bi bi-key"></i>
-                                            </button>
-                                            {% if u.id != current_user.id %}
-                                            <form action="{{ url_for('excluir_usuario_equipe', id=u.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Remover acesso deste colaborador?')">
-                                                <button type="submit" class="btn btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
-                                            </form>
-                                            {% endif %}
-                                        </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light small text-muted">
+                <tr>
+                    <th>NOME</th>
+                    <th>E-MAIL</th>
+                    <th>CARGO</th>
+                    <th>PERFIL</th>
+                    <th class="text-end pe-2">AÇÕES</th>
+                </tr>
+            </thead>
+            <tbody class="small">
+                {% for u in usuarios_equipe %}
+                <tr>
+                    <td class="fw-bold text-dark">{{ u.nome }}</td>
+                    <td class="text-muted">{{ u.email }}</td>
+                    <td>{{ u.cargo or '--' }}</td>
+                    <td>
+                        {% if u.nivel_acesso in ['admin', 'master'] %}
+                            <span class="badge bg-primary fw-bold">ADMIN</span>
+                        {% else %}
+                            <span class="badge bg-secondary fw-bold">OPERADOR</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end pe-2">
+                        <div class="btn-group btn-group-sm">
+                            <!-- BOTÃO DE EDITAR -->
+                            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalEditarUsuario{{ u.id }}" title="Editar Acessos">
+                                <i class="bi bi-pencil-square"></i>
+                            </button>
+                            <!-- BOTÃO DE RESETAR SENHA -->
+                            <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#modalResetSenha{{ u.id }}" title="Redefinir Senha">
+                                <i class="bi bi-key"></i>
+                            </button>
+                            <!-- BOTÃO DE EXCLUIR -->
+                            {% if u.id != current_user.id %}
+                            <form action="{{ url_for('excluir_usuario_equipe', id=u.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Deseja realmente remover o acesso de {{ u.nome }}?');">
+                                <button type="submit" class="btn btn-outline-danger" title="Excluir Colaborador">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+
+                <!-- MODAL DE EDIÇÃO DE CADA MEMBRO -->
+                <div class="modal fade text-start" id="modalEditarUsuario{{ u.id }}" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content border-0 shadow rounded-4">
+                            <form action="{{ url_for('editar_usuario_equipe', id=u.id) }}" method="POST">
+                                <div class="modal-header bg-light">
+                                    <h6 class="modal-title fw-bold text-dark">
+                                        <i class="bi bi-person-gear text-primary me-2"></i>Editar Membro: {{ u.nome }}
+                                    </h6>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                                </div>
+                                <div class="modal-body p-4">
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-bold">Nome Completo *</label>
+                                        <input type="text" name="nome" class="form-control form-control-sm" value="{{ u.nome }}" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-bold">E-mail de Login *</label>
+                                        <input type="email" name="email" class="form-control form-control-sm" value="{{ u.email }}" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-bold">Cargo / Função</label>
+                                        <input type="text" name="cargo" class="form-control form-control-sm" value="{{ u.cargo or '' }}" placeholder="Ex: Técnico de Campo, Vistoriador">
+                                    </div>
+
+                                    <!-- FERRAMENTAS DE CONFIGURAÇÃO DE ACESSO -->
+                                    <div class="p-3 bg-light rounded-3 border mt-3">
+                                        <label class="form-label small fw-bold text-dark d-block mb-2">
+                                            <i class="bi bi-shield-lock text-primary me-1"></i>Permissões de Acesso aos Módulos
+                                        </label>
+
+                                        {% if u.id == current_user.id %}
+                                            <div class="alert alert-info py-2 px-3 small mb-0">
+                                                <i class="bi bi-info-circle me-1"></i>Você é o administrador titular da conta e possui acesso a todos os recursos.
+                                            </div>
                                         {% else %}
-                                        <span class="text-muted">Sem permissão</span>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" name="perm_clientes" id="perm_cli_{{ u.id }}" {% if u.perm_clientes %}checked{% endif %}>
+                                                <label class="form-check-label small" for="perm_cli_{{ u.id }}"><b>Clientes:</b> Cadastro, histórico e upload de laudos</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" name="perm_propostas" id="perm_prop_{{ u.id }}" {% if u.perm_propostas %}checked{% endif %}>
+                                                <label class="form-check-label small" for="perm_prop_{{ u.id }}"><b>Propostas & Catálogo:</b> Emissão de orçamentos</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" name="perm_servicos" id="perm_serv_{{ u.id }}" {% if u.perm_servicos %}checked{% endif %}>
+                                                <label class="form-check-label small" for="perm_serv_{{ u.id }}"><b>Serviços / OS:</b> Agenda, responsáveis e fotos</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" name="perm_financeiro" id="perm_fin_{{ u.id }}" {% if u.perm_financeiro %}checked{% endif %}>
+                                                <label class="form-check-label small" for="perm_fin_{{ u.id }}"><b>Financeiro:</b> Faturamento, parcelas e baixas</label>
+                                            </div>
+                                            <hr class="my-2 text-muted">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" name="perm_configuracoes" id="perm_conf_{{ u.id }}" {% if u.perm_configuracoes %}checked{% endif %}>
+                                                <label class="form-check-label small text-danger fw-bold" for="perm_conf_{{ u.id }}">
+                                                    Permissão Admin (Configurações da Empresa e Equipe)
+                                                </label>
+                                            </div>
                                         {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                                    </div>
+                                </div>
+                                <div class="modal-footer bg-light py-2">
+                                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">
+                                        Salvar Alterações
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 </div>
-            </div>
+
+                <!-- MODAL DE RESET DE SENHA -->
+                <div class="modal fade text-start" id="modalResetSenha{{ u.id }}" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered modal-sm">
+                        <div class="modal-content border-0 shadow rounded-4">
+                            <form action="{{ url_for('resetar_senha_equipe', id=u.id) }}" method="POST">
+                                <div class="modal-header bg-light py-2">
+                                    <h6 class="modal-title fw-bold text-dark small">
+                                        <i class="bi bi-key text-warning me-1"></i>Redefinir Senha
+                                    </h6>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body p-3">
+                                    <p class="small text-muted mb-2">Nova senha para <b>{{ u.nome }}</b>:</p>
+                                    <input type="password" name="nova_senha" class="form-control form-control-sm font-monospace" placeholder="Mín. 8 dígitos (A-Z, 0-9, @)" required>
+                                </div>
+                                <div class="modal-footer bg-light py-2">
+                                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                                    <button type="submit" class="btn btn-warning btn-sm fw-bold">Redefinir</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
 
             <!-- ABA 4: MINHA CONTA -->
             <div class="tab-pane fade" id="tab-minhaconta" role="tabpanel">
