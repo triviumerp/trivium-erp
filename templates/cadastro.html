@@ -25,13 +25,13 @@
                     <input class="form-check-input" type="radio" name="tipo_pessoa" id="tipoPJ" value="PJ" 
                            {% if not cliente or (cliente.cnpj_cpf and cliente.cnpj_cpf|length > 11) %}checked{% endif %} 
                            onchange="alternarTipoPessoa('PJ')">
-                    <label class="form-check-label fw-bold" for="tipoPJ">Pessoa Jurídica (Empresa / Condomínio)</label>
+                    <label class="form-check-label fw-bold" for="tipoPJ">Pessoa Jurídica</label>
                 </div>
                 <div class="form-check">
                     <input class="form-check-input" type="radio" name="tipo_pessoa" id="tipoPF" value="PF" 
                            {% if cliente and cliente.cnpj_cpf and cliente.cnpj_cpf|length <= 11 %}checked{% endif %} 
                            onchange="alternarTipoPessoa('PF')">
-                    <label class="form-check-label fw-bold" for="tipoPF">Pessoa Física (Autônomo / Particular)</label>
+                    <label class="form-check-label fw-bold" for="tipoPF">Pessoa Física</label>
                 </div>
             </div>
 
