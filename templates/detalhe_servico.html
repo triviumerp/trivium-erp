@@ -3,7 +3,7 @@
 {% block title %}Ficha Técnica: OS-{{ "%04d"|format(servico.numero_sequencial_empresa) }} - Trivium ERP{% endblock %}
 
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4 d-print-none">
     <div>
         <a href="{{ url_for('consultar_servicos') }}" class="text-decoration-none small text-muted mb-1 d-inline-block">
             <i class="bi bi-arrow-left"></i> Voltar para Agenda de Serviços
@@ -11,11 +11,14 @@
         <h2 class="fw-bold text-dark mb-0">
             <i class="bi bi-file-earmark-check-fill text-primary me-2"></i>{{ servico.titulo_documento_custom or 'Ordem de Serviço' }} Nº OS-{{ "%04d"|format(servico.numero_sequencial_empresa) }}
         </h2>
-        <span class="text-muted small">Cliente: <strong>{{ servico.cliente.nome }}</strong> • {{ servico.tipo_servico.nome }}</span>
+        <span class="text-muted small">Cliente: <strong>{{ servico.cliente.nome }}</strong> • {{ servico.tipo_servico.nome if servico.tipo_servico else 'Atendimento Geral' }}</span>
     </div>
     <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary fw-bold shadow-sm" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i> Imprimir
+        </button>
         <a href="{{ url_for('gerar_pdf_ordem_servico', id=servico.id) }}" target="_blank" class="btn btn-outline-primary fw-bold shadow-sm">
-            <i class="bi bi-file-earmark-pdf me-1"></i> Exportar em PDF
+            <i class="bi bi-file-earmark-pdf me-1"></i> Baixar em PDF
         </a>
     </div>
 </div>
@@ -43,24 +46,38 @@
         <!-- QUADRO DE DADOS DA ATIVIDADE -->
         <div class="row g-3 p-3 bg-light rounded-3 border mb-4 small">
             <div class="col-md-6">
-                <span class="text-muted d-block">CLIENTE:</span>
+                <span class="text-muted d-block">CLIENTE / CONTRATANTE:</span>
                 <strong class="text-dark fs-6">{{ servico.cliente.nome }}</strong>
-                <div class="text-muted">{{ servico.cliente.cnpj_cpf }}</div>
+                <div class="text-muted">{{ servico.cliente.cnpj_cpf or '--' }}</div>
             </div>
             <div class="col-md-3">
                 <span class="text-muted d-block">DATA SOLICITAÇÃO:</span>
                 <strong class="text-dark">{{ servico.data_solicitacao.strftime('%d/%m/%Y') if servico.data_solicitacao else '--' }}</strong>
             </div>
             <div class="col-md-3">
-                <span class="text-muted d-block">DATA PREVISÃO / EXECUÇÃO:</span>
+                <span class="text-muted d-block">PREVISÃO & HORÁRIO GERAL:</span>
                 <strong class="{% if servico.data_previsao and servico.data_previsao < hoje and servico.status != 'Concluido' %}text-danger{% else %}text-dark{% endif %}">
                     {{ servico.data_previsao.strftime('%d/%m/%Y') if servico.data_previsao else '--' }}
                 </strong>
+                {% if servico.hora_inicio_agendada %}
+                <div class="text-muted">
+                    <i class="bi bi-clock me-1"></i>{{ servico.hora_inicio_agendada.strftime('%H:%M') }}{% if servico.hora_fim_agendada %} às {{ servico.hora_fim_agendada.strftime('%H:%M') }}{% endif %}
+                </div>
+                {% endif %}
             </div>
             <div class="col-md-6">
-                <span class="text-muted d-block">RESPONSÁVEL TÉCNICO:</span>
-                <strong class="text-primary">{{ servico.responsavel_tecnico or 'Não definido' }}</strong>
-                {% if servico.documento_responsavel %}<span class="text-muted">({{ servico.documento_responsavel }})</span>{% endif %}
+                <span class="text-muted d-block">RESPONSÁVEL TÉCNICO PRINCIPAL:</span>
+                {% if servico.operador_responsavel %}
+                    <strong class="text-primary">{{ servico.operador_responsavel.nome }}</strong>
+                    {% if servico.operador_responsavel.documento_registro %}
+                        <span class="text-muted">({{ servico.operador_responsavel.documento_registro }})</span>
+                    {% endif %}
+                {% else %}
+                    <strong class="text-primary">{{ servico.responsavel_tecnico or 'Não definido' }}</strong>
+                    {% if servico.documento_responsavel %}
+                        <span class="text-muted">({{ servico.documento_responsavel }})</span>
+                    {% endif %}
+                {% endif %}
             </div>
             <div class="col-md-6">
                 <span class="text-muted d-block">LOCAL DE EXECUÇÃO:</span>
@@ -68,15 +85,28 @@
             </div>
         </div>
 
-        <!-- CRONOGRAMA DE ETAPAS OPERACIONAIS (GANTT) -->
+        <!-- CRONOGRAMA DE ETAPAS OPERACIONAIS (GANTT COM OPERADOR E HORÁRIOS) -->
         {% if servico.etapas_rastreio %}
         <div class="mb-4">
-            <h5 class="fw-bold text-dark border-bottom pb-2 mb-3"><i class="bi bi-bar-chart-steps text-primary me-2"></i>Cronograma & Etapas de Execução</h5>
+            <h5 class="fw-bold text-dark border-bottom pb-2 mb-3">
+                <i class="bi bi-bar-chart-steps text-primary me-2"></i>Cronograma & Etapas de Execução (Gantt)
+            </h5>
             <div class="d-flex flex-column gap-2">
                 {% for etapa in servico.etapas_rastreio %}
                 <div class="p-3 rounded-3 border bg-white shadow-sm">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <strong class="text-dark">{{ etapa.ordem }}. {{ etapa.titulo_fase }}</strong>
+                        <div>
+                            <strong class="text-dark">{{ etapa.ordem }}. {{ etapa.titulo_fase }}</strong>
+                            {% if etapa.operador %}
+                                <span class="badge bg-light text-primary border ms-2">
+                                    <i class="bi bi-person me-1"></i>{{ etapa.operador.nome }}
+                                </span>
+                            {% elif servico.operador_responsavel %}
+                                <span class="badge bg-light text-secondary border ms-2">
+                                    <i class="bi bi-person me-1"></i>{{ servico.operador_responsavel.nome }}
+                                </span>
+                            {% endif %}
+                        </div>
                         {% if etapa.status_fase == 'concluido' %}
                             <span class="badge bg-success">Concluído</span>
                         {% elif etapa.status_fase == 'em_andamento' %}
@@ -86,8 +116,14 @@
                         {% endif %}
                     </div>
                     <div class="d-flex justify-content-between small text-muted">
-                        <span>Início: {{ etapa.data_inicio.strftime('%d/%m/%Y') if etapa.data_inicio else '--' }}</span>
-                        <span>Previsão de Conclusão: {{ etapa.data_fim.strftime('%d/%m/%Y') if etapa.data_fim else '--' }}</span>
+                        <span>
+                            <i class="bi bi-calendar-event me-1"></i>Início: {{ etapa.data_inicio.strftime('%d/%m/%Y') if etapa.data_inicio else '--' }}
+                            {% if etapa.hora_inicio %} às {{ etapa.hora_inicio.strftime('%H:%M') }}{% endif %}
+                        </span>
+                        <span>
+                            <i class="bi bi-calendar-check me-1"></i>Término: {{ etapa.data_fim.strftime('%d/%m/%Y') if etapa.data_fim else '--' }}
+                            {% if etapa.hora_fim %} às {{ etapa.hora_fim.strftime('%H:%M') }}{% endif %}
+                        </span>
                     </div>
                     {% if etapa.status_fase == 'concluido' %}
                         <div class="progress mt-2" style="height: 6px;">
@@ -108,14 +144,30 @@
         </div>
         {% endif %}
 
-        <!-- DETALHAMENTO DO ESCOPO -->
+        <!-- ESCOPO E OBSERVAÇÕES DETALHADAS -->
         <div class="mb-4">
-            <h5 class="fw-bold text-dark border-bottom pb-2 mb-3"><i class="bi bi-card-text text-primary me-2"></i>Escopo & Detalhamento da Execução</h5>
+            <h5 class="fw-bold text-dark border-bottom pb-2 mb-3">
+                <i class="bi bi-card-text text-primary me-2"></i>Escopo & Detalhamento da Execução
+            </h5>
             
+            {% if servico.observacoes %}
+            <div class="mb-3">
+                <label class="fw-bold small text-muted">OBSERVAÇÕES DA ORDEM DE SERVIÇO:</label>
+                <div class="p-3 bg-light rounded text-dark small" style="white-space: pre-line;">{{ servico.observacoes }}</div>
+            </div>
+            {% endif %}
+
             {% if servico.detalhamento_execucao %}
             <div class="mb-3">
                 <label class="fw-bold small text-muted">DETALHAMENTO TÉCNICO:</label>
                 <div class="p-3 bg-light rounded text-dark small" style="white-space: pre-line;">{{ servico.detalhamento_execucao }}</div>
+            </div>
+            {% endif %}
+
+            {% if servico.relatorio_operador %}
+            <div class="mb-3">
+                <label class="fw-bold small text-muted">RELATÓRIO DO TÉCNICO DE CAMPO:</label>
+                <div class="p-3 bg-light rounded text-dark small" style="white-space: pre-line;">{{ servico.relatorio_operador }}</div>
             </div>
             {% endif %}
 
@@ -125,19 +177,14 @@
                 <div class="p-3 bg-light rounded text-dark small" style="white-space: pre-line;">{{ servico.orientacoes_cliente }}</div>
             </div>
             {% endif %}
-
-            {% if servico.observacoes %}
-            <div>
-                <label class="fw-bold small text-muted">OBSERVAÇÕES OPERACIONAIS:</label>
-                <div class="p-3 bg-light rounded text-dark small" style="white-space: pre-line;">{{ servico.observacoes }}</div>
-            </div>
-            {% endif %}
         </div>
 
         <!-- GALERIA DE EVIDÊNCIAS / FOTOS -->
         {% if servico.evidencias %}
         <div class="mb-4">
-            <h5 class="fw-bold text-dark border-bottom pb-2 mb-3"><i class="bi bi-images text-primary me-2"></i>Evidências Fotográficas e Documentos</h5>
+            <h5 class="fw-bold text-dark border-bottom pb-2 mb-3">
+                <i class="bi bi-images text-primary me-2"></i>Evidências Fotográficas e Documentos
+            </h5>
             <div class="row g-3">
                 {% for ev in servico.evidencias %}
                 <div class="col-md-4 col-lg-3">
@@ -158,6 +205,33 @@
             </div>
         </div>
         {% endif %}
+
+        <!-- ASSINATURA COLETADA / RODAPÉ FORMAL -->
+        <div class="pt-4 mt-5 border-top">
+            <div class="row text-center">
+                <div class="col-6">
+                    <p class="mb-0">__________________________________________</p>
+                    <strong class="d-block text-dark">
+                        {{ servico.operador_responsavel.nome if servico.operador_responsavel else (servico.responsavel_tecnico or current_user.empresa.razao_social) }}
+                    </strong>
+                    <small class="text-muted">
+                        {{ servico.operador_responsavel.documento_registro if servico.operador_responsavel and servico.operador_responsavel.documento_registro else (servico.documento_responsavel or 'Responsável Técnico') }}
+                    </small>
+                </div>
+                <div class="col-6">
+                    {% if servico.assinatura_cliente_base64 %}
+                        <img src="{{ servico.assinatura_cliente_base64 }}" alt="Assinatura" style="max-height: 50px; object-fit: contain;">
+                        <p class="mb-0">__________________________________________</p>
+                        <strong class="d-block text-dark">{{ servico.nome_quem_assinou or servico.cliente.nome }}</strong>
+                        <small class="text-muted">{{ servico.documento_quem_assinou or 'Aceite do Responsável no Local' }}</small>
+                    {% else %}
+                        <p class="mb-0">__________________________________________</p>
+                        <strong class="d-block text-dark">{{ servico.cliente.nome }}</strong>
+                        <small class="text-muted">Aceite do Cliente / Declaração de Execução</small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
 
     </div>
 </div>

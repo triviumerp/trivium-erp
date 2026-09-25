@@ -1,0 +1,329 @@
+{% extends 'base.html' %}
+
+{% block title %}Técnicos & Operadores de Campo - Trivium ERP{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-people-fill text-primary me-2"></i>Técnicos & Operadores de Campo
+        </h2>
+        <p class="text-muted mb-0">Gestão da equipe externa, monitoramento de escalas de visita, etapas do cronograma e produtividade</p>
+    </div>
+    <div>
+        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoOperador">
+            <i class="bi bi-person-plus-fill me-1"></i>Novo Operador
+        </button>
+    </div>
+</div>
+
+<!-- ABAS DE NAVEGAÇÃO -->
+<ul class="nav nav-pills mb-4 gap-2 bg-white p-2 rounded-3 border shadow-sm" id="pills-tab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active fw-bold" id="tab-lista" data-bs-toggle="pill" data-bs-target="#conteudo-lista" type="button" role="tab">
+            <i class="bi bi-person-lines-fill me-1"></i> Equipe Cadastrada ({{ operadores|length }})
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-bold" id="tab-agenda" data-bs-toggle="pill" data-bs-target="#conteudo-agenda" type="button" role="tab">
+            <i class="bi bi-calendar3 me-1"></i> Escala & Monitoramento ({{ ordens_agendadas|length }})
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-bold" id="tab-metricas" data-bs-toggle="pill" data-bs-target="#conteudo-metricas" type="button" role="tab">
+            <i class="bi bi-pie-chart-fill me-1"></i> Métricas & Desempenho
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- ABA 1: LISTA DE OPERADORES -->
+    <div class="tab-pane fade show active" id="conteudo-lista" role="tabpanel">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light small text-muted">
+                        <tr>
+                            <th>NOME DO OPERADOR</th>
+                            <th>ESPECIALIDADE / CARGO</th>
+                            <th>REGISTRO / DOC</th>
+                            <th>WHATSAPP / CONTATO</th>
+                            <th>PRODUTIVIDADE</th>
+                            <th>STATUS</th>
+                            <th class="text-end pe-3">AÇÕES</th>
+                        </tr>
+                    </thead>
+                    <tbody class="small">
+                        {% for op in operadores %}
+                        <tr>
+                            <td>
+                                <strong class="text-dark d-block">{{ op.nome }}</strong>
+                                <span class="text-muted">{{ op.email or 'Sem e-mail cadastrado' }}</span>
+                            </td>
+                            <td>{{ op.cargo }}</td>
+                            <td><code>{{ op.documento_registro or '--' }}</code></td>
+                            <td>
+                                <a href="https://wa.me/55{{ op.telefone }}?text=Ol%C3%A1%20{{ op.nome }},%20aqui%20est%C3%A3o%20as%20informa%C3%A7%C3%B5es%20da%20sua%20escala." 
+                                   target="_blank" class="btn btn-sm btn-outline-success fw-bold py-0 px-2 rounded-pill">
+                                    <i class="bi bi-whatsapp me-1"></i>{{ op.telefone }}
+                                </a>
+                            </td>
+                            <td>
+                                <span class="badge bg-success-subtle text-success fw-bold">
+                                    {{ op.total_os_concluidas }} concluídas
+                                </span>
+                                <span class="badge bg-light text-muted border">
+                                    {{ op.total_os_em_andamento }} em andamento
+                                </span>
+                            </td>
+                            <td>
+                                {% if op.ativo %}
+                                    <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end pe-3">
+                                <form action="{{ url_for('alternar_status_operador', id=op.id) }}" method="POST" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Ativar/Desativar">
+                                        <i class="bi bi-power"></i>
+                                    </button>
+                                </form>
+                                <form action="{{ url_for('excluir_operador', id=op.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Deseja realmente remover este operador?')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                <i class="bi bi-person-x fs-2 d-block mb-2 text-secondary"></i>
+                                Nenhum operador cadastrado. Clique no botão "+ Novo Operador".
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABA 2: ESCALA E MONITORAMENTO (UNIFICADA COM GANTT E VISUALIZAR) -->
+    <div class="tab-pane fade" id="conteudo-agenda" role="tabpanel">
+        <div class="card border-0 shadow-sm rounded-4 p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold text-dark mb-0">
+                    <i class="bi bi-geo-alt-fill text-primary me-2"></i>Escala de Visitas & Etapas do Cronograma
+                </h5>
+                <span class="badge bg-light text-dark border">{{ ordens_agendadas|length }} agendamento(s)</span>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 small">
+                    <thead class="table-light">
+                        <tr>
+                            <th>DATA & HORÁRIO</th>
+                            <th>TÉCNICO / OPERADOR</th>
+                            <th>CLIENTE / LOCAL</th>
+                            <th>ATIVIDADE / ESCOPO</th>
+                            <th>STATUS</th>
+                            <th class="text-end pe-2">FICHA TÉCNICA</th>
+                        </tr>
+                    </thead>
+                   <tbody>
+                        {% for item in ordens_agendadas %}
+                        <tr>
+                            <td>
+                                <strong class="text-dark d-block">
+                                    {{ item.data.strftime('%d/%m/%Y') if item.data else '--' }}
+                                </strong>
+                                <span class="text-muted">
+                                    <i class="bi bi-clock me-1"></i>
+                                    {% if item.hora_inicio %}
+                                        {{ item.hora_inicio.strftime('%H:%M') }}{% if item.hora_fim %} às {{ item.hora_fim.strftime('%H:%M') }}{% endif %}
+                                    {% else %}
+                                        Horário a alinhar
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                <strong class="text-primary">{{ item.operador_nome }}</strong>
+                            </td>
+                            <td>
+                                <strong class="text-dark d-block">{{ item.cliente_nome }}</strong>
+                                <span class="text-muted text-truncate d-inline-block" style="max-width: 240px;">{{ item.endereco }}</span>
+                            </td>
+                            <td>
+                                {% if item.is_etapa %}
+                                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle mb-1">
+                                        <i class="bi bi-bar-chart-steps me-1"></i>Etapa Gantt
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary-subtle text-secondary border mb-1">
+                                        <i class="bi bi-tools me-1"></i>OS Completa
+                                    </span>
+                                {% endif %}
+                                <div class="fw-semibold text-dark">{{ item.descricao_atividade }}</div>
+                                <small class="text-muted">{{ item.servico_nome }} (OS-{{ "%04d"|format(item.numero_os) }})</small>
+                            </td>
+                            <td>
+                                <span class="badge {% if item.status == 'Concluido' %}bg-success{% elif item.status == 'Em Andamento' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                    {{ item.status }}
+                                </span>
+                            </td>
+                            <td class="text-end pe-2">
+                                <div class="d-inline-flex gap-1 align-items-center">
+                                    <!-- LINK MOBILE PARA O TÉCNICO PREENCHER E COLETAR ASSINATURA -->
+                                    {% if item.is_etapa and item.token_externo %}
+                                        {% set url_link = url_for('etapa_formulario_externo', token=item.token_externo, _external=True) %}
+                                        <button type="button" class="btn btn-sm btn-outline-success" onclick="navigator.clipboard.writeText('{{ url_link }}'); alert('Link da fase copiado!');" title="Copiar Link para o Técnico">
+                                            <i class="bi bi-share"></i>
+                                        </button>
+                                        {% if item.operador_telefone %}
+                                        <a href="https://wa.me/55{{ item.operador_telefone }}?text=Ol%C3%A1,%20aqui%20est%C3%A1%20o%20link%20para%20a%20sua%20etapa:%20{{ url_link|urlencode }}" target="_blank" class="btn btn-sm btn-success" title="Enviar no WhatsApp do Técnico">
+                                            <i class="bi bi-whatsapp"></i>
+                                        </a>
+                                        {% endif %}
+                                    {% endif %}
+
+                                    <a href="{{ url_for('visualizar_ficha_servico', id=item.servico_id) }}" target="_blank" class="btn btn-sm btn-outline-primary fw-bold" title="Abrir Ficha de Atendimento">
+                                        <i class="bi bi-eye"></i> Visualizar
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                <i class="bi bi-calendar-x fs-2 d-block mb-2 text-secondary"></i>
+                                Nenhum atendimento ou etapa escalada com operadores no momento.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABA 3: MÉTRICAS E GRÁFICOS -->
+    <div class="tab-pane fade" id="conteudo-metricas" role="tabpanel">
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-bar-chart-line text-primary me-2"></i>OS Concluídas por Operador</h6>
+                    <canvas id="graficoOperadores" style="max-height: 280px;"></canvas>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-pie-chart text-primary me-2"></i>Distribuição de Demandas em Campo</h6>
+                    <canvas id="graficoStatusOS" style="max-height: 280px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: NOVO OPERADOR -->
+<div class="modal fade" id="modalNovoOperador" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('gestao_operadores') }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-person-plus text-primary me-2"></i>Cadastrar Técnico / Operador</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nome Completo *</label>
+                        <input type="text" name="nome" class="form-control" required placeholder="Ex: Lucas Ferreira">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Cargo / Especialidade *</label>
+                            <input type="text" name="cargo" class="form-control" value="Técnico de Campo" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">WhatsApp / Celular *</label>
+                            <input type="text" name="telefone" class="form-control" placeholder="(11) 99999-9999" required>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Registro / Matrícula</label>
+                            <input type="text" name="documento_registro" class="form-control" placeholder="MTE / CREA / CFT">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">E-mail (Opcional)</label>
+                            <input type="email" name="email" class="form-control" placeholder="tecnico@empresa.com">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Cliente Fixo Alocado (Opcional)</label>
+                        <select name="cliente_id" class="form-select">
+                            <option value="">Nenhum (Atua em múltiplos clientes)</option>
+                            {% for cli in clientes %}
+                            <option value="{{ cli.id }}">{{ cli.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4">Salvar Operador</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const ctxOp = document.getElementById('graficoOperadores');
+    if (ctxOp) {
+        new Chart(ctxOp, {
+            type: 'bar',
+            data: {
+                labels: [{% for op in operadores %}'{{ op.nome }}',{% endfor %}],
+                datasets: [{
+                    label: 'OS Concluídas',
+                    data: [{% for op in operadores %}{{ op.total_os_concluidas }},{% endfor %}],
+                    backgroundColor: '#2563eb',
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+            }
+        });
+    }
+
+    const ctxSt = document.getElementById('graficoStatusOS');
+    if (ctxSt) {
+        new Chart(ctxSt, {
+            type: 'doughnut',
+            data: {
+                labels: ['Concluídas', 'Em Andamento / Pendente'],
+                datasets: [{
+                    data: [
+                        {{ operadores|sum(attribute='total_os_concluidas') }},
+                        {{ operadores|sum(attribute='total_os_em_andamento') }}
+                    ],
+                    backgroundColor: ['#059669', '#3b82f6']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom' } }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

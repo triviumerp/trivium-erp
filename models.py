@@ -1,7 +1,10 @@
-from datetime import datetime, date
+import secrets
+from datetime import datetime, date, time
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from extensions import db
+
+
 
 class Empresa(db.Model):
     __tablename__ = 'empresas'
@@ -51,6 +54,7 @@ class Empresa(db.Model):
     faturas = db.relationship('Fatura', backref='empresa', lazy=True, cascade="all, delete-orphan")
     parcelas = db.relationship('ParcelaFatura', backref='empresa', lazy=True, cascade="all, delete-orphan")
     chamados = db.relationship('ChamadoSuporte', back_populates='empresa', lazy=True, cascade="all, delete-orphan")
+    operadores = db.relationship('OperadorCampo', backref='empresa', lazy=True, cascade="all, delete-orphan")
 
     cupom_utilizado = db.Column(db.String(30), nullable=True)
     afiliado_id = db.Column(db.Integer, db.ForeignKey('cupons_desconto.id'), nullable=True)
@@ -233,6 +237,32 @@ class ServicoCliente(db.Model):
     arquivo_nf = db.Column(db.String(255), nullable=True)
     historico_cobranca = db.Column(db.Text, nullable=True)
 
+    # Vínculo com Operador e Horários de Agendamento
+    operador_id = db.Column(db.Integer, db.ForeignKey('operadores_campo.id'), nullable=True)
+    hora_inicio_agendada = db.Column(db.Time, nullable=True)
+    hora_fim_agendada = db.Column(db.Time, nullable=True)
+
+    # Campos de Retorno do Formulário Externo de Campo (Mobile / Sem Login)
+    token_externo = db.Column(db.String(64), unique=True, index=True, nullable=True)
+    data_inicio_execucao = db.Column(db.DateTime, nullable=True)
+    data_fim_execucao = db.Column(db.DateTime, nullable=True)
+    relatorio_operador = db.Column(db.Text, nullable=True)
+    nome_quem_assinou = db.Column(db.String(120), nullable=True)
+    documento_quem_assinou = db.Column(db.String(30), nullable=True)
+    assinatura_cliente_base64 = db.Column(db.Text, nullable=True)
+
+    # Padrão Pré-estabelecido: Ficha de Atendimento
+    tipo_ficha = db.Column(db.String(30), default='operacional')  # 'operacional' ou 'atendimento'
+    anamnese_historico = db.Column(db.Text, nullable=True)
+    conclusao_parecer = db.Column(db.Text, nullable=True)
+    numero_sessao = db.Column(db.Integer, default=1)
+    total_sessoes_pacote = db.Column(db.Integer, nullable=True)
+
+    def gerar_token_se_necessario(self):
+        if not self.token_externo:
+            self.token_externo = secrets.token_urlsafe(32)
+        return self.token_externo
+
     @property
     def numero_sequencial_empresa(self):
         """Item 8: Retorna o contador sequencial restrito aos registros da empresa atual."""
@@ -251,6 +281,41 @@ class ServicoCliente(db.Model):
             return f"{self.cliente.logradouro or ''}, {self.cliente.numero or 'S/N'} {self.cliente.complemento or ''} - {self.cliente.bairro or ''}, {self.cliente.cidade or ''}/{self.cliente.estado or ''}".strip(" ,-/")
         return "Endereço não informado"
 
+    @property
+    def historico_paciente(self):
+        """Retorna todas as sessões anteriores deste paciente em ordem cronológica reversa."""
+        return ServicoCliente.query.filter(
+            ServicoCliente.empresa_id == self.empresa_id,
+            ServicoCliente.cliente_id == self.cliente_id,
+            ServicoCliente.tipo_ficha == 'atendimento',
+            ServicoCliente.id != self.id
+        ).order_by(ServicoCliente.data_solicitacao.desc(), ServicoCliente.id.desc()).all()
+
+class OperadorCampo(db.Model):
+    __tablename__ = 'operadores_campo'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    empresa_id = db.Column(db.Integer, db.ForeignKey('empresas.id'), nullable=False)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=True)
+    
+    nome = db.Column(db.String(120), nullable=False)
+    cargo = db.Column(db.String(100), default='Técnico de Campo')
+    telefone = db.Column(db.String(30), nullable=False)
+    documento_registro = db.Column(db.String(50), nullable=True)
+    email = db.Column(db.String(120), nullable=True)
+    ativo = db.Column(db.Boolean, default=True)
+    data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
+
+    cliente_alocado = db.relationship('Cliente', backref='operadores_alocados', lazy=True)
+    ordens_servico = db.relationship('ServicoCliente', backref='operador_responsavel', lazy=True)
+
+    @property
+    def total_os_concluidas(self):
+        return sum(1 for os in self.ordens_servico if os.status == 'Concluido')
+
+    @property
+    def total_os_em_andamento(self):
+        return sum(1 for os in self.ordens_servico if os.status in ['Em Andamento', 'Pendente'])
 
 class ServicoEtapaRastreio(db.Model):
     __tablename__ = 'servicos_etapas_rastreio'
@@ -261,18 +326,40 @@ class ServicoEtapaRastreio(db.Model):
     descricao_detalhes = db.Column(db.Text, nullable=True)
     data_inicio = db.Column(db.Date, nullable=True)
     data_fim = db.Column(db.Date, nullable=True)
+    hora_inicio = db.Column(db.Time, nullable=True)
+    hora_fim = db.Column(db.Time, nullable=True)
+    operador_id = db.Column(db.Integer, db.ForeignKey('operadores_campo.id'), nullable=True)
+
     status_fase = db.Column(db.String(30), default='pendente')
     ordem = db.Column(db.Integer, default=0)
 
+    # Campos de Execução Externa da Fase
+    token_externo = db.Column(db.String(64), unique=True, index=True, nullable=True)
+    relatorio_fase = db.Column(db.Text, nullable=True)
+    nome_quem_assinou = db.Column(db.String(120), nullable=True)
+    documento_quem_assinou = db.Column(db.String(30), nullable=True)
+    assinatura_base64 = db.Column(db.Text, nullable=True)
+    data_conclusao = db.Column(db.DateTime, nullable=True)
+
     servico = db.relationship('ServicoCliente', backref=db.backref('etapas_rastreio', lazy=True, cascade="all, delete-orphan"))
+    operador = db.relationship('OperadorCampo', lazy=True)
+    evidencias_etapa = db.relationship('EvidenciaServico', backref='etapa_vinculada', lazy=True, cascade="all, delete-orphan")
+
+    def gerar_token_se_necessario(self):
+        if not self.token_externo:
+            self.token_externo = secrets.token_urlsafe(32)
+        return self.token_externo
+
 
 class EvidenciaServico(db.Model):
     __tablename__ = 'evidencias_servico'
     id = db.Column(db.Integer, primary_key=True)
     servico_cliente_id = db.Column(db.Integer, db.ForeignKey('servicos_cliente.id'), nullable=False)
+    etapa_rastreio_id = db.Column(db.Integer, db.ForeignKey('servicos_etapas_rastreio.id'), nullable=True)
     chave_bucket = db.Column(db.String(255), nullable=False)
     nome_original = db.Column(db.String(150), nullable=True)
     data_upload = db.Column(db.DateTime, default=datetime.utcnow)
+
     
 class Proposta(db.Model):
     __tablename__ = 'propostas'
@@ -299,6 +386,7 @@ class Proposta(db.Model):
     qtd_parcelas = db.Column(db.Integer, default=1)
     forma_pagamento_parcelas = db.Column(db.String(50), default='Boleto Bancário')
     intervalo_dias = db.Column(db.Integer, default=30)
+    tipo_destino = db.Column(db.String(30), default='operacional')
 
     itens = db.relationship('ItemProposta', backref='proposta', lazy='select', cascade="all, delete-orphan")
     faturas = db.relationship('Fatura', backref='proposta', lazy='select')

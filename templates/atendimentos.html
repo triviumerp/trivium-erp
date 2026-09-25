@@ -1,0 +1,339 @@
+{% extends 'base.html' %}
+
+{% block title %}Fichas de Atendimento & Consultas - Trivium ERP{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-person-lines-fill text-primary me-2"></i>Fichas de Atendimento & Sessões Clínicas
+        </h2>
+        <p class="text-muted mb-0">Gestão contínua de prontuários, acompanhamento terapêutico e registo de consultas</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoAtendimentoAvulso">
+            <i class="bi bi-plus-circle me-1"></i>+ Novo Atendimento Avulso
+        </button>
+    </div>
+</div>
+
+<!-- CARDS RESUMO CLÍNICO -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-white">
+            <small class="text-muted fw-bold d-block mb-1">TOTAL DE ATENDIMENTOS</small>
+            <h3 class="fw-bold text-primary mb-0">{{ total_atendimentos }}</h3>
+            <span class="text-muted small">Sessões registadas no sistema</span>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-white">
+            <small class="text-muted fw-bold d-block mb-1">SESSÕES EM CURSO / AGENDADAS</small>
+            <h3 class="fw-bold text-warning mb-0">{{ total_pendentes }}</h3>
+            <span class="text-muted small">Consultas a realizar</span>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-white">
+            <small class="text-muted fw-bold d-block mb-1">SESSÕES REALIZADAS</small>
+            <h3 class="fw-bold text-success mb-0">{{ total_concluidos }}</h3>
+            <span class="text-muted small">Prontuários com evolução concluída</span>
+        </div>
+    </div>
+</div>
+
+<!-- BARRA DE PESQUISA POR NOME OU CPF DO PACIENTE -->
+<div class="card border-0 shadow-sm rounded-4 mb-3 p-3 bg-white">
+    <form method="GET" action="{{ url_for('listar_atendimentos') }}" class="row g-2 align-items-center">
+        <div class="col-md-8">
+            <div class="input-group input-group-sm">
+                <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" name="busca" class="form-control border-start-0" 
+                       placeholder="Pesquisar paciente por Nome Completo ou CPF/Documento..." 
+                       value="{{ busca or '' }}">
+            </div>
+        </div>
+        <div class="col-md-2 col-6">
+            <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="todos" {% if filtro_status == 'todos' %}selected{% endif %}>Todos os Atendimentos</option>
+                <option value="em_curso" {% if filtro_status == 'em_curso' %}selected{% endif %}>Agendados / Em Curso</option>
+                <option value="concluidos" {% if filtro_status == 'concluidos' %}selected{% endif %}>Realizados</option>
+            </select>
+        </div>
+        <div class="col-md-2 col-6 d-flex gap-1">
+            <button type="submit" class="btn btn-sm btn-primary fw-bold w-100">Pesquisar</button>
+            {% if busca %}
+                <a href="{{ url_for('listar_atendimentos') }}" class="btn btn-sm btn-outline-secondary" title="Limpar"><i class="bi bi-x-lg"></i></a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<!-- LISTAGEM DE PRONTUÁRIOS / ATENDIMENTOS -->
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light small text-muted">
+                <tr>
+                    <th>SESSÃO</th>
+                    <th>PACIENTE</th>
+                    <th>DATA & HORA</th>
+                    <th>PROFISSIONAL</th>
+                    <th>ESTADO</th>
+                    <th class="text-end pe-3">AÇÕES</th>
+                </tr>
+            </thead>
+            <tbody class="small">
+                {% for a in atendimentos %}
+                <tr>
+                    <td>
+                        <strong class="text-dark d-block">
+                            <i class="bi bi-person-heart text-primary me-1"></i>Sessão #{{ a.numero_sessao or 1 }}
+                        </strong>
+                        <span class="text-muted">{{ a.tipo_servico.nome if a.tipo_servico else 'Consulta Especializada' }}</span>
+                    </td>
+                    <td>
+                        <strong class="text-dark d-block">{{ a.cliente.nome }}</strong>
+                        <span class="text-muted">{{ a.cliente.cnpj_cpf or '--' }}</span>
+                    </td>
+                    <td>
+                        <span class="text-dark fw-semibold">{{ a.data_previsao.strftime('%d/%m/%Y') if a.data_previsao else a.data_solicitacao.strftime('%d/%m/%Y') }}</span>
+                        {% if a.hora_inicio_agendada %}
+                            <small class="text-muted d-block">{{ a.hora_inicio_agendada.strftime('%H:%M') }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <strong class="text-primary">{{ a.responsavel_tecnico or 'Especialista' }}</strong>
+                        {% if a.documento_responsavel %}<small class="text-muted d-block">({{ a.documento_responsavel }})</small>{% endif %}
+                    </td>
+                    <td>
+                        <span class="badge {% if a.status == 'Concluido' %}bg-success{% elif a.status == 'Em Andamento' %}bg-primary{% else %}bg-secondary{% endif %}">
+                            {{ a.status }}
+                        </span>
+                    </td>
+                    <td class="text-end pe-3">
+                        <button type="button" class="btn btn-sm btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalAtender{{ a.id }}">
+                            <i class="bi bi-pencil-square me-1"></i> Atendimento
+                        </button>
+                        <a href="{{ url_for('visualizar_ficha_servico', id=a.id) }}" class="btn btn-sm btn-outline-secondary fw-bold ms-1" title="Ver Prontuário">
+                            <i class="bi bi-eye"></i> Visualizar
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center py-5 text-muted">
+                        <i class="bi bi-clipboard2-x fs-2 d-block mb-2 text-secondary"></i>
+                        Nenhuma ficha de atendimento localizada.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- MODAIS DE EVOLUÇÃO CLÍNICA SOAP                                -->
+<!-- ============================================================== -->
+{% for a in atendimentos %}
+<div class="modal fade" id="modalAtender{{ a.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form action="{{ url_for('salvar_evolucao_atendimento', id=a.id) }}" method="POST" enctype="multipart/form-data">
+                <div class="modal-header bg-light border-bottom py-3">
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0">
+                            <i class="bi bi-clipboard2-pulse-fill text-primary me-2"></i>Evolução de Atendimento • Sessão #{{ a.numero_sessao or 1 }}
+                        </h5>
+                        <small class="text-muted">Paciente: <strong>{{ a.cliente.nome }}</strong> (Doc: {{ a.cliente.cnpj_cpf or '--' }})</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <div class="row g-4">
+                        <div class="col-lg-8 border-end pe-lg-4">
+                            <div class="row g-2 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">Profissional Responsável *</label>
+                                    <input type="text" name="responsavel_tecnico" class="form-control form-control-sm" value="{{ a.responsavel_tecnico or current_user.nome }}" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Reg. (CRP/CRN/CRM)</label>
+                                    <input type="text" name="documento_responsavel" class="form-control form-control-sm" value="{{ a.documento_responsavel or '' }}" placeholder="Ex: CRP 06/12345">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Sessão Nº</label>
+                                    <input type="number" name="numero_sessao" class="form-control form-control-sm fw-bold" value="{{ a.numero_sessao or 1 }}">
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-primary">1. Queixa Principal / Motivo do Encontro</label>
+                                <textarea name="motivo_queixa" class="form-control form-control-sm" rows="2" placeholder="O que o paciente relatou na consulta de hoje...">{{ a.observacoes or '' }}</textarea>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-primary">2. Desenvolvimento & Relato da Sessão (Anamnese / Evolução)</label>
+                                <textarea name="anamnese_historico" class="form-control form-control-sm" rows="4" placeholder="Registo detalhado da conversa, sintomas, padrão emocional, recordatório alimentar ou evolução técnica...">{{ a.anamnese_historico or '' }}</textarea>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-primary">3. Avaliação Profissional & Parecer Diagnóstico</label>
+                                <textarea name="conclusao_parecer" class="form-control form-control-sm" rows="3" placeholder="Avaliação clínica, diagnóstico inicial ou parâmetros observados...">{{ a.conclusao_parecer or '' }}</textarea>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-primary">4. Conduta, Prescrição & Metas de Acompanhamento</label>
+                                <textarea name="orientacoes_cliente" class="form-control form-control-sm" rows="3" placeholder="Orientações ao paciente, plano alimentar, exercícios prescritos ou tarefas para a próxima sessão...">{{ a.orientacoes_cliente or '' }}</textarea>
+                            </div>
+
+                            <div class="row g-2 mb-2">
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">Anexar Exames / Bioimpedância / Documentos</label>
+                                    <input type="file" name="anexos_atendimento[]" multiple class="form-control form-control-sm">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">Estado da Sessão</label>
+                                    <select name="status" class="form-select form-select-sm fw-bold">
+                                        <option value="Em Andamento" {% if a.status == 'Em Andamento' %}selected{% endif %}>Em Curso</option>
+                                        <option value="Concluido" {% if a.status == 'Concluido' %}selected{% endif %} class="text-success">✔ Realizada / Concluída</option>
+                                        <option value="Pendente" {% if a.status == 'Pendente' %}selected{% endif %}>Agendada / Pendente</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- HISTÓRICO DAS SESSÕES ANTERIORES DO MESMO PACIENTE -->
+                        <div class="col-lg-4">
+                            <h6 class="fw-bold text-dark mb-3"><i class="bi bi-clock-history text-secondary me-2"></i>Histórico do Paciente</h6>
+                            <div class="d-flex flex-column gap-3" style="max-height: 520px; overflow-y: auto; padding-right: 6px;">
+                                {% for ant in a.historico_paciente %}
+                                <div class="p-3 bg-light rounded-3 border small">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <strong class="text-dark">Sessão #{{ ant.numero_sessao or 'Avulsa' }}</strong>
+                                        <span class="text-muted">{{ ant.data_solicitacao.strftime('%d/%m/%Y') if ant.data_solicitacao else '--' }}</span>
+                                    </div>
+                                    <div class="text-muted mb-1"><strong>Profissional:</strong> {{ ant.responsavel_tecnico or '--' }}</div>
+                                    {% if ant.observacoes %}
+                                        <div class="mb-1"><strong>Queixa:</strong> <span class="text-dark">{{ ant.observacoes[:90] }}...</span></div>
+                                    {% endif %}
+                                    {% if ant.orientacoes_cliente %}
+                                        <div class="text-success"><strong>Conduta:</strong> {{ ant.orientacoes_cliente[:90] }}...</div>
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                <div class="text-center py-4 text-muted small">
+                                    <i class="bi bi-info-circle fs-3 d-block mb-1 text-secondary"></i>
+                                    Primeiro atendimento registado para este paciente.
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">
+                        <i class="bi bi-check2-circle me-1"></i> Guardar Evolução
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- MODAL: NOVO ATENDIMENTO AVULSO -->
+<div class="modal fade" id="modalNovoAtendimentoAvulso" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('criar_servico_avulso') }}" method="POST">
+                <input type="hidden" name="tipo_ficha" value="atendimento">
+                
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-person-plus text-primary me-2"></i>Novo Atendimento Clínico Avulso
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold">Paciente *</label>
+                            <select name="cliente_id" class="form-select" required>
+                                <option value="">Selecione o paciente na carteira...</option>
+                                {% for cli in clientes %}
+                                <option value="{{ cli.id }}">{{ cli.nome }} ({{ cli.cnpj_cpf }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Especialidade / Serviço *</label>
+                            <select name="tipo_servico_id" class="form-select" required>
+                                {% for cat in catalogo %}
+                                <option value="{{ cat.id }}">{{ cat.nome }} (R$ {{ "%.2f"|format(cat.valor_sugerido) }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Data da Consulta *</label>
+                            <input type="date" name="data_previsao" class="form-control" value="{{ hoje }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Hora Início</label>
+                            <input type="time" name="hora_inicio_agendada" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Hora Fim</label>
+                            <input type="time" name="hora_fim_agendada" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Título da Ficha</label>
+                        <input type="text" name="titulo_documento_custom" class="form-control" value="Ficha de Atendimento Clínico">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Queixa Inicial / Notas Prévias</label>
+                        <textarea name="observacoes" class="form-control" rows="2" placeholder="Motivo inicial relatado pelo paciente..."></textarea>
+                    </div>
+
+                    <div class="p-3 bg-light rounded-3 border">
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="checkFaturaAtend" name="gerar_fatura" value="1" onchange="document.getElementById('blocoFinanceiroAtend').classList.toggle('d-none', !this.checked)">
+                            <label class="form-check-label fw-bold" for="checkFaturaAtend">Lançar Cobrança no Módulo Financeiro?</label>
+                        </div>
+                        <div id="blocoFinanceiroAtend" class="row g-2 d-none pt-2 border-top">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Valor da Sessão (R$)</label>
+                                <input type="number" step="0.01" name="valor_cobrado" class="form-control form-control-sm" placeholder="0.00">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Forma de Pagamento</label>
+                                <select name="forma_pagamento" class="form-select form-select-sm">
+                                    <option value="PIX">PIX</option>
+                                    <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                    <option value="Boleto Bancário">Boleto Bancário</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4">Confirmar Agendamento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

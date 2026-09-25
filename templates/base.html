@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Trivium ERP{% endblock %}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logofav.png') }}">
+    
     <!-- Google Fonts: Plus Jakarta Sans -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -27,7 +28,7 @@
             --border-color: #e2e8f0;
             --text-dark: #0f172a;
             --text-muted: #64748b;
-            --sidebar-width: 250px;
+            --sidebar-width: 260px;
         }
 
         body {
@@ -53,7 +54,6 @@
             font-weight: 700;
         }
 
-        /* --- BARRA LATERAL FIXA COM ROLAGEM VERTICAL INTELIGENTE --- */
         .sidebar {
             background-color: var(--sidebar-bg);
             border-right: 1px solid var(--border-color);
@@ -73,22 +73,11 @@
             overflow-x: hidden;
         }
 
-        /* Scrollbar para a barra lateral */
-        .sidebar::-webkit-scrollbar {
-            width: 4px;
-        }
-        .sidebar::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        .sidebar::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
-        }
-        .sidebar::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-track { background: transparent; }
+        .sidebar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .sidebar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-        /* --- CONTEÚDO PRINCIPAL AJUSTADO AO ESPAÇO RESTANTE --- */
         .main-wrapper {
             margin-left: var(--sidebar-width);
             width: calc(100% - var(--sidebar-width));
@@ -97,15 +86,9 @@
             flex-direction: column;
         }
 
-        /* --- ADAPTAÇÃO MOBILE (< 768px) --- */
         @media (max-width: 767.98px) {
-            .sidebar {
-                display: none !important;
-            }
-            .main-wrapper {
-                margin-left: 0 !important;
-                width: 100% !important;
-            }
+            .sidebar { display: none !important; }
+            .main-wrapper { margin-left: 0 !important; width: 100% !important; }
         }
 
         .nav-link-custom {
@@ -123,17 +106,8 @@
         }
 
         .nav-link-custom i { font-size: 1.15rem; }
-
-        .nav-link-custom:hover {
-            background-color: #f1f5f9;
-            color: var(--brand-accent);
-        }
-
-        .nav-link-custom.active {
-            background-color: #eff6ff;
-            color: var(--brand-accent);
-            font-weight: 700;
-        }
+        .nav-link-custom:hover { background-color: #f1f5f9; color: var(--brand-accent); }
+        .nav-link-custom.active { background-color: #eff6ff; color: var(--brand-accent); font-weight: 700; }
 
         .sidebar-badge {
             background: #eff6ff;
@@ -158,11 +132,7 @@
             padding: 0.5rem 1.5rem;
         }
 
-        .content-body {
-            padding: 1.5rem;
-            flex-grow: 1;
-        }
-
+        .content-body { padding: 1.5rem; flex-grow: 1; }
         .card-custom {
             background: #ffffff;
             border: 1px solid var(--border-color);
@@ -174,7 +144,7 @@
 <body>
     {% if session.get('original_master_id') %}
     <div class="bg-warning text-dark py-2 px-3 fw-bold d-flex justify-content-between align-items-center shadow-sm" style="position: sticky; top: 0; z-index: 2000;">
-        <span><i class="bi bi-eye-fill me-2"></i>MODO DE SUPORTE MASTER: Você está visualizando o ambiente de <u>{{ current_user.empresa.razao_social }}</u>.</span>
+        <span><i class="bi bi-eye-fill me-2"></i>MODO DE SUPORTE MASTER: A visualizar o ambiente de <u>{{ current_user.empresa.razao_social }}</u>.</span>
         <a href="{{ url_for('admin_sair_impersonacao') }}" class="btn btn-sm btn-dark fw-bold">
             <i class="bi bi-box-arrow-right me-1"></i> Sair do Modo Suporte
         </a>
@@ -202,10 +172,10 @@
                 <i class="bi bi-shield-lock-fill"></i><span>Painel Master</span>
             </a>
             <a href="{{ url_for('admin_master_usuarios') }}" class="nav-link-custom text-danger {% if request.endpoint == 'admin_master_usuarios' %}active{% endif %}">
-                <i class="bi bi-person-gear"></i><span>Gestão de Usuários</span>
+                <i class="bi bi-person-gear"></i><span>Gestão de Utilizadores</span>
             </a>
             <a href="{{ url_for('admin_master_cupons') }}" class="nav-link-custom text-danger {% if request.endpoint == 'admin_master_cupons' %}active{% endif %}">
-                <i class="bi bi-tags-fill"></i><span>Cupons & Afiliados</span>
+                <i class="bi bi-tags-fill"></i><span>Cupões & Afiliados</span>
             </a>
             <a href="{{ url_for('admin_master_chamados') }}" class="nav-link-custom text-danger {% if request.endpoint in ['admin_master_chamados', 'admin_atender_chamado'] %}active{% endif %}">
                 <i class="bi bi-headset"></i><span>Fila Global Tickets</span>
@@ -213,9 +183,9 @@
             <hr class="my-2 border-secondary opacity-25">
             {% endif %}
 
-            <!-- Painel de Controle / Dashboard -->
+            <!-- Painel de Controlo -->
             <a href="{{ url_for('index') }}" id="tour-dashboard" class="nav-link-custom {% if request.endpoint == 'index' %}active{% endif %}">
-                <i class="bi bi-grid-1x2-fill"></i><span>Painel de Controle</span>
+                <i class="bi bi-grid-1x2-fill"></i><span>Painel de Controlo</span>
             </a>
 
             <!-- Clientes -->
@@ -239,11 +209,31 @@
             </a>
             {% endif %}
 
-            <!-- Serviços / OS -->
+            <!-- MÓDULO SERVIÇOS / OS (COM SUBMENUS INDEPENDENTES) -->
             {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_servicos %}
-            <a href="{{ url_for('consultar_servicos') }}" id="tour-servicos" class="nav-link-custom {% if request.endpoint == 'consultar_servicos' %}active{% endif %}">
-                <i class="bi bi-briefcase-fill"></i><span>Serviços / OS</span>
-            </a>
+            <div class="nav-item">
+                <a class="nav-link-custom d-flex justify-content-between align-items-center {% if request.endpoint in ['consultar_servicos', 'listar_atendimentos', 'gestao_operadores', 'visualizar_ficha_servico'] %}active{% endif %}" 
+                   data-bs-toggle="collapse" href="#submenuServicos" role="button">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-briefcase-fill"></i>
+                        <span>Serviços / OS</span>
+                    </div>
+                    <i class="bi bi-chevron-down small opacity-75"></i>
+                </a>
+                <div class="collapse {% if request.endpoint in ['consultar_servicos', 'listar_atendimentos', 'gestao_operadores', 'visualizar_ficha_servico'] %}show{% endif %}" id="submenuServicos">
+                    <div class="ps-3 py-1 d-flex flex-column gap-1">
+                        <a href="{{ url_for('consultar_servicos') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'consultar_servicos' %}active fw-bold text-primary{% endif %}">
+                            <i class="bi bi-tools"></i><span>Ordens de Serviço</span>
+                        </a>
+                        <a href="{{ url_for('listar_atendimentos') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'listar_atendimentos' %}active fw-bold text-primary{% endif %}">
+                            <i class="bi bi-person-lines-fill"></i><span>Fichas de Atendimento</span>
+                        </a>
+                        <a href="{{ url_for('gestao_operadores') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'gestao_operadores' %}active fw-bold text-primary{% endif %}">
+                            <i class="bi bi-people"></i><span>Técnicos & Operadores</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
             {% endif %}
 
             <!-- Financeiro -->
@@ -253,14 +243,14 @@
             </a>
             {% endif %}
 
-            <!-- Lucratividade (Fase 4) -->
+            <!-- Lucratividade -->
             {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
             <a href="{{ url_for('relatorio_lucratividade') }}" id="tour-lucratividade" class="nav-link-custom {% if request.endpoint == 'relatorio_lucratividade' %}active{% endif %}">
                 <i class="bi bi-graph-up-arrow"></i><span>Lucratividade</span>
             </a>
             {% endif %}
 
-            <!-- Configurações / Perfil -->
+            <!-- Configurações -->
             {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_configuracoes %}
             <a href="{{ url_for('perfil_empresa') }}" id="tour-config" class="nav-link-custom {% if request.endpoint == 'perfil_empresa' %}active{% endif %}">
                 <i class="bi bi-gear-wide-connected"></i><span>Configurações</span>
@@ -293,7 +283,7 @@
         <div class="offcanvas-body d-flex flex-column">
             <nav class="nav flex-column mb-auto">
                 <a href="{{ url_for('index') }}" class="nav-link-custom {% if request.endpoint == 'index' %}active{% endif %}">
-                    <i class="bi bi-grid-1x2-fill"></i><span>Painel de Controle</span>
+                    <i class="bi bi-grid-1x2-fill"></i><span>Painel de Controlo</span>
                 </a>
 
                 {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_clientes %}
@@ -315,9 +305,28 @@
                 {% endif %}
 
                 {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_servicos %}
-                <a href="{{ url_for('consultar_servicos') }}" class="nav-link-custom {% if request.endpoint == 'consultar_servicos' %}active{% endif %}">
-                    <i class="bi bi-briefcase-fill"></i><span>Serviços / OS</span>
-                </a>
+                <div class="nav-item">
+                    <a class="nav-link-custom d-flex justify-content-between align-items-center {% if request.endpoint in ['consultar_servicos', 'gestao_operadores'] %}active{% endif %}" 
+                       data-bs-toggle="collapse" href="#submenuServicosMobile" role="button">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-briefcase-fill"></i><span>Serviços / OS</span>
+                        </div>
+                        <i class="bi bi-chevron-down small"></i>
+                    </a>
+                    <div class="collapse show" id="submenuServicosMobile">
+                        <div class="ps-3 py-1 d-flex flex-column gap-1">
+                            <a href="{{ url_for('consultar_servicos') }}" class="nav-link-custom py-1 small">
+                                <i class="bi bi-clipboard-check"></i><span>Ordens de Serviço</span>
+                            </a>
+                            <a href="{{ url_for('consultar_servicos', tipo='atendimentos') }}" class="nav-link-custom py-1 small">
+                                <i class="bi bi-person-lines-fill"></i><span>Fichas de Atendimento</span>
+                            </a>
+                            <a href="{{ url_for('gestao_operadores') }}" class="nav-link-custom py-1 small">
+                                <i class="bi bi-people"></i><span>Técnicos & Operadores</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
                 {% endif %}
 
                 {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
@@ -353,7 +362,7 @@
         </div>
     </div>
 
-    <!-- WRAPPER DIREITO (CABEÇALHO + CONTEÚDO) -->
+    <!-- WRAPPER PRINCIPAL -->
     <div class="main-wrapper">
         <header class="top-navbar">
             <div class="d-flex align-items-center gap-3">
@@ -400,103 +409,6 @@
 
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-    <!-- Driver.js JS -->
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
-
-    <script>
-    function iniciarTourGuiado() {
-        const driver = window.driver.js.driver;
-
-        const driverObj = driver({
-            showProgress: true,
-            animate: true,
-            nextBtnText: 'Próximo →',
-            prevBtnText: '← Anterior',
-            doneBtnText: 'Concluir',
-            steps: [
-                { 
-                    popover: { 
-                        title: '👋 Bem-vindo ao Trivium ERP!', 
-                        description: 'Vamos apresentar como a plataforma conecta sua operação técnica ao controle comercial e financeiro.' 
-                    } 
-                },
-                { 
-                    element: '#tour-dashboard', 
-                    popover: { 
-                        title: '1. Painel de Controle', 
-                        description: 'Visão executiva com métricas de clientes ativos, orçamentos em aberto, atividades da semana e total recebido no mês.' 
-                    } 
-                },
-                { 
-                    element: '#tour-clientes', 
-                    popover: { 
-                        title: '2. Carteira de Clientes', 
-                        description: 'Cadastre pessoas físicas e jurídicas, faça upload de plantas e laudos, e gere contratos timbrados em PDF.' 
-                    } 
-                },
-                { 
-                    element: '#tour-catalogo', 
-                    popover: { 
-                        title: '3. Catálogo & Ficha Técnica', 
-                        description: 'Padronize seus serviços, determine custos diretos e componha margens mínimas de venda.' 
-                    } 
-                },
-                { 
-                    element: '#tour-propostas', 
-                    popover: { 
-                        title: '4. Propostas Comerciais', 
-                        description: 'Gere cartas-proposta formais com condições de sinal, parcelamento e escopo técnico detalhado.' 
-                    } 
-                },
-                { 
-                    element: '#tour-servicos', 
-                    popover: { 
-                        title: '5. Agenda de Serviços & OS', 
-                        description: 'Controle ordens de serviço, atribua técnicos responsáveis e acompanhe cronogramas de execução.' 
-                    } 
-                },
-                { 
-                    element: '#tour-financeiro', 
-                    popover: { 
-                        title: '6. Módulo Financeiro', 
-                        description: 'Controle de contas a receber com baixa manual de títulos, controle de inadimplência e emissão de notas fiscais.' 
-                    } 
-                },
-                { 
-                    element: '#tour-lucratividade', 
-                    popover: { 
-                        title: '7. Relatório de Lucratividade', 
-                        description: 'Acompanhe a rentabilidade real por serviço e a decomposição de custos de mão de obra e insumos.' 
-                    } 
-                },
-                { 
-                    element: '#tour-config', 
-                    popover: { 
-                        title: '8. Configurações & White-Label', 
-                        description: 'Insira sua logomarca, escolha suas cores de marca e gerencie as permissões dos membros da sua equipe.' 
-                    } 
-                },
-                { 
-                    popover: { 
-                        title: '🚀 Pronto para começar!', 
-                        description: 'Se precisar rever este guia a qualquer momento, clique no botão "Fazer Tour" no topo.' 
-                    } 
-                }
-            ],
-            onDestroyed: () => {
-                localStorage.setItem('trivium_tour_visto', 'true');
-            }
-        });
-
-        driverObj.drive();
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        if (!localStorage.getItem('trivium_tour_visto')) {
-            setTimeout(iniciarTourGuiado, 500);
-        }
-    });
-    </script>
 </body>
 </html>

@@ -1,384 +1,641 @@
 {% extends 'base.html' %}
 
-{% block title %}Agenda Técnica & Ordens de Serviço - Trivium ERP{% endblock %}
+{% block title %}Agenda de Serviços & Ordens de Execução - Trivium ERP{% endblock %}
 
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
     <div>
-        <h2 class="fw-bold text-dark mb-0"><i class="bi bi-briefcase-fill text-primary me-2"></i>Agenda Técnica & Ordens de Serviço</h2>
-        <p class="text-muted mb-0">Controle operacional de vistorias, laudos, execução em campo e emissão de relatórios</p>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-calendar-check-fill text-primary me-2"></i>Agenda Operacional & Ordens de Serviço
+        </h2>
+        <p class="text-muted mb-0">Controle e execução de atividades técnicas, visitas periódicas de contratos e demandas avulsas</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovaOSAvulsa">
+            <i class="bi bi-plus-circle me-1"></i>+ Nova OS Avulsa
+        </button>
     </div>
 </div>
 
-<!-- CARDS RESUMO -->
+<!-- CARDS INDICADORES / KPIS -->
 <div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-3 bg-primary text-white rounded-4">
-            <span class="small text-white-50 fw-bold">EM ANDAMENTO</span>
-            <h3 class="fw-bold my-1">{{ qtd_em_andamento }}</h3>
-            <small>Atividades em execução</small>
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-white">
+            <small class="text-muted fw-bold d-block mb-1">EM EXECUÇÃO / ANDAMENTO</small>
+            <h3 class="fw-bold text-primary mb-0">{{ qtd_em_andamento }}</h3>
+            <span class="text-muted small">Atividades com execução liberada</span>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-3 bg-warning text-dark rounded-4">
-            <span class="small text-dark-50 fw-bold">PENDENTES / AGUARDANDO SINAL</span>
-            <h3 class="fw-bold my-1">{{ qtd_pendentes }}</h3>
-            <small>Aguardando liberação ou agendamento</small>
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-white">
+            <small class="text-muted fw-bold d-block mb-1">PENDENTES DE INÍCIO</small>
+            <h3 class="fw-bold text-warning mb-0">{{ qtd_pendentes }}</h3>
+            <span class="text-muted small">Aguardando data ou liberação financeira</span>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card border-0 shadow-sm p-3 bg-success text-white rounded-4">
-            <span class="small text-white-50 fw-bold">CONCLUÍDAS</span>
-            <h3 class="fw-bold my-1">{{ qtd_concluidos }}</h3>
-            <small>Serviços finalizados</small>
-        </div>
-    </div>
-</div>
-
-<!-- FILTROS -->
-<div class="card border-0 shadow-sm mb-4 rounded-4">
-    <div class="card-body py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
-        <div class="btn-group">
-            <a href="{{ url_for('consultar_servicos', status='agenda', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'agenda' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}">Agenda Ativa</a>
-            <a href="{{ url_for('consultar_servicos', status='pendentes', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'pendentes' %}btn-warning text-dark fw-bold{% else %}btn-outline-secondary{% endif %}">Pendentes</a>
-            <a href="{{ url_for('consultar_servicos', status='recorrentes', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'recorrentes' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">Recorrentes</a>
-            <a href="{{ url_for('consultar_servicos', status='avulsos', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'avulsos' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">Avulsos</a>
-            <a href="{{ url_for('consultar_servicos', status='concluidos', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'concluidos' %}btn-success fw-bold{% else %}btn-outline-secondary{% endif %}">Concluídos</a>
-            <a href="{{ url_for('consultar_servicos', status='todos', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'todos' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">Todos</a>
-        </div>
-        <div class="btn-group">
-            <span class="btn btn-sm btn-light disabled border"><i class="bi bi-calendar3 me-1"></i>Período:</span>
-            <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='todos') }}" class="btn btn-sm {% if periodo_atual == 'todos' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">Todos</a>
-            <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='semana') }}" class="btn btn-sm {% if periodo_atual == 'semana' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">7 Dias</a>
-            <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='mes') }}" class="btn btn-sm {% if periodo_atual == 'mes' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">Este Mês</a>
-            <a href="{{ url_for('consultar_servicos', status=filtro_atual, periodo='ano') }}" class="btn btn-sm {% if periodo_atual == 'ano' %}btn-dark fw-bold{% else %}btn-outline-secondary{% endif %}">Ano</a>
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-white">
+            <small class="text-muted fw-bold d-block mb-1">CONCLUÍDOS NO PERÍODO</small>
+            <h3 class="fw-bold text-success mb-0">{{ qtd_concluidos }}</h3>
+            <span class="text-muted small">Ordens finalizadas com sucesso</span>
         </div>
     </div>
 </div>
 
-<!-- TABELA DE ATIVIDADES -->
+<!-- BARRA DE FILTROS DE STATUS E PERÍODO -->
+<div class="card border-0 shadow-sm rounded-4 mb-3 p-2 bg-white">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{{ url_for('consultar_servicos', status='agenda', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'agenda' %}btn-primary fw-bold{% else %}btn-light text-muted{% endif %} rounded-3">
+                Agenda / Em Curso
+            </a>
+            <a href="{{ url_for('consultar_servicos', status='recorrentes', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'recorrentes' %}btn-primary fw-bold{% else %}btn-light text-muted{% endif %} rounded-3">
+                Contratos Recorrentes
+            </a>
+            <a href="{{ url_for('consultar_servicos', status='avulsos', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'avulsos' %}btn-primary fw-bold{% else %}btn-light text-muted{% endif %} rounded-3">
+                Demandas Avulsas
+            </a>
+            <a href="{{ url_for('consultar_servicos', status='pendentes', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'pendentes' %}btn-primary fw-bold{% else %}btn-light text-muted{% endif %} rounded-3">
+                Pendentes / Bloqueadas
+            </a>
+            <a href="{{ url_for('consultar_servicos', status='concluidos', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'concluidos' %}btn-primary fw-bold{% else %}btn-light text-muted{% endif %} rounded-3">
+                Concluídas
+            </a>
+            <a href="{{ url_for('consultar_servicos', status='todos', periodo=periodo_atual) }}" class="btn btn-sm {% if filtro_atual == 'todos' %}btn-primary fw-bold{% else %}btn-light text-muted{% endif %} rounded-3">
+                Todas
+            </a>
+        </div>
+
+        <div>
+            <select class="form-select form-select-sm" onchange="location = this.value;">
+                <option value="{{ url_for('consultar_servicos', status=filtro_atual, periodo='todos') }}" {% if periodo_atual == 'todos' %}selected{% endif %}>Todos os Prazos</option>
+                <option value="{{ url_for('consultar_servicos', status=filtro_atual, periodo='semana') }}" {% if periodo_atual == 'semana' %}selected{% endif %}>Próximos 7 Dias</option>
+                <option value="{{ url_for('consultar_servicos', status=filtro_atual, periodo='mes') }}" {% if periodo_atual == 'mes' %}selected{% endif %}>Próximos 30 Dias</option>
+                <option value="{{ url_for('consultar_servicos', status=filtro_atual, periodo='ano') }}" {% if periodo_atual == 'ano' %}selected{% endif %}>Próximo Ano</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- TABELA DE ORDENS DE SERVIÇO -->
 <div class="card border-0 shadow-sm rounded-4">
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0 small">
-                <thead class="table-light text-muted">
-                    <tr>
-                        <th>Nº / TÍTULO</th>
-                        <th>CLIENTE</th>
-                        <th>SERVIÇO</th>
-                        <th>RESPONSÁVEL</th>
-                        <th>PREVISÃO</th>
-                        <th>STATUS</th>
-                        <th class="text-end pe-3">AÇÕES</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for s in servicos_operacionais %}
-                    {% set atrasado = s.status != 'Concluido' and s.data_previsao and s.data_previsao < hoje %}
-                    <tr class="{% if atrasado %}table-danger{% endif %}">
-                        <td>
-                            <strong class="text-dark d-block">OS-{{ "%04d"|format(s.numero_sequencial_empresa) }}</strong>
-                            <span class="text-muted">{{ s.titulo_documento_custom or 'Ordem de Serviço' }}</span>
-                        </td>
-                        <td>
-                            <strong class="text-dark d-block">{{ s.cliente.nome }}</strong>
-                            <span class="text-muted">{{ s.cliente.cidade }}/{{ s.cliente.estado }}</span>
-                        </td>
-                        <td>
-                            <span class="fw-semibold text-dark">{{ s.tipo_servico.nome }}</span>
-                        </td>
-                        <td>
-                            <span class="text-dark">{{ s.responsavel_tecnico or 'A Definir' }}</span>
-                        </td>
-                        <td>
-                            <span class="fw-bold {% if atrasado %}text-danger{% else %}text-dark{% endif %}">
-                                {{ s.data_previsao.strftime('%d/%m/%Y') if s.data_previsao else '--' }}
-                            </span>
-                        </td>
-                        <td>
-                            {% if s.status == 'Concluido' %}
-                                <span class="badge bg-success">Concluído</span>
-                            {% elif s.status == 'Em Andamento' %}
-                                <span class="badge bg-primary">Em Andamento</span>
-                            {% elif s.status == 'Bloqueado' %}
-                                <span class="badge bg-danger">Aguardando Sinal</span>
-                            {% else %}
-                                <span class="badge bg-warning text-dark">Pendente</span>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light small text-muted">
+                <tr>
+                    <th>ORDEM / IDENTIFICAÇÃO</th>
+                    <th>CLIENTE / LOCAL</th>
+                    <th>PREVISÃO / HORÁRIO</th>
+                    <th>VALOR</th>
+                    <th>RESPONSÁVEL TÉCNICO</th>
+                    <th>STATUS</th>
+                    <th class="text-end pe-3">AÇÕES</th>
+                </tr>
+            </thead>
+            <tbody class="small">
+                {% for s in servicos_operacionais %}
+                <tr>
+                    <td>
+                        <strong class="text-dark d-block">OS-{{ "%04d"|format(s.numero_sequencial_empresa) }}</strong>
+                        <span class="text-muted">{{ s.tipo_servico.nome if s.tipo_servico else 'Serviço Geral' }}</span>
+                        {% if s.contrato_id %}
+                            <span class="badge bg-light text-primary border d-inline-block mt-1">Recorrente</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <strong class="text-dark d-block">{{ s.cliente.nome }}</strong>
+                        <span class="text-muted text-truncate d-inline-block" style="max-width: 250px;">{{ s.endereco_exibicao }}</span>
+                    </td>
+                    <td>
+                        <span class="text-dark fw-semibold">{{ s.data_previsao.strftime('%d/%m/%Y') if s.data_previsao else '--' }}</span>
+                        {% if s.hora_inicio_agendada %}
+                            <small class="text-muted d-block">
+                                <i class="bi bi-clock me-1"></i>{{ s.hora_inicio_agendada.strftime('%H:%M') }}{% if s.hora_fim_agendada %} às {{ s.hora_fim_agendada.strftime('%H:%M') }}{% endif %}
+                            </small>
+                        {% endif %}
+                        {% if s.data_previsao and s.data_previsao < hoje and s.status != 'Concluido' %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle d-block mt-1" style="font-size: 0.70rem;">Prazo Expirado</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <strong class="text-dark">R$ {{ "%.2f"|format(s.valor_cobrado or 0.0) }}</strong>
+                    </td>
+                    <td>
+                        {% if s.operador_responsavel %}
+                            <span class="badge bg-light text-dark border">{{ s.operador_responsavel.nome }}</span>
+                        {% else %}
+                            <span class="text-muted">{{ s.responsavel_tecnico or 'Não definido' }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge {% if s.status == 'Concluido' %}bg-success{% elif s.status == 'Em Andamento' %}bg-primary{% elif s.status == 'Bloqueado' %}bg-danger{% else %}bg-secondary{% endif %}">
+                            {{ s.status }}
+                        </span>
+                    </td>
+                    <td class="text-end pe-3">
+                        <div class="d-inline-flex gap-1 align-items-center">
+                            <button type="button" class="btn btn-sm btn-outline-secondary fw-bold" data-bs-toggle="modal" data-bs-target="#modalGerenciarOS{{ s.id }}" title="Gerenciar Operação">
+                                <i class="bi bi-gear-wide-connected me-1"></i> Gerenciar
+                            </button>
+                            <a href="{{ url_for('visualizar_ficha_servico', id=s.id) }}" class="btn btn-sm btn-outline-primary fw-bold" title="Visualizar Ficha">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <button type="button" class="btn btn-sm btn-outline-dark" data-bs-toggle="modal" data-bs-target="#modalPdfServico{{ s.id }}" title="Configurar Impressão em PDF">
+                                <i class="bi bi-file-earmark-pdf"></i>
+                            </button>
+                            {% if s.token_externo %}
+                            <button type="button" class="btn btn-sm btn-outline-success" 
+                                    onclick="navigator.clipboard.writeText('{{ url_for('os_formulario_externo', token=s.token_externo, _external=True) }}'); alert('Link externo copiado para a área de transferência!');" 
+                                    title="Copiar Link para o Técnico">
+                                <i class="bi bi-whatsapp"></i>
+                            </button>
                             {% endif %}
-                        </td>
-                        <td class="text-end pe-3">
-                            <div class="d-flex gap-1 justify-content-end">
-                                <!-- BOTÃO VISUALIZAR FICHA TÉCNICA -->
-                                <a href="{{ url_for('visualizar_ficha_servico', id=s.id) }}" target="_blank" class="btn btn-sm btn-outline-info" title="Visualizar Ficha Técnica">
-                                    <i class="bi bi-window-fullscreen"></i>
-                                </a>
-
-                                <!-- BOTÃO GERAR PDF DA OS -->
-                                <a href="{{ url_for('gerar_pdf_ordem_servico', id=s.id) }}" target="_blank" class="btn btn-sm btn-outline-primary" title="Exportar PDF da OS">
-                                    <i class="bi bi-file-earmark-pdf"></i>
-                                </a>
-
-                                <button class="btn btn-sm btn-dark fw-bold px-3" data-bs-toggle="modal" data-bs-target="#modalGerenciarOS{{ s.id }}">
-                                    <i class="bi bi-pencil-square me-1"></i>Gerenciar
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="7" class="text-center py-5 text-muted">Nenhuma atividade encontrada nesta listagem.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-muted">
+                        <i class="bi bi-folder2-open fs-2 d-block mb-2 text-secondary"></i>
+                        Nenhuma ordem de serviço localizada neste filtro.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
 
-<!-- ==================================================================== -->
-<!-- MODAIS DE GERENCIAMENTO DA ORDEM DE SERVIÇO -->
-<!-- ==================================================================== -->
+<!-- ============================================================== -->
+<!-- MODAIS DE GERENCIAMENTO OPERACIONAL DA OS                      -->
+<!-- ============================================================== -->
 {% for s in servicos_operacionais %}
 <div class="modal fade" id="modalGerenciarOS{{ s.id }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg rounded-4">
-            <!-- Formulário envia para atualizar a OS -->
-            <form action="{{ url_for('atualizar_operacao_servico', id=s.id) }}" method="POST" enctype="multipart/form-data" id="formOS{{ s.id }}">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('atualizar_operacao_servico', id=s.id) }}" method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="filtro_retorno" value="{{ filtro_atual }}">
                 
                 <div class="modal-header bg-light">
                     <div>
-                        <h5 class="modal-title fw-bold text-dark mb-0">OS-{{ "%04d"|format(s.numero_sequencial_empresa) }} — {{ s.cliente.nome }}</h5>
-                        <small class="text-muted">{{ s.tipo_servico.nome }}</small>
+                        <h5 class="modal-title fw-bold text-dark mb-0">
+                            <i class="bi bi-gear-wide-connected text-primary me-2"></i>Gerenciar OS-{{ "%04d"|format(s.numero_sequencial_empresa) }}
+                        </h5>
+                        <small class="text-muted">Cliente: <strong>{{ s.cliente.nome }}</strong> • {{ s.tipo_servico.nome if s.tipo_servico else 'Geral' }}</small>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
 
-                <div class="modal-body p-4 small">
-                    <!-- SEÇÃO 1: DADOS GERAIS -->
-                    <div class="p-3 bg-light rounded-3 border mb-3">
-                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-card-heading text-primary me-2"></i>1. Dados da Ficha & Responsável Técnico</h6>
-                        <div class="row g-2 mb-2">
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold small">Título da Ficha / Documento</label>
-                                <input type="text" name="titulo_documento_custom" class="form-control form-control-sm" value="{{ s.titulo_documento_custom or 'Ordem de Serviço' }}">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold small">Responsável pelo Atendimento</label>
-                                <input type="text" name="responsavel_tecnico" class="form-control form-control-sm" value="{{ s.responsavel_tecnico or '' }}" placeholder="Nome do profissional">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold small">Doc / Registro Profissional (CPF, CREA, CFT)</label>
-                                <input type="text" name="documento_responsavel" class="form-control form-control-sm" value="{{ s.documento_responsavel or '' }}" placeholder="Ex: CREA 123456/SP">
-                            </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Status Operacional</label>
+                            <select name="status" class="form-select form-select-sm fw-bold">
+                                <option value="Em Andamento" {% if s.status == 'Em Andamento' %}selected{% endif %}>Em Andamento</option>
+                                <option value="Concluido" {% if s.status == 'Concluido' %}selected{% endif %} class="text-success">✔ Concluído</option>
+                                <option value="Pendente" {% if s.status == 'Pendente' %}selected{% endif %}>Pendente</option>
+                                <option value="Bloqueado" {% if s.status == 'Bloqueado' %}selected{% endif %} class="text-danger">Bloqueado</option>
+                            </select>
                         </div>
-                        <div class="row g-2">
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold small">Status da Operação</label>
-                                <select name="status" class="form-select form-select-sm fw-bold">
-                                    <option value="Pendente" {% if s.status == 'Pendente' %}selected{% endif %}>Pendente</option>
-                                    <option value="Em Andamento" {% if s.status == 'Em Andamento' %}selected{% endif %}>Em Andamento</option>
-                                    <option value="Concluido" {% if s.status == 'Concluido' %}selected{% endif %} class="text-success">✔ Concluído</option>
-                                    {% if s.status == 'Bloqueado' %}
-                                    <option value="Bloqueado" selected class="text-danger">Bloqueado (Sinal Pendente)</option>
-                                    {% endif %}
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold small">Data de Previsão / Execução</label>
-                                <input type="date" name="data_previsao" class="form-control form-control-sm" value="{{ s.data_previsao.strftime('%Y-%m-%d') if s.data_previsao else '' }}">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-bold small">Adicionar Evidências / Fotos (Máx 2 MB cada)</label>
-                                <input type="file" name="arquivos_evidencia[]" class="form-control form-control-sm" multiple accept=".pdf,.png,.jpg,.jpeg,.webp">
-                            </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Previsão / Execução</label>
+                            <input type="date" name="data_previsao" class="form-control form-control-sm" value="{{ s.data_previsao }}">
                         </div>
-
-                        <!-- GALERIA DE EVIDÊNCIAS JÁ ENVIADAS -->
-                        {% if s.evidencias %}
-                        <div class="mt-3 pt-3 border-top">
-                            <label class="form-label fw-bold small text-dark d-block">Fotos & Evidências Anexadas:</label>
-                            <div class="d-flex flex-wrap gap-2">
-                                {% for ev in s.evidencias %}
-                                <div class="d-flex align-items-center bg-white border p-1 rounded gap-1 shadow-sm">
-                                    <a href="{{ url_for('download_file', filename=ev.chave_bucket) }}" target="_blank" class="text-decoration-none fw-bold small text-primary">
-                                        <i class="bi bi-image me-1"></i>{{ ev.nome_original or 'Foto' }}
-                                    </a>
-                                    <button type="submit" formaction="{{ url_for('excluir_evidencia_servico', evidencia_id=ev.id) }}" class="btn btn-sm text-danger p-0 ms-1" title="Remover" onclick="return confirm('Excluir esta foto?')">
-                                        <i class="bi bi-x-circle-fill"></i>
-                                    </button>
-                                </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-primary">Técnico Principal</label>
+                            <select name="operador_id" class="form-select form-select-sm fw-bold">
+                                <option value="">Sem operador vinculado</option>
+                                {% for op in operadores %}
+                                <option value="{{ op.id }}" {% if s.operador_id == op.id %}selected{% endif %}>
+                                    {{ op.nome }} ({{ op.cargo }})
+                                </option>
                                 {% endfor %}
-                            </div>
+                            </select>
                         </div>
-                        {% endif %}
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Título do Documento</label>
+                            <input type="text" name="titulo_documento_custom" class="form-control form-control-sm" value="{{ s.titulo_documento_custom or 'Ordem de Serviço' }}">
+                        </div>
                     </div>
 
-                    <!-- SEÇÃO 2: ESCOPO E ORIENTAÇÕES -->
+                    <!-- CAMPOS DE HORÁRIO GERAL DA ORDEM DE SERVIÇO -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold"><i class="bi bi-clock me-1 text-primary"></i>Hora Início Prevista</label>
+                            <input type="time" name="hora_inicio_agendada" class="form-control form-control-sm" value="{{ s.hora_inicio_agendada.strftime('%H:%M') if s.hora_inicio_agendada else '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold"><i class="bi bi-clock-history me-1 text-primary"></i>Hora Fim Prevista</label>
+                            <input type="time" name="hora_fim_agendada" class="form-control form-control-sm" value="{{ s.hora_fim_agendada.strftime('%H:%M') if s.hora_fim_agendada else '' }}">
+                        </div>
+                    </div>
+
+                    <!-- LOCAL DE ATENDIMENTO / ENDEREÇO PERSONALIZADO COM VIACEP -->
                     <div class="p-3 bg-light rounded-3 border mb-3">
-                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-text-paragraph text-primary me-2"></i>2. Detalhamento & Orientações</h6>
-                        <div class="row g-2 mb-2">
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small">Detalhamento da Execução Técnica</label>
-                                <textarea name="detalhamento_execucao" class="form-control form-control-sm" rows="3" placeholder="Pule linhas normalmente para tópicos ou etapas...">{{ s.detalhamento_execucao or '' }}</textarea>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small">Orientações & Recomendações ao Cliente</label>
-                                <textarea name="orientacoes_cliente" class="form-control form-control-sm" rows="3" placeholder="Recomendações técnicas ou cuidados operacionais...">{{ s.orientacoes_cliente or '' }}</textarea>
-                            </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="usar_endereco_personalizado" id="checkEndCustom{{ s.id }}" value="1"
+                                   {% if s.usar_endereco_personalizado %}checked{% endif %}
+                                   onchange="document.getElementById('blocoEnderecoCustom{{ s.id }}').classList.toggle('d-none', !this.checked)">
+                            <label class="form-check-label fw-bold small text-dark" for="checkEndCustom{{ s.id }}">
+                                Usar local de atendimento diferente do endereço principal do cliente?
+                            </label>
                         </div>
-                        <div>
-                            <label class="form-label fw-bold small">Observações Gerais</label>
-                            <textarea name="observacoes" class="form-control form-control-sm" rows="2">{{ s.observacoes or '' }}</textarea>
+
+                        <div id="blocoEnderecoCustom{{ s.id }}" class="row g-2 pt-2 border-top {% if not s.usar_endereco_personalizado %}d-none{% endif %}">
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">CEP da Execução</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="text" name="cep_execucao" id="cepExec{{ s.id }}" class="form-control font-monospace" value="{{ s.cep_execucao or '' }}" placeholder="00000-000">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="consultarCepExecucao({{ s.id }})"><i class="bi bi-search"></i></button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Logradouro / Rua</label>
+                                <input type="text" name="logradouro_execucao" id="ruaExec{{ s.id }}" class="form-control form-control-sm" value="{{ s.logradouro_execucao or '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Número</label>
+                                <input type="text" name="numero_execucao" class="form-control form-control-sm" value="{{ s.numero_execucao or '' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Complemento</label>
+                                <input type="text" name="complemento_execucao" class="form-control form-control-sm" value="{{ s.complemento_execucao or '' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Bairro</label>
+                                <input type="text" name="bairro_execucao" id="bairroExec{{ s.id }}" class="form-control form-control-sm" value="{{ s.bairro_execucao or '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Cidade</label>
+                                <input type="text" name="cidade_execucao" id="cidadeExec{{ s.id }}" class="form-control form-control-sm" value="{{ s.cidade_execucao or '' }}">
+                            </div>
+                            <div class="col-md-1">
+                                <label class="form-label small fw-bold">UF</label>
+                                <input type="text" name="estado_execucao" id="ufExec{{ s.id }}" class="form-control form-control-sm text-uppercase" maxlength="2" value="{{ s.estado_execucao or '' }}">
+                            </div>
                         </div>
                     </div>
 
-                    <!-- SEÇÃO 3: ETAPAS OPERACIONAIS (GANTT OPCIONAL) -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Detalhamento Técnico da Execução</label>
+                        <textarea name="detalhamento_execucao" class="form-control form-control-sm" rows="3" placeholder="Metodologia, normas aplicáveis, ensaios realizados...">{{ s.detalhamento_execucao or '' }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Orientações e Recomendações Técnicas ao Cliente</label>
+                        <textarea name="orientacoes_cliente" class="form-control form-control-sm" rows="2" placeholder="Recomendações técnicas para manutenção ou conformidade...">{{ s.orientacoes_cliente or '' }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Observações Internas</label>
+                        <textarea name="observacoes" class="form-control form-control-sm" rows="2">{{ s.observacoes or '' }}</textarea>
+                    </div>
+
+                    <!-- CRONOGRAMA DE ETAPAS / RASTREIO GANTT COM OPERADOR E HORÁRIOS -->
                     <div class="p-3 bg-light rounded-3 border mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-bar-chart-steps text-primary me-2"></i>3. Etapas & Cronograma de Execução (Gantt Opcional)</h6>
-                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="adicionarLinhaEtapaOS('{{ s.id }}')">
-                                <i class="bi bi-plus-lg me-1"></i>Adicionar Fase
+                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-bar-chart-steps text-primary me-1"></i>Cronograma por Etapas (Gantt com Horários & Responsáveis)</h6>
+                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="adicionarEtapaRastreio({{ s.id }})">
+                                <i class="bi bi-plus-lg me-1"></i>Nova Fase
                             </button>
                         </div>
-                        <div id="container-etapas-os-{{ s.id }}" class="d-flex flex-column gap-2">
+                        <div id="container-etapas-{{ s.id }}" class="d-flex flex-column gap-2">
                             {% for et in s.etapas_rastreio %}
-                            <div class="row g-2 align-items-center bg-white p-2 rounded border">
-                                <div class="col-md-5">
-                                    <input type="text" name="etapa_titulo[]" class="form-control form-control-sm" value="{{ et.titulo_fase }}" placeholder="Nome da Fase/Etapa" required>
+                            <div class="p-2 rounded border bg-white shadow-sm etapa-linha">
+                                <div class="row g-2 align-items-center mb-1">
+                                    <div class="col-md-5">
+                                        <label class="small text-muted fw-bold d-block" style="font-size: 0.72rem;">Título da Fase / Tarefa *</label>
+                                        <input type="text" name="etapa_titulo[]" class="form-control form-control-sm" value="{{ et.titulo_fase }}" required>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="small text-muted fw-bold d-block text-primary" style="font-size: 0.72rem;">Operador Responsável</label>
+                                        <select name="etapa_operador_id[]" class="form-select form-select-sm">
+                                            <option value="">Mesmo da OS Geral</option>
+                                            {% for op in operadores %}
+                                            <option value="{{ op.id }}" {% if et.operador_id == op.id %}selected{% endif %}>
+                                                {{ op.nome }} ({{ op.cargo }})
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="small text-muted fw-bold d-block" style="font-size: 0.72rem;">Status</label>
+                                        <select name="etapa_status[]" class="form-select form-select-sm">
+                                            <option value="pendente" {% if et.status_fase == 'pendente' %}selected{% endif %}>Pendente</option>
+                                            <option value="em_andamento" {% if et.status_fase == 'em_andamento' %}selected{% endif %}>Em Andamento</option>
+                                            <option value="concluido" {% if et.status_fase == 'concluido' %}selected{% endif %}>Concluído</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-1 text-end pt-3">
+                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.etapa-linha').remove();" title="Remover Fase">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div class="col-md-2">
-                                    <input type="date" name="etapa_inicio[]" class="form-control form-control-sm" value="{{ et.data_inicio.strftime('%Y-%m-%d') if et.data_inicio else '' }}" title="Início">
-                                </div>
-                                <div class="col-md-2">
-                                    <input type="date" name="etapa_fim[]" class="form-control form-control-sm" value="{{ et.data_fim.strftime('%Y-%m-%d') if et.data_fim else '' }}" title="Previsão Término">
-                                </div>
-                                <div class="col-md-2">
-                                    <select name="etapa_status[]" class="form-select form-select-sm">
-                                        <option value="pendente" {% if et.status_fase == 'pendente' %}selected{% endif %}>Pendente</option>
-                                        <option value="em_andamento" {% if et.status_fase == 'em_andamento' %}selected{% endif %}>Em Andamento</option>
-                                        <option value="concluido" {% if et.status_fase == 'concluido' %}selected{% endif %} class="text-success">Concluído</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-1 text-end">
-                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.row').remove()"><i class="bi bi-trash"></i></button>
+                                <div class="row g-2 align-items-center">
+                                    <div class="col-md-3">
+                                        <small class="text-muted" style="font-size: 0.70rem;">Data Início:</small>
+                                        <input type="date" name="etapa_inicio[]" class="form-control form-control-sm" value="{{ et.data_inicio }}">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <small class="text-muted" style="font-size: 0.70rem;">Data Fim:</small>
+                                        <input type="date" name="etapa_fim[]" class="form-control form-control-sm" value="{{ et.data_fim }}">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <small class="text-muted" style="font-size: 0.70rem;">Hora Início:</small>
+                                        <input type="time" name="etapa_hora_inicio[]" class="form-control form-control-sm" value="{{ et.hora_inicio.strftime('%H:%M') if et.hora_inicio else '' }}">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <small class="text-muted" style="font-size: 0.70rem;">Hora Fim:</small>
+                                        <input type="time" name="etapa_hora_fim[]" class="form-control form-control-sm" value="{{ et.hora_fim.strftime('%H:%M') if et.hora_fim else '' }}">
+                                    </div>
                                 </div>
                             </div>
                             {% endfor %}
                         </div>
                     </div>
 
-                    <!-- SEÇÃO 4: OPÇÕES DE EXIBIÇÃO NO PDF DA OS -->
-                    <div class="p-3 bg-light rounded-3 border mb-3">
-                        <h6 class="fw-bold text-dark mb-2"><i class="bi bi-printer text-primary me-2"></i>4. Opções de Exibição no PDF da OS</h6>
-                        <div class="row g-2 small">
-                            <div class="col-md-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="exibir_doc_cliente" value="1" checked form="formPDF{{ s.id }}">
-                                    <label class="form-check-label">Exibir CPF/CNPJ</label>
+                    <!-- FOTOS E EVIDÊNCIAS ANEXADAS -->
+                    <div class="p-3 bg-light rounded-3 border">
+                        <label class="form-label small fw-bold d-block mb-1">Evidências Fotográficas & Anexos</label>
+                        <input type="file" name="arquivos_evidencia[]" multiple class="form-control form-control-sm mb-3">
+
+                        {% if s.evidencias %}
+                        <div class="row g-2">
+                            {% for ev in s.evidencias %}
+                            <div class="col-md-3 col-6">
+                                <div class="card p-2 border shadow-sm text-center h-100">
+                                    <span class="text-truncate d-block small mb-1">{{ ev.nome_original or 'Foto' }}</span>
+                                    <div class="d-flex justify-content-center gap-1 mt-auto">
+                                        <a href="{{ url_for('download_file', filename=ev.chave_bucket) }}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" title="Abrir"><i class="bi bi-eye"></i></a>
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="excluirEvidenciaFoto({{ ev.id }})" title="Excluir"><i class="bi bi-trash"></i></button>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="exibir_datas" value="1" checked form="formPDF{{ s.id }}">
-                                    <label class="form-check-label">Exibir Datas</label>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="exibir_endereco" value="1" checked form="formPDF{{ s.id }}">
-                                    <label class="form-check-label">Exibir Endereço</label>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="exibir_responsavel" value="1" checked form="formPDF{{ s.id }}">
-                                    <label class="form-check-label">Exibir Responsável</label>
-                                </div>
-                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL DE CONFIGURAÇÃO DE IMPRESSÃO PDF DA OS -->
+<div class="modal fade" id="modalPdfServico{{ s.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('gerar_pdf_ordem_servico', id=s.id) }}" method="POST" target="_blank">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark mb-0">
+                        <i class="bi bi-printer text-primary me-2"></i>Exportar Relatório PDF
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="small text-muted mb-3">Selecione quais seções deseja incluir no documento timbrado oficial:</p>
+                    
+                    <div class="d-flex flex-column gap-2 small">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="exibir_doc_cliente" value="1" id="pdfDoc{{ s.id }}" checked>
+                            <label class="form-check-label fw-semibold" for="pdfDoc{{ s.id }}">CNPJ / CPF do Cliente</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="exibir_datas" value="1" id="pdfData{{ s.id }}" checked>
+                            <label class="form-check-label fw-semibold" for="pdfData{{ s.id }}">Datas de Solicitação, Previsão e Horários</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="exibir_endereco" value="1" id="pdfEnd{{ s.id }}" checked>
+                            <label class="form-check-label fw-semibold" for="pdfEnd{{ s.id }}">Endereço do Local de Atendimento</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="exibir_responsavel" value="1" id="pdfResp{{ s.id }}" checked>
+                            <label class="form-check-label fw-semibold" for="pdfResp{{ s.id }}">Responsável Técnico e Número de Registro</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="exibir_descricao" value="1" id="pdfDesc{{ s.id }}" checked>
+                            <label class="form-check-label fw-semibold" for="pdfDesc{{ s.id }}">Descrição Geral da Atividade</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="exibir_detalhamento" value="1" id="pdfDet{{ s.id }}" checked>
+                            <label class="form-check-label fw-semibold" for="pdfDet{{ s.id }}">Detalhamento Técnico da Execução</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="exibir_orientacoes" value="1" id="pdfOri{{ s.id }}" checked>
+                            <label class="form-check-label fw-semibold" for="pdfOri{{ s.id }}">Orientações e Recomendações ao Cliente</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="exibir_assinaturas" value="1" id="pdfAss{{ s.id }}" checked>
+                            <label class="form-check-label fw-semibold" for="pdfAss{{ s.id }}">Campos de Assinatura Formal</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">
+                        <i class="bi bi-file-earmark-pdf me-1"></i> Gerar Documento PDF
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- MODAL: NOVA ORDEM DE SERVIÇO AVULSA -->
+<div class="modal fade" id="modalNovaOSAvulsa" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('criar_servico_avulso') }}" method="POST">
+                <input type="hidden" name="tipo_ficha" value="operacional">
+                
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-tools text-primary me-2"></i>Nova Ordem de Serviço Avulsa
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold">Cliente Contratante *</label>
+                            <select name="cliente_id" class="form-select" required>
+                                <option value="">Selecione na carteira...</option>
+                                {% for cli in clientes %}
+                                <option value="{{ cli.id }}">{{ cli.nome }} ({{ cli.cnpj_cpf }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Serviço do Catálogo *</label>
+                            <select name="tipo_servico_id" class="form-select" required>
+                                {% for cat in catalogo %}
+                                <option value="{{ cat.id }}">{{ cat.nome }} (R$ {{ "%.2f"|format(cat.valor_sugerido) }})</option>
+                                {% endfor %}
+                            </select>
                         </div>
                     </div>
 
-                    <!-- LOCAL ESPECÍFICO DE ATENDIMENTO -->
-                    <div class="p-3 bg-white rounded border">
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="usar_endereco_personalizado" id="switchEnd{{ s.id }}" {% if s.usar_endereco_personalizado %}checked{% endif %} onchange="document.getElementById('boxEndCustom{{ s.id }}').style.display = this.checked ? 'block' : 'none'">
-                            <label class="form-check-label fw-bold small" for="switchEnd{{ s.id }}">Executar em endereço diferente do cadastro principal do cliente</label>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Data Agendada *</label>
+                            <input type="date" name="data_previsao" class="form-control" value="{{ hoje }}" required>
                         </div>
-                        <div id="boxEndCustom{{ s.id }}" style="display: {{ 'block' if s.usar_endereco_personalizado else 'none' }};">
-                            <div class="row g-2">
-                                <div class="col-md-3">
-                                    <input type="text" name="cep_execucao" class="form-control form-control-sm" value="{{ s.cep_execucao or '' }}" placeholder="CEP">
-                                </div>
-                                <div class="col-md-6">
-                                    <input type="text" name="logradouro_execucao" class="form-control form-control-sm" value="{{ s.logradouro_execucao or '' }}" placeholder="Rua / Avenida">
-                                </div>
-                                <div class="col-md-3">
-                                    <input type="text" name="numero_execucao" class="form-control form-control-sm" value="{{ s.numero_execucao or '' }}" placeholder="Número">
-                                </div>
-                                <div class="col-md-4">
-                                    <input type="text" name="bairro_execucao" class="form-control form-control-sm" value="{{ s.bairro_execucao or '' }}" placeholder="Bairro">
-                                </div>
-                                <div class="col-md-5">
-                                    <input type="text" name="cidade_execucao" class="form-control form-control-sm" value="{{ s.cidade_execucao or '' }}" placeholder="Cidade">
-                                </div>
-                                <div class="col-md-3">
-                                    <input type="text" name="estado_execucao" class="form-control form-control-sm text-uppercase" maxlength="2" value="{{ s.estado_execucao or '' }}" placeholder="UF">
-                                </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Hora Início</label>
+                            <input type="time" name="hora_inicio_agendada" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Hora Fim</label>
+                            <input type="time" name="hora_fim_agendada" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Técnico / Operador Designado</label>
+                            <select name="operador_id" class="form-select">
+                                <option value="">Sem operador fixo vinculado</option>
+                                {% for op in operadores %}
+                                <option value="{{ op.id }}">{{ op.nome }} ({{ op.cargo }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Título do Documento</label>
+                            <input type="text" name="titulo_documento_custom" class="form-control" value="Ordem de Serviço">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Escopo Técnico / Observações</label>
+                        <textarea name="observacoes" class="form-control" rows="2" placeholder="Notas sobre a demanda..."></textarea>
+                    </div>
+
+                    <div class="p-3 bg-light rounded-3 border">
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="checkFaturaOS" name="gerar_fatura" value="1" onchange="document.getElementById('blocoFinanceiroOS').classList.toggle('d-none', !this.checked)">
+                            <label class="form-check-label fw-bold" for="checkFaturaOS">Lançar Título no Módulo Financeiro?</label>
+                        </div>
+                        <div id="blocoFinanceiroOS" class="row g-2 d-none pt-2 border-top">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Valor a Cobrar (R$)</label>
+                                <input type="number" step="0.01" name="valor_cobrado" class="form-control form-control-sm" placeholder="0.00">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Forma de Pagamento</label>
+                                <select name="forma_pagamento" class="form-select form-select-sm">
+                                    <option value="PIX">PIX</option>
+                                    <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                    <option value="Boleto Bancário">Boleto Bancário</option>
+                                </select>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <a href="{{ url_for('visualizar_ficha_servico', id=s.id) }}" target="_blank" class="btn btn-outline-info btn-sm fw-bold">
-                        <i class="bi bi-window-fullscreen me-1"></i> Visualizar Ficha
-                    </a>
-                    
-                    <!-- FORMULÁRIO SEPARADO PARA GERAR O PDF DA OS RESPEITANDO OS CHECKBOXES -->
-                    <a href="#" onclick="document.getElementById('formPDF{{ s.id }}').submit(); return false;" class="btn btn-outline-primary btn-sm fw-bold">
-                        <i class="bi bi-file-earmark-pdf me-1"></i> Gerar PDF da OS
-                    </a>
-
-                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">Salvar Alterações</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4">Confirmar Agendamento</button>
                 </div>
             </form>
-
-            <!-- FORM HIDDEN PARA DISPARAR O PDF COM OS CHECKBOXES DA SEÇÃO 4 -->
-            <form action="{{ url_for('gerar_pdf_ordem_servico', id=s.id) }}" method="POST" target="_blank" id="formPDF{{ s.id }}" class="d-none"></form>
         </div>
     </div>
 </div>
-{% endfor %}
 
+<!-- JAVASCRIPT DINÂMICO PARA VIACEP, GANTT E FOTOS -->
 <script>
-function adicionarLinhaEtapaOS(servicoId) {
-    const container = document.getElementById(`container-etapas-os-${servicoId}`);
+// Opções de operadores para injeção dinâmica no JavaScript
+const opcoesOperadoresHTML = `
+    <option value="">Mesmo da OS Geral</option>
+    {% for op in operadores %}
+    <option value="{{ op.id }}">{{ op.nome }} ({{ op.cargo }})</option>
+    {% endfor %}
+`;
+
+function consultarCepExecucao(id) {
+    const cep = document.getElementById('cepExec' + id).value.replace(/\D/g, '');
+    if (cep.length === 8) {
+        fetch(`https://viacep.com.br/ws/${cep}/json/`)
+            .then(res => res.json())
+            .then(data => {
+                if (!data.erro) {
+                    document.getElementById('ruaExec' + id).value = data.logradouro || '';
+                    document.getElementById('bairroExec' + id).value = data.bairro || '';
+                    document.getElementById('cidadeExec' + id).value = data.localidade || '';
+                    document.getElementById('ufExec' + id).value = data.uf || '';
+                }
+            });
+    }
+}
+
+function adicionarEtapaRastreio(servicoId) {
+    const container = document.getElementById('container-etapas-' + servicoId);
     const div = document.createElement('div');
-    div.className = 'row g-2 align-items-center bg-white p-2 rounded border';
+    div.className = 'p-2 rounded border bg-white shadow-sm etapa-linha';
     div.innerHTML = `
-        <div class="col-md-5">
-            <input type="text" name="etapa_titulo[]" class="form-control form-control-sm" placeholder="Nome da Fase/Etapa" required>
+        <div class="row g-2 align-items-center mb-1">
+            <div class="col-md-5">
+                <label class="small text-muted fw-bold d-block" style="font-size: 0.72rem;">Título da Fase / Tarefa *</label>
+                <input type="text" name="etapa_titulo[]" class="form-control form-control-sm" placeholder="Ex: Montagem de Andaime" required>
+            </div>
+            <div class="col-md-4">
+                <label class="small text-muted fw-bold d-block text-primary" style="font-size: 0.72rem;">Operador Responsável</label>
+                <select name="etapa_operador_id[]" class="form-select form-select-sm">
+                    ${opcoesOperadoresHTML}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="small text-muted fw-bold d-block" style="font-size: 0.72rem;">Status</label>
+                <select name="etapa_status[]" class="form-select form-select-sm">
+                    <option value="pendente">Pendente</option>
+                    <option value="em_andamento">Em Andamento</option>
+                    <option value="concluido">Concluído</option>
+                </select>
+            </div>
+            <div class="col-md-1 text-end pt-3">
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.etapa-linha').remove();" title="Remover Fase">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
         </div>
-        <div class="col-md-2">
-            <input type="date" name="etapa_inicio[]" class="form-control form-control-sm" title="Início">
-        </div>
-        <div class="col-md-2">
-            <input type="date" name="etapa_fim[]" class="form-control form-control-sm" title="Previsão Término">
-        </div>
-        <div class="col-md-2">
-            <select name="etapa_status[]" class="form-select form-select-sm">
-                <option value="pendente">Pendente</option>
-                <option value="em_andamento">Em Andamento</option>
-                <option value="concluido">Concluído</option>
-            </select>
-        </div>
-        <div class="col-md-1 text-end">
-            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.row').remove()"><i class="bi bi-trash"></i></button>
+        <div class="row g-2 align-items-center">
+            <div class="col-md-3">
+                <small class="text-muted" style="font-size: 0.70rem;">Data Início:</small>
+                <input type="date" name="etapa_inicio[]" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3">
+                <small class="text-muted" style="font-size: 0.70rem;">Data Fim:</small>
+                <input type="date" name="etapa_fim[]" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3">
+                <small class="text-muted" style="font-size: 0.70rem;">Hora Início:</small>
+                <input type="time" name="etapa_hora_inicio[]" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3">
+                <small class="text-muted" style="font-size: 0.70rem;">Hora Fim:</small>
+                <input type="time" name="etapa_hora_fim[]" class="form-control form-control-sm">
+            </div>
         </div>
     `;
     container.appendChild(div);
+}
+
+function excluirEvidenciaFoto(evidenciaId) {
+    if (confirm('Deseja realmente remover esta evidência fotográfica?')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/servicos/evidencia/' + evidenciaId + '/excluir';
+        document.body.appendChild(form);
+        form.submit();
+    }
 }
 </script>
 {% endblock %}
