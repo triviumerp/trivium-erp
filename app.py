@@ -3,9 +3,16 @@ import os
 import re
 import time
 import html
+import secrets
+import csv
+import zipfile
+import pandas as pd
 from functools import wraps
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
+from io import BytesIO, StringIO
+from collections import defaultdict
+
 
 # Carrega variáveis de ambiente (.env)
 from dotenv import load_dotenv
@@ -36,7 +43,8 @@ from models import (
     ServicoCliente, Proposta, ItemProposta, ContratoRecorrente, 
     Fatura, ParcelaFatura, ChamadoSuporte, MensagemChamado, CupomDesconto, 
     ServicoCustoPadrao, ItemPropostaCusto, ContratoGerado, ServicoEtapaRastreio, 
-    ComissaoAfiliado, RepasseAfiliado, EvidenciaServico, OperadorCampo
+    ComissaoAfiliado, RepasseAfiliado, EvidenciaServico, OperadorCampo,
+    ProdutoEstoque, MovimentacaoEstoque, PedidoRequisicao, ItemPedidoRequisicao
 )
 from auth.routes import auth_bp
 from auth.routes import validar_senha_forte
@@ -551,29 +559,75 @@ def painel_afiliado():
 def index():
     hoje = date.today()
     proximos_7_dias = hoje + timedelta(days=7)
+    empresa = current_user.empresa
 
-    total_clientes = Cliente.query.filter_by(empresa_id=current_user.empresa_id).count()
+    # 1. Indicadores Universais
+    total_clientes = Cliente.query.filter_by(empresa_id=empresa.id).count()
 
-    propostas_abertas = Proposta.query.filter_by(empresa_id=current_user.empresa_id, status='Aguardando Aprovação').all()
+    # 2. Comercial / Propostas
+    propostas_todas = Proposta.query.filter_by(empresa_id=empresa.id).all()
+    qtd_total_propostas = len(propostas_todas)
+    qtd_propostas_aprovadas = len([p for p in propostas_todas if p.status == 'Aprovado'])
+    taxa_conversao_propostas = round((qtd_propostas_aprovadas / qtd_total_propostas * 100), 1) if qtd_total_propostas > 0 else 0.0
+
+    propostas_abertas = [p for p in propostas_todas if p.status == 'Aguardando Aprovação']
     qtd_propostas_negociacao = len(propostas_abertas)
     valor_propostas_abertas = sum(p.valor_total for p in propostas_abertas)
 
-    qtd_servicos_execucao = ServicoCliente.query.filter_by(empresa_id=current_user.empresa_id).filter(
-        ServicoCliente.status.in_(['Em Andamento', 'Bloqueado'])
-    ).count()
+    # 3. Serviços & Campo
+    qtd_servicos_execucao = 0
+    total_servicos_concluidos = 0
+    proximos_servicos = []
+    if empresa.modulo_servicos_campo:
+        query_os = ServicoCliente.query.filter_by(empresa_id=empresa.id).filter(
+            (ServicoCliente.tipo_ficha == 'operacional') | (ServicoCliente.tipo_ficha.is_(None))
+        )
+        qtd_servicos_execucao = query_os.filter(ServicoCliente.status.in_(['Em Andamento', 'Bloqueado'])).count()
+        total_servicos_concluidos = query_os.filter_by(status='Concluido').count()
+        proximos_servicos = query_os.filter(
+            ServicoCliente.status.in_(['Em Andamento', 'Pendente', 'Bloqueado'])
+        ).order_by(ServicoCliente.data_previsao.asc().nullslast()).limit(5).all()
 
-    todas_parcelas = ParcelaFatura.query.filter_by(empresa_id=current_user.empresa_id).all()
+    # 4. Atendimentos Clínicos
+    qtd_atendimentos_pendentes = 0
+    total_consultas_realizadas = 0
+    proximos_atendimentos = []
+    if empresa.modulo_atendimentos:
+        query_atend = ServicoCliente.query.filter_by(empresa_id=empresa.id, tipo_ficha='atendimento')
+        qtd_atendimentos_pendentes = query_atend.filter(ServicoCliente.status.in_(['Em Andamento', 'Pendente'])).count()
+        total_consultas_realizadas = query_atend.filter_by(status='Concluido').count()
+        proximos_atendimentos = query_atend.filter(
+            ServicoCliente.status.in_(['Em Andamento', 'Pendente'])
+        ).order_by(ServicoCliente.data_previsao.asc().nullslast()).limit(5).all()
+
+    # 5. Estoque & Almoxarifado
+    total_itens_estoque = 0
+    itens_alerta_baixo = 0
+    valor_imobilizado_estoque = 0.0
+    if empresa.modulo_estoque:
+        produtos = ProdutoEstoque.query.filter_by(empresa_id=empresa.id).all()
+        total_itens_estoque = len(produtos)
+        itens_alerta_baixo = sum(1 for p in produtos if p.alerta_estoque_baixo)
+        valor_imobilizado_estoque = sum((p.quantidade_atual or 0) * (p.preco_custo or 0) for p in produtos)
+
+    # 6. Vendas & Expedição
+    pedidos_separacao = 0
+    pedidos_rota = 0
+    total_entregas_concluidas = 0
+    if empresa.modulo_vendas_externas or empresa.modulo_estoque:
+        pedidos_separacao = PedidoRequisicao.query.filter_by(empresa_id=empresa.id, status='em_separacao').count()
+        pedidos_rota = PedidoRequisicao.query.filter_by(empresa_id=empresa.id, status='em_rota').count()
+        total_entregas_concluidas = PedidoRequisicao.query.filter_by(empresa_id=empresa.id, status='entregue').count()
+
+    # 7. Financeiro & Inadimplência
+    todas_parcelas = ParcelaFatura.query.filter_by(empresa_id=empresa.id).all()
     total_recebido_mes = sum(p.valor for p in todas_parcelas if p.status == 'Pago')
-
+    
     titulos_atrasados = [p for p in todas_parcelas if p.status != 'Pago' and p.data_vencimento and p.data_vencimento < hoje]
     qtd_titulos_atrasados = len(titulos_atrasados)
     valor_titulos_atrasados = sum(p.valor for p in titulos_atrasados)
 
-    proximos_servicos = ServicoCliente.query.filter_by(empresa_id=current_user.empresa_id).filter(
-        ServicoCliente.status.in_(['Em Andamento', 'Pendente', 'Bloqueado'])
-    ).order_by(ServicoCliente.data_previsao.asc().nullslast()).limit(6).all()
-
-    titulos_proximos = ParcelaFatura.query.filter_by(empresa_id=current_user.empresa_id).filter(
+    titulos_proximos = ParcelaFatura.query.filter_by(empresa_id=empresa.id).filter(
         ParcelaFatura.status != 'Pago',
         ParcelaFatura.data_vencimento >= hoje,
         ParcelaFatura.data_vencimento <= proximos_7_dias
@@ -585,11 +639,22 @@ def index():
         total_clientes=total_clientes,
         qtd_propostas_negociacao=qtd_propostas_negociacao,
         valor_propostas_abertas=valor_propostas_abertas,
+        taxa_conversao_propostas=taxa_conversao_propostas,
         qtd_servicos_execucao=qtd_servicos_execucao,
+        total_servicos_concluidos=total_servicos_concluidos,
+        proximos_servicos=proximos_servicos,
+        qtd_atendimentos_pendentes=qtd_atendimentos_pendentes,
+        total_consultas_realizadas=total_consultas_realizadas,
+        proximos_atendimentos=proximos_atendimentos,
+        total_itens_estoque=total_itens_estoque,
+        itens_alerta_baixo=itens_alerta_baixo,
+        valor_imobilizado_estoque=valor_imobilizado_estoque,
+        pedidos_separacao=pedidos_separacao,
+        pedidos_rota=pedidos_rota,
+        total_entregas_concluidas=total_entregas_concluidas,
         total_recebido_mes=total_recebido_mes,
         qtd_titulos_atrasados=qtd_titulos_atrasados,
         valor_titulos_atrasados=valor_titulos_atrasados,
-        proximos_servicos=proximos_servicos,
         titulos_proximos=titulos_proximos
     )
 
@@ -778,6 +843,240 @@ def download_file(filename):
         abort(404)
 
     return redirect(url_temporaria)
+
+
+# =============================================================================
+# IMPORTAÇÃO & EXPORTAÇÃO DE ESTOQUE EM EXCEL (.XLSX)
+# =============================================================================
+
+@app.route('/estoque/modelo-excel')
+@login_required
+def baixar_modelo_estoque_excel():
+    """Gera um modelo de planilha padrão com instruções para importação em lote."""
+    if not current_user.empresa.modulo_estoque and current_user.nivel_acesso != 'master':
+        abort(403)
+
+    dados_exemplo = [
+        {
+            'NOME': 'Cabo Flexível 2.5mm Azul 100m',
+            'CODIGO_SKU': 'CAB-FLEX-25-AZ',
+            'CODIGO_BARRAS': '7891234567890',
+            'UNIDADE': 'rl',
+            'TIPO_ITEM': 'consumo_interno',  # venda, consumo_interno ou misto
+            'QUANTIDADE_INICIAL': 15.0,
+            'QUANTIDADE_MINIMA': 3.0,
+            'PRECO_CUSTO': 145.50,
+            'PRECO_VENDA_SUGERIDO': 210.00,
+            'DESCRICAO': 'Rolo de 100 metros antichamas'
+        },
+        {
+            'NOME': 'Disjuntor Bipolar 32A Curva C',
+            'CODIGO_SKU': 'DISJ-BI-32A',
+            'CODIGO_BARRAS': '7899876543210',
+            'UNIDADE': 'un',
+            'TIPO_ITEM': 'venda',
+            'QUANTIDADE_INICIAL': 40.0,
+            'QUANTIDADE_MINIMA': 10.0,
+            'PRECO_CUSTO': 28.00,
+            'PRECO_VENDA_SUGERIDO': 49.90,
+            'DESCRICAO': 'Padrão DIN para trilho'
+        }
+    ]
+
+    df = pd.DataFrame(dados_exemplo)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Modelo_Estoque')
+    
+    output.seek(0)
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name="Modelo_Importacao_Estoque_Trivium.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
+@app.route('/estoque/exportar-excel')
+@login_required
+def exportar_estoque_excel():
+    """Exporta a lista completa de produtos e saldos atuais da empresa em formato Excel."""
+    if not current_user.empresa.modulo_estoque and current_user.nivel_acesso != 'master':
+        abort(403)
+
+    empresa_id = current_user.empresa_id
+    produtos = ProdutoEstoque.query.filter_by(empresa_id=empresa_id).order_by(ProdutoEstoque.nome.asc()).all()
+
+    dados = []
+    for p in produtos:
+        dados.append({
+            'ID': p.id,
+            'NOME': p.nome,
+            'CODIGO_SKU': p.codigo_sku or '',
+            'CODIGO_BARRAS': p.codigo_barras or '',
+            'UNIDADE': p.unidade_medida or 'un',
+            'TIPO_ITEM': p.tipo_item,
+            'SALDO_ATUAL': p.quantidade_atual or 0.0,
+            'QUANTIDADE_MINIMA': p.quantidade_minima or 0.0,
+            'PRECO_CUSTO': p.preco_custo or 0.0,
+            'PRECO_VENDA_SUGERIDO': p.preco_venda_sugerido or 0.0,
+            'VALOR_TOTAL_EM_ESTOQUE': round((p.quantidade_atual or 0.0) * (p.preco_custo or 0.0), 2),
+            'STATUS_ALERTA': 'BAIXO' if p.alerta_estoque_baixo else 'NORMAL',
+            'DESCRICAO': p.descricao or ''
+        })
+
+    df = pd.DataFrame(dados)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Estoque_Atual')
+
+    output.seek(0)
+    nome_arquivo = f"Estoque_{current_user.empresa.razao_social[:15].strip()}_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=nome_arquivo,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
+@app.route('/estoque/importar-excel', methods=['POST'])
+@login_required
+def importar_estoque_excel():
+    """Lê a planilha enviada, cadastra novos produtos ou atualiza saldos já existentes."""
+    if not current_user.empresa.modulo_estoque and current_user.nivel_acesso != 'master':
+        flash('Módulo de estoque indisponível para importação.', 'danger')
+        return redirect(url_for('listar_estoque'))
+
+    arquivo = request.files.get('arquivo_excel')
+    if not arquivo or not arquivo.filename:
+        flash('Nenhum arquivo Excel selecionado.', 'warning')
+        return redirect(url_for('listar_estoque'))
+
+    ext = arquivo.filename.rsplit('.', 1)[-1].lower()
+    if ext not in ['xlsx', 'xls']:
+        flash('Formato inválido. Por favor, envie uma planilha no formato .xlsx ou .xls.', 'danger')
+        return redirect(url_for('listar_estoque'))
+
+    try:
+        df = pd.read_excel(arquivo)
+        # Padroniza nomes das colunas (maiúsculas e sem espaços extras)
+        df.columns = [str(col).strip().upper() for col in df.columns]
+
+        if 'NOME' not in df.columns:
+            flash('A coluna obrigatória "NOME" não foi encontrada na planilha. Baixe o modelo padrão.', 'danger')
+            return redirect(url_for('listar_estoque'))
+
+        empresa_id = current_user.empresa_id
+        novos_cadastrados = 0
+        atualizados = 0
+
+        for _, row in df.iterrows():
+            nome = str(row.get('NOME', '')).strip()
+            if not nome or nome.lower() == 'nan':
+                continue
+
+            sku = str(row.get('CODIGO_SKU', '')).strip()
+            if not sku or sku.lower() == 'nan':
+                sku = None
+
+            barras = str(row.get('CODIGO_BARRAS', '')).strip()
+            if not barras or barras.lower() == 'nan':
+                barras = None
+
+            unidade = str(row.get('UNIDADE', 'un')).strip() or 'un'
+            if unidade.lower() == 'nan':
+                unidade = 'un'
+
+            tipo_item = str(row.get('TIPO_ITEM', 'misto')).strip().lower()
+            if tipo_item not in ['venda', 'consumo_interno', 'misto']:
+                tipo_item = 'misto'
+
+            qtd_inicial = float(row.get('QUANTIDADE_INICIAL', 0.0) if pd.notnull(row.get('QUANTIDADE_INICIAL')) else 0.0)
+            qtd_min = float(row.get('QUANTIDADE_MINIMA', 5.0) if pd.notnull(row.get('QUANTIDADE_MINIMA')) else 5.0)
+            p_custo = float(row.get('PRECO_CUSTO', 0.0) if pd.notnull(row.get('PRECO_CUSTO')) else 0.0)
+            p_venda = float(row.get('PRECO_VENDA_SUGERIDO', 0.0) if pd.notnull(row.get('PRECO_VENDA_SUGERIDO')) else 0.0)
+            descricao = str(row.get('DESCRICAO', '')).strip()
+            if descricao.lower() == 'nan':
+                descricao = None
+
+            # 1. Verifica se o produto já existe pelo SKU ou Código de Barras na mesma empresa
+            produto = None
+            if sku:
+                produto = ProdutoEstoque.query.filter_by(empresa_id=empresa_id, codigo_sku=sku).first()
+            if not produto and barras:
+                produto = ProdutoEstoque.query.filter_by(empresa_id=empresa_id, codigo_barras=barras).first()
+            if not produto:
+                produto = ProdutoEstoque.query.filter_by(empresa_id=empresa_id, nome=nome).first()
+
+            if produto:
+                # Atualiza dados existentes e ajusta o saldo
+                saldo_anterior = float(produto.quantidade_atual or 0.0)
+                produto.nome = nome
+                produto.unidade_medida = unidade
+                produto.tipo_item = tipo_item
+                produto.preco_custo = p_custo
+                produto.preco_venda_sugerido = p_venda
+                produto.quantidade_minima = qtd_min
+                if descricao:
+                    produto.descricao = descricao
+
+                # Se a planilha enviou quantidade inicial positiva, soma ao saldo
+                if qtd_inicial > 0:
+                    produto.quantidade_atual = saldo_anterior + qtd_inicial
+                    mov = MovimentacaoEstoque(
+                        empresa_id=empresa_id,
+                        produto_id=produto.id,
+                        tipo_movimento='entrada_manual',
+                        quantidade=qtd_inicial,
+                        saldo_anterior=saldo_anterior,
+                        saldo_posterior=produto.quantidade_atual,
+                        motivo_observacao='Importação Excel: Atualização de Saldo',
+                        usuario_id=current_user.id
+                    )
+                    db.session.add(mov)
+
+                atualizados += 1
+            else:
+                # Cadastra novo produto
+                novo_prod = ProdutoEstoque(
+                    empresa_id=empresa_id,
+                    nome=nome,
+                    codigo_sku=sku,
+                    codigo_barras=barras,
+                    unidade_medida=unidade,
+                    tipo_item=tipo_item,
+                    quantidade_atual=qtd_inicial,
+                    quantidade_minima=qtd_min,
+                    preco_custo=p_custo,
+                    preco_venda_sugerido=p_venda,
+                    descricao=descricao
+                )
+                db.session.add(novo_prod)
+                db.session.flush()
+
+                if qtd_inicial > 0:
+                    mov = MovimentacaoEstoque(
+                        empresa_id=empresa_id,
+                        produto_id=novo_prod.id,
+                        tipo_movimento='entrada_manual',
+                        quantidade=qtd_inicial,
+                        saldo_anterior=0.0,
+                        saldo_posterior=qtd_inicial,
+                        motivo_observacao='Importação Excel: Saldo Inicial',
+                        usuario_id=current_user.id
+                    )
+                    db.session.add(mov)
+
+                novos_cadastrados += 1
+
+        db.session.commit()
+        flash(f'Importação concluída com sucesso! {novos_cadastrados} novo(s) item(ns) cadastrado(s) e {atualizados} atualizado(s).', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao processar planilha: {str(e)}', 'danger')
+
+    return redirect(url_for('listar_estoque'))
 
 # -----------------------------------------------------------------------------
 # 5. ROTAS DE PROPOSTAS COMERCIAIS
@@ -1193,6 +1492,44 @@ def relatorio_lucratividade():
         lucro_total=lucro_total,
         margem_media=margem_media,
         custos_por_categoria=custos_por_categoria
+    )
+
+# -----------------------------------------------------------------------------
+# NOVO RELATÓRIO: RENTABILIDADE DE VENDAS & MERCADORIAS
+# -----------------------------------------------------------------------------
+@app.route('/relatorios/vendas')
+@login_required
+def relatorio_vendas():
+    if not (current_user.empresa.modulo_estoque or current_user.empresa.modulo_vendas_externas) and current_user.nivel_acesso != 'master':
+        flash('O Módulo de Vendas não está ativo no seu plano.', 'warning')
+        return redirect(url_for('perfil_empresa'))
+
+    empresa_id = current_user.empresa_id
+
+    # Busca apenas pedidos concluídos / expedidos
+    vendas_concluidas = PedidoRequisicao.query.filter_by(
+        empresa_id=empresa_id
+    ).filter(PedidoRequisicao.status.in_(['entregue', 'em_separacao', 'em_rota'])).order_by(
+        PedidoRequisicao.data_solicitacao.desc()
+    ).all()
+
+    receita_total = sum(v.valor_total for v in vendas_concluidas)
+    
+    custo_total = sum(
+        (item.quantidade_solicitada * (item.produto.preco_custo or 0.0))
+        for v in vendas_concluidas for item in v.itens if item.produto
+    )
+
+    lucro_total = receita_total - custo_total
+    margem_media = round((lucro_total / receita_total * 100.0), 1) if receita_total > 0 else 0.0
+
+    return render_template(
+        'relatorio_vendas.html',
+        vendas=vendas_concluidas,
+        receita_total=receita_total,
+        custo_total=custo_total,
+        lucro_total=lucro_total,
+        margem_media=margem_media
     )
 
 @app.route('/propostas/<int:id>/pdf')
@@ -2098,11 +2435,13 @@ def gestao_operadores():
             'hora_inicio': os_item.hora_inicio_agendada,
             'hora_fim': os_item.hora_fim_agendada,
             'operador_nome': os_item.operador_responsavel.nome if os_item.operador_responsavel else '--',
+            'operador_telefone': os_item.operador_responsavel.telefone if os_item.operador_responsavel else '',
             'cliente_nome': os_item.cliente.nome,
             'endereco': os_item.endereco_exibicao,
             'servico_nome': os_item.tipo_servico.nome if os_item.tipo_servico else 'Serviço Técnico',
             'descricao_atividade': os_item.titulo_documento_custom or 'Execução Geral da OS',
             'is_etapa': False,
+            'token_externo': os_item.token_externo,
             'status': os_item.status
         })
 
@@ -2116,6 +2455,25 @@ def gestao_operadores():
         os_pai = et.servico
         token_link = et.gerar_token_se_necessario()
         db.session.commit()
+        
+        # APPEND DA FASE DO GANTT NA ESCALA (O QUE ESTAVA FALTANDO)
+        itens_escala.append({
+            'servico_id': os_pai.id,
+            'etapa_id': et.id,
+            'numero_os': os_pai.numero_sequencial_empresa,
+            'data': et.data_inicio or os_pai.data_previsao,
+            'hora_inicio': et.hora_inicio,
+            'hora_fim': et.hora_fim,
+            'operador_nome': et.operador.nome if et.operador else '--',
+            'operador_telefone': et.operador.telefone if et.operador else '',
+            'cliente_nome': os_pai.cliente.nome,
+            'endereco': os_pai.endereco_exibicao,
+            'servico_nome': os_pai.tipo_servico.nome if os_pai.tipo_servico else 'Serviço Técnico',
+            'descricao_atividade': f"Fase #{et.ordem}: {et.titulo_fase}",
+            'is_etapa': True,
+            'token_externo': et.token_externo,
+            'status': 'Concluido' if et.status_fase == 'concluido' else ('Em Andamento' if et.status_fase == 'em_andamento' else 'Pendente')
+        })
         
     # Ordena a escala unificada por data e hora de início
     itens_escala.sort(key=lambda x: (x['data'] or date.min, x['hora_inicio'] or time.min))
@@ -2388,8 +2746,11 @@ def atualizar_cobranca_parcela(id):
         registro = f"[{datetime.now().strftime('%d/%m/%Y %H:%M')}] {nova_obs}\n"
         parcela.historico_cobranca = (parcela.historico_cobranca or "") + registro
 
+    # GATILHO AUTOMÁTICO DE BAIXA DE SINAL / ENTRADA
     if parcela.is_entrada and novo_status == 'Pago' and status_anterior != 'Pago':
         fatura = parcela.fatura
+        
+        # 1. Desbloqueia Ordens de Serviço (caso venha de propostas)
         servicos_bloqueados = ServicoCliente.query.filter_by(
             fatura_id=fatura.id, 
             empresa_id=current_user.empresa_id, 
@@ -2398,7 +2759,18 @@ def atualizar_cobranca_parcela(id):
         for sc in servicos_bloqueados:
             sc.status = 'Em Andamento'
             sc.observacoes = (sc.observacoes or "") + " | [Sinal Confirmado: Execução Liberada]"
-        flash(f'Sinal de Entrada quitado! {len(servicos_bloqueados)} atividade(s) liberadas na Agenda.', 'success')
+
+        # 2. Desbloqueia Pedidos de Venda de Produtos e envia para Expedição
+        pedidos_bloqueados = PedidoRequisicao.query.filter_by(
+            fatura_id=fatura.id,
+            empresa_id=current_user.empresa_id,
+            status='bloqueado_pagamento'
+        ).all()
+        for ped in pedidos_bloqueados:
+            ped.status = 'em_separacao'
+            ped.observacoes = (ped.observacoes or "") + " | [Sinal Pago: Liberado para Expedição]"
+
+        flash(f'Sinal de Entrada quitado! {len(servicos_bloqueados)} serviço(s) e {len(pedidos_bloqueados)} pedido(s) liberados para a expedição.', 'success')
 
     db.session.commit()
     flash(f'{parcela.descricao_parcela} atualizada com sucesso!', 'info')
@@ -2487,6 +2859,7 @@ def faturar_mes_contratos():
 def perfil_empresa():
     empresa = current_user.empresa
     usuario = current_user
+    abrir_modal_pagamento = False
     
     if empresa and empresa.status_assinatura == 'trial':
         if empresa.valor_mensalidade != 0.0:
@@ -2497,13 +2870,12 @@ def perfil_empresa():
     if request.method == 'POST':
         form_type = request.form.get('form_type')
 
+        # 1. DADOS DA EMPRESA
         if form_type == 'dados_empresa':
             tipo_pessoa = request.form.get('tipo_pessoa', 'PJ')
-            
             def _so_numeros(valor):
                 return re.sub(r'\D', '', valor) if valor else ""
 
-            # Captura a razão social dependendo se é PF ou PJ (aceita ambos os nomes de input)
             if tipo_pessoa == 'PF':
                 nome_pf = request.form.get('nome_profissional') or request.form.get('razao_social')
                 empresa.razao_social = nome_pf
@@ -2517,7 +2889,6 @@ def perfil_empresa():
             empresa.telefone = _so_numeros(request.form.get('telefone'))
             empresa.email = request.form.get('email', '').strip()
             empresa.site = request.form.get('site', '').strip()
-            
             empresa.cep = _so_numeros(request.form.get('cep'))
             empresa.logradouro = request.form.get('logradouro')
             empresa.numero = request.form.get('numero')
@@ -2526,7 +2897,6 @@ def perfil_empresa():
             empresa.cidade = request.form.get('cidade')
             empresa.estado = request.form.get('estado')
             empresa.endereco_completo = f"{empresa.logradouro or ''}, {empresa.numero or 'S/N'} {empresa.complemento or ''} - {empresa.bairro or ''}, {empresa.cidade or ''}/{empresa.estado or ''}".strip(" ,-/")
-            
             empresa.cor_primaria = request.form.get('cor_primaria', '#1e3a8a')
 
             logo_file = request.files.get('logo')
@@ -2534,24 +2904,21 @@ def perfil_empresa():
                 try:
                     if empresa.logo_filename:
                         excluir_arquivo_supabase(empresa.logo_filename)
-
                     chave_salva = salvar_arquivo_supabase(
                         file_storage=logo_file,
                         pasta_destino='logos',
                         empresa_id=empresa.id
                     )
                     empresa.logo_filename = chave_salva
-                except ValueError as err:
-                    flash(str(err), 'danger')
-                    return redirect(url_for('perfil_empresa'))
                 except Exception as e:
-                    flash(f'Erro ao enviar o logotipo: {str(e)}', 'danger')
+                    flash(f'Erro ao enviar logotipo: {str(e)}', 'danger')
                     return redirect(url_for('perfil_empresa'))
 
             db.session.commit()
-            flash('Dados cadastrais e identidade visual atualizados com sucesso!', 'success')
+            flash('Dados cadastrais atualizados com sucesso!', 'success')
             return redirect(url_for('perfil_empresa') + '#tab-dados')
 
+        # 2. DADOS DO USUÁRIO
         elif form_type == 'dados_usuario':
             novo_nome = request.form.get('nome_usuario')
             novo_email = request.form.get('email_login', '').strip().lower()
@@ -2561,7 +2928,7 @@ def perfil_empresa():
 
             outro_usuario = Usuario.query.filter(Usuario.email == novo_email, Usuario.id != usuario.id).first()
             if outro_usuario:
-                flash('Este e-mail já está sendo utilizado por outro usuário.', 'danger')
+                flash('Este e-mail já está sendo utilizado.', 'danger')
                 return redirect(url_for('perfil_empresa'))
 
             usuario.nome = novo_nome
@@ -2569,27 +2936,60 @@ def perfil_empresa():
 
             if nova_senha:
                 if not usuario.check_senha(senha_atual):
-                    flash('A senha atual digitada está incorreta.', 'danger')
+                    flash('A senha atual está incorreta.', 'danger')
                     return redirect(url_for('perfil_empresa'))
                 if nova_senha != confirma_senha:
                     flash('A nova senha e a confirmação não conferem.', 'warning')
                     return redirect(url_for('perfil_empresa'))
-                
                 usuario.set_senha(nova_senha)
-                flash('Senha e dados de acesso alterados com sucesso!', 'success')
+                flash('Senha alterada com sucesso!', 'success')
             else:
-                flash('Dados da conta atualizados com sucesso!', 'success')
+                flash('Dados atualizados com sucesso!', 'success')
 
             db.session.commit()
+            return redirect(url_for('perfil_empresa') + '#tab-usuario')
 
-        return redirect(url_for('perfil_empresa'))
+        # 3. CALCULADORA MODULAR (R$ 14,90 BASE + MÓDULOS + USUÁRIOS)
+        elif form_type == 'config_assinatura_modular':
+            valor_calculado = 14.90
+
+            empresa.modulo_servicos_campo = True
+            empresa.modulo_atendimentos = bool(request.form.get('modulo_atendimentos'))
+            empresa.modulo_gestao_tecnicos = bool(request.form.get('modulo_gestao_tecnicos'))
+            empresa.modulo_estoque = bool(request.form.get('modulo_estoque'))
+            empresa.modulo_vendas_externas = bool(request.form.get('modulo_vendas_externas'))
+
+            if empresa.modulo_atendimentos:
+                valor_calculado += 15.00
+            if empresa.modulo_gestao_tecnicos:
+                valor_calculado += 15.00
+            if empresa.modulo_estoque:
+                valor_calculado += 20.00
+            if empresa.modulo_vendas_externas:
+                valor_calculado += 20.00
+
+            qtd_usuarios = int(request.form.get('limite_usuarios') or 5)
+            empresa.limite_usuarios = max(5, qtd_usuarios)
+            extras_usuarios = max(0, empresa.limite_usuarios - 5)
+            valor_calculado += (extras_usuarios * 4.00)
+
+            empresa.valor_base_plano = 14.90
+            empresa.valor_mensalidade = round(valor_calculado, 2)
+            empresa.plano = "Plano Customizado"
+
+            empresa.gerar_token_requisicao_se_necessario()
+            db.session.commit()
+
+            flash(f'Plano configurado! Mensalidade: R$ {empresa.valor_mensalidade:.2f}. Escolha a forma de pagamento abaixo para ativar.', 'success')
+            abrir_modal_pagamento = True
 
     usuarios_equipe = Usuario.query.filter_by(empresa_id=current_user.empresa_id).all()
 
     return render_template(
         'perfil_empresa.html', 
         perfil=empresa,
-        usuarios_equipe=usuarios_equipe
+        usuarios_equipe=usuarios_equipe,
+        abrir_modal_pagamento=abrir_modal_pagamento
     )
 
 @app.route('/configuracoes/usuarios/novo', methods=['POST'])
@@ -2599,9 +2999,15 @@ def criar_usuario_equipe():
         flash('Acesso restrito ao administrador.', 'danger')
         return redirect(url_for('perfil_empresa'))
 
+    # 1. Contagem no banco (AQUI é onde define a variável para não dar erro)
     total_usuarios_empresa = Usuario.query.filter_by(empresa_id=current_user.empresa_id).count()
-    if total_usuarios_empresa >= 4 and current_user.nivel_acesso != 'master':
-        flash('Limite atingido: Cada empresa pode cadastrar no máximo 4 colaboradores na equipe.', 'warning')
+
+    # 2. Limite dinâmico vindo da empresa
+    limite_real = getattr(current_user.empresa, 'limite_usuarios', 2) or 2
+
+    # 3. Validação do limite
+    if total_usuarios_empresa >= limite_real and current_user.nivel_acesso != 'master':
+        flash(f'Limite atingido: Sua conta permite até {limite_real} colaboradores.', 'warning')
         return redirect(url_for('perfil_empresa'))
 
     nome = request.form.get('nome', '').strip()
@@ -2915,15 +3321,32 @@ def webhook_mercadopago():
 @login_required
 def api_checkout_preferencia():
     dados = request.get_json(silent=True) or {}
-    plano = dados.get('plano', 'MENSAL')
-    valor_total = dados.get('valor_total')
-    cupom = dados.get('cupom')
+    ciclo = str(dados.get('ciclo', 'mensal')).lower()
+    empresa = current_user.empresa
 
-    empresa = getattr(current_user, 'empresa', None)
     if not empresa:
         return jsonify({"status": "error", "mensagem": "Empresa não vinculada."}), 400
 
-    resposta = criar_preferencia_mercado_pago(empresa, plano, valor_total, cupom)
+    mensalidade = float(empresa.valor_mensalidade or 14.90)
+
+    # Aplicação das regras de desconto por ciclo
+    if ciclo == 'semestral':
+        valor_bruto = mensalidade * 6
+        valor_final = round(valor_bruto * (1.0 - 0.12), 2)
+        nome_plano = "Assinatura Semestral (12% OFF)"
+    elif ciclo == 'anual':
+        valor_bruto = mensalidade * 12
+        valor_final = round(valor_bruto * (1.0 - 0.25), 2)
+        nome_plano = "Assinatura Anual (25% OFF)"
+    else:
+        valor_final = round(mensalidade, 2)
+        nome_plano = "Assinatura Mensal"
+
+    resposta = criar_preferencia_mercado_pago(
+        empresa=empresa,
+        plano=nome_plano,
+        valor_total=valor_final
+    )
 
     if resposta.get('sucesso'):
         return jsonify({
@@ -2934,31 +3357,38 @@ def api_checkout_preferencia():
     else:
         return jsonify({
             'status': 'error',
-            'mensagem': resposta.get('mensagem', 'Erro ao gerar link de pagamento.')
+            'mensagem': resposta.get('mensagem', 'Erro ao gerar link do Mercado Pago.')
         }), 400
 
 @app.route('/api/assinatura/checkout-transparente', methods=['POST'])
 @login_required
 def api_checkout_transparente():
     dados = request.get_json(silent=True) or {}
-    plano_nome = dados.get('plano', 'MENSAL')
-    valor_total = float(dados.get('valor_total', 39.90))
-    parcelas = int(dados.get('parcelas', 1))
+    ciclo = str(dados.get('ciclo', 'mensal')).lower()
     forma_pagamento = dados.get('forma_pagamento', 'PIX')
     cartao_dados = dados.get('cartao')
+    parcelas = int(dados.get('parcelas', 1))
 
-    empresa = getattr(current_user, 'empresa', None)
+    empresa = current_user.empresa
     if not empresa:
-        return jsonify({"status": "error", "mensagem": "Empresa não vinculada ao usuário logado."}), 400
+        return jsonify({"status": "error", "mensagem": "Empresa não vinculada."}), 400
 
-    cupom_cod = (dados.get('cupom') or '').strip().upper()
-    if cupom_cod:
-        cupom_obj = CupomDesconto.query.filter_by(codigo=cupom_cod).first()
-        if cupom_obj and cupom_obj.is_valido:
-            fator = 1.0 - (cupom_obj.percentual_desconto / 100.0)
-            valor_total = max(1.0, round(valor_total * fator, 2))
-            empresa.cupom_utilizado = cupom_obj.codigo
-            empresa.afiliado_id = cupom_obj.id
+    mensalidade = float(empresa.valor_mensalidade or 14.90)
+
+    # Cálculo do valor final com desconto por ciclo
+    if ciclo == 'semestral':
+        valor_bruto = mensalidade * 6
+        desconto = valor_bruto * 0.12
+        valor_final = round(valor_bruto - desconto, 2)
+        nome_plano = "Semestral (12% off)"
+    elif ciclo == 'anual':
+        valor_bruto = mensalidade * 12
+        desconto = valor_bruto * 0.25
+        valor_final = round(valor_bruto - desconto, 2)
+        nome_plano = "Anual (25% off)"
+    else:
+        valor_final = round(mensalidade, 2)
+        nome_plano = "Mensal"
 
     ip_cliente = request.headers.get('X-Forwarded-For', request.remote_addr)
     if ip_cliente and ',' in ip_cliente:
@@ -2966,8 +3396,8 @@ def api_checkout_transparente():
 
     resultado = criar_cobranca_mercadopago(
         empresa=empresa,
-        nome_plano=plano_nome,
-        valor=valor_total,
+        nome_plano=nome_plano,
+        valor=valor_final,
         forma_pagamento=forma_pagamento,
         cartao_dados=cartao_dados,
         remote_ip=ip_cliente,
@@ -2975,20 +3405,19 @@ def api_checkout_transparente():
     )
 
     if resultado.get('sucesso'):
-        db.session.commit()
         return jsonify({
             "status": "success",
             "mensagem": "Cobrança gerada com sucesso!",
+            "valor_pago": valor_final,
+            "ciclo": ciclo,
             "dados": resultado.get('dados'),
             "pix": resultado.get('pix'),
-            "bankSlipUrl": resultado.get('bankSlipUrl'),
-            "invoiceUrl": resultado.get('invoiceUrl')
+            "bankSlipUrl": resultado.get('bankSlipUrl')
         })
     else:
-        db.session.rollback()
         return jsonify({
             "status": "error",
-            "mensagem": resultado.get('mensagem', 'Erro ao processar cobrança no Mercado Pago.')
+            "mensagem": resultado.get('mensagem', 'Erro ao processar cobrança.')
         }), 400
 # -----------------------------------------------------------------------------
 # GESTÃO DE CUPONS E AFILIADOS (PAINEL MASTER)
@@ -3538,6 +3967,2003 @@ def gerar_pdf_contrato(id):
         as_attachment=True,
         download_name=nome_arquivo_pdf,
         mimetype='application/pdf'
+    )
+
+
+# =============================================================================
+# MÓDULO DE CONTROLE DE ESTOQUE, ALMOXARIFADO & REQUISIÇÕES
+# =============================================================================
+
+@app.route('/estoque')
+@login_required
+def listar_estoque():
+    # Validação da contratação do módulo
+    if not current_user.empresa.modulo_estoque and current_user.nivel_acesso != 'master':
+        flash('O Módulo de Estoque e Almoxarifado não está habilitado no seu plano. Ative-o na aba de assinaturas.', 'warning')
+        return redirect(url_for('perfil_empresa') + '#tab-planos')
+
+    busca = request.args.get('busca', '').strip()
+    filtro_alerta = request.args.get('alerta', '')
+
+    query = ProdutoEstoque.query.filter_by(empresa_id=current_user.empresa_id)
+
+    if busca:
+        query = query.filter(
+            (ProdutoEstoque.nome.ilike(f'%{busca}%')) |
+            (ProdutoEstoque.codigo_sku.ilike(f'%{busca}%')) |
+            (ProdutoEstoque.codigo_barras.ilike(f'%{busca}%'))
+        )
+
+    produtos = query.order_by(ProdutoEstoque.nome.asc()).all()
+
+    if filtro_alerta == 'baixo':
+        produtos = [p for p in produtos if p.alerta_estoque_baixo]
+
+    # Indicadores
+    total_itens = len(produtos)
+    itens_alerta = sum(1 for p in produtos if p.alerta_estoque_baixo)
+    valor_total_custo = sum((p.quantidade_atual or 0) * (p.preco_custo or 0) for p in produtos)
+    valor_total_venda = sum((p.quantidade_atual or 0) * (p.preco_venda_sugerido or 0) for p in produtos)
+
+    # Últimas movimentações
+    movimentacoes_recentes = MovimentacaoEstoque.query.filter_by(
+        empresa_id=current_user.empresa_id
+    ).order_by(MovimentacaoEstoque.data_movimento.desc()).limit(10).all()
+
+    # Garante link público de requisição
+    token_equipe = current_user.empresa.gerar_token_requisicao_se_necessario()
+    db.session.commit()
+
+    return render_template(
+        'estoque.html',
+        produtos=produtos,
+        total_itens=total_itens,
+        itens_alerta=itens_alerta,
+        valor_total_custo=valor_total_custo,
+        valor_total_venda=valor_total_venda,
+        movimentacoes_recentes=movimentacoes_recentes,
+        busca=busca,
+        filtro_alerta=filtro_alerta,
+        token_equipe=token_equipe
+    )
+
+
+@app.route('/estoque/produto/novo', methods=['POST'])
+@login_required
+def criar_produto_estoque():
+    try:
+        nome = request.form.get('nome', '').strip()
+        sku = request.form.get('codigo_sku', '').strip()
+        barras = request.form.get('codigo_barras', '').strip()
+        unidade = request.form.get('unidade_medida', 'un').strip()
+        tipo_item = request.form.get('tipo_item', 'misto')
+        qtd_inicial = float(request.form.get('quantidade_inicial') or 0.0)
+        qtd_min = float(request.form.get('quantidade_minima') or 5.0)
+        p_custo = float(request.form.get('preco_custo') or 0.0)
+        p_venda = float(request.form.get('preco_venda_sugerido') or 0.0)
+        descricao = request.form.get('descricao', '').strip()
+
+        novo_prod = ProdutoEstoque(
+            empresa_id=current_user.empresa_id,
+            nome=nome,
+            codigo_sku=sku or None,
+            codigo_barras=barras or None,
+            unidade_medida=unidade,
+            tipo_item=tipo_item,
+            quantidade_atual=qtd_inicial,
+            quantidade_minima=qtd_min,
+            preco_custo=p_custo,
+            preco_venda_sugerido=p_venda,
+            descricao=descricao or None
+        )
+
+        foto = request.files.get('foto')
+        if foto and foto.filename:
+            novo_prod.foto_arquivo = salvar_arquivo_supabase(foto, 'produtos_estoque', current_user.empresa_id)
+
+        db.session.add(novo_prod)
+        db.session.flush()
+
+        # Registro de saldo inicial no histórico (Kardex)
+        if qtd_inicial > 0:
+            mov = MovimentacaoEstoque(
+                empresa_id=current_user.empresa_id,
+                produto_id=novo_prod.id,
+                tipo_movimento='entrada_manual',
+                quantidade=qtd_inicial,
+                saldo_anterior=0.0,
+                saldo_posterior=qtd_inicial,
+                motivo_observacao='Cadastro Inicial de Saldo',
+                usuario_id=current_user.id
+            )
+            db.session.add(mov)
+
+        db.session.commit()
+        flash(f'Item "{nome}" cadastrado no estoque com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao cadastrar produto: {str(e)}', 'danger')
+
+    return redirect(url_for('listar_estoque'))
+
+@app.route('/estoque/produto/editar/<int:id>', methods=['POST'])
+@login_required
+def editar_produto_estoque(id):
+    """Atualiza todos os dados cadastrais do produto e permite troca da foto otimizada."""
+    produto = ProdutoEstoque.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+
+    try:
+        produto.nome = request.form.get('nome', '').strip()
+        produto.codigo_sku = request.form.get('codigo_sku', '').strip() or None
+        produto.codigo_barras = request.form.get('codigo_barras', '').strip() or None
+        produto.unidade_medida = request.form.get('unidade_medida', 'un').strip()
+        produto.tipo_item = request.form.get('tipo_item', 'misto')
+        produto.quantidade_minima = float(request.form.get('quantidade_minima') or 5.0)
+        produto.preco_custo = float(request.form.get('preco_custo') or 0.0)
+        produto.preco_venda_sugerido = float(request.form.get('preco_venda_sugerido') or 0.0)
+        produto.descricao = request.form.get('descricao', '').strip() or None
+
+        # Otimização e compressão automática da imagem via storage_service
+        foto = request.files.get('foto')
+        if foto and foto.filename:
+            if produto.foto_arquivo:
+                excluir_arquivo_supabase(produto.foto_arquivo)
+            produto.foto_arquivo = salvar_arquivo_supabase(foto, 'produtos_estoque', current_user.empresa_id)
+
+        # Se o usuário também informou movimentação de saldo na aba rápida
+        qtd_mov = float(request.form.get('quantidade_movimento') or 0.0)
+        tipo_operacao = request.form.get('tipo_operacao')
+        motivo_obs = request.form.get('motivo_observacao', '').strip() or 'Ajuste cadastral de saldo'
+
+        if qtd_mov > 0:
+            saldo_anterior = float(produto.quantidade_atual or 0.0)
+            if tipo_operacao == 'entrada':
+                saldo_posterior = saldo_anterior + qtd_mov
+                tipo_mov = 'entrada_manual'
+            else:
+                if qtd_mov > saldo_anterior:
+                    flash(f'Saldo insuficiente para saída! Disponível: {saldo_anterior} {produto.unidade_medida}.', 'danger')
+                    return redirect(url_for('listar_estoque'))
+                saldo_posterior = saldo_anterior - qtd_mov
+                tipo_mov = 'saida_manual'
+
+            produto.quantidade_atual = saldo_posterior
+            mov = MovimentacaoEstoque(
+                empresa_id=current_user.empresa_id,
+                produto_id=produto.id,
+                tipo_movimento=tipo_mov,
+                quantidade=qtd_mov,
+                saldo_anterior=saldo_anterior,
+                saldo_posterior=saldo_posterior,
+                motivo_observacao=motivo_obs,
+                usuario_id=current_user.id
+            )
+            db.session.add(mov)
+
+        db.session.commit()
+        flash(f'Item "{produto.nome}" atualizado com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao atualizar produto: {str(e)}', 'danger')
+
+    return redirect(url_for('listar_estoque'))
+
+
+@app.route('/estoque/produto/excluir/<int:id>', methods=['POST'])
+@login_required
+def excluir_produto_estoque(id):
+    """Exclui o item do catálogo caso não esteja vinculado a pedidos de vendas ou propostas."""
+    produto = ProdutoEstoque.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+
+    # Validação de segurança: verificar vínculos
+    tem_pedidos = ItemPedidoRequisicao.query.filter_by(produto_id=produto.id).first()
+    tem_propostas = ItemProposta.query.filter_by(produto_id=produto.id).first()
+
+    if tem_pedidos or tem_propostas:
+        flash(f'O item "{produto.nome}" não pode ser excluído pois possui pedidos ou propostas vinculadas no histórico.', 'warning')
+        return redirect(url_for('listar_estoque'))
+
+    try:
+        nome_removido = produto.nome
+        if produto.foto_arquivo:
+            excluir_arquivo_supabase(produto.foto_arquivo)
+
+        db.session.delete(produto)
+        db.session.commit()
+        flash(f'Item "{nome_removido}" excluído com sucesso do almoxarifado.', 'info')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao excluir produto: {str(e)}', 'danger')
+
+    return redirect(url_for('listar_estoque'))
+
+
+@app.route('/estoque/requisicoes')
+@login_required
+def listar_requisicoes_estoque():
+    if not current_user.empresa.modulo_estoque and current_user.nivel_acesso != 'master':
+        flash('Módulo não contratado.', 'warning')
+        return redirect(url_for('perfil_empresa'))
+
+    filtro_status = request.args.get('status', 'todos')
+    query = PedidoRequisicao.query.filter_by(empresa_id=current_user.empresa_id)
+
+    if filtro_status == 'pendentes':
+        query = query.filter_by(status='pendente')
+    elif filtro_status == 'separacao':
+        query = query.filter_by(status='em_separacao')
+    elif filtro_status == 'concluidas':
+        query = query.filter_by(status='entregue')
+
+    pedidos = query.order_by(PedidoRequisicao.data_solicitacao.desc()).all()
+
+    return render_template(
+        'requisicoes.html',
+        pedidos=pedidos,
+        filtro_status=filtro_status
+    )
+
+
+@app.route('/estoque/requisicoes/<int:id>/status', methods=['POST'])
+@login_required
+def atualizar_status_requisicao(id):
+    pedido = PedidoRequisicao.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    novo_status = request.form.get('novo_status')
+
+    status_anterior = pedido.status
+    pedido.status = novo_status
+
+    # Se mudar para ENTREGUE, dá baixa automática e definitiva no estoque
+    if novo_status == 'entregue' and status_anterior != 'entregue':
+        for item in pedido.itens:
+            prod = item.produto
+            qtd_baixa = float(item.quantidade_solicitada or 0.0)
+            saldo_anterior = float(prod.quantidade_atual or 0.0)
+            saldo_novo = max(0.0, saldo_anterior - qtd_baixa)
+
+            prod.quantidade_atual = saldo_novo
+            item.quantidade_atendida = qtd_baixa
+
+            mov = MovimentacaoEstoque(
+                empresa_id=current_user.empresa_id,
+                produto_id=prod.id,
+                tipo_movimento='saida_requisicao',
+                quantidade=qtd_baixa,
+                saldo_anterior=saldo_anterior,
+                saldo_posterior=saldo_novo,
+                motivo_observacao=f"Atendimento do Pedido #{pedido.numero_pedido} ({pedido.nome_solicitante})",
+                usuario_id=current_user.id
+            )
+            db.session.add(mov)
+
+        pedido.data_conclusao = datetime.now()
+        flash(f'Pedido #{pedido.numero_pedido} baixado do estoque e entregue com sucesso!', 'success')
+
+    db.session.commit()
+    return redirect(url_for('listar_requisicoes_estoque'))
+
+
+# -----------------------------------------------------------------------------
+# CANAL PÚBLICO EXTERNO: REQUISIÇÃO DE ALMOXARIFADO DA EQUIPE (SEM LOGIN)
+# -----------------------------------------------------------------------------
+@app.route('/almoxarifado/requisicao/<token>', methods=['GET', 'POST'])
+def requisicao_almoxarifado_externa(token):
+    empresa = Empresa.query.filter_by(token_requisicao_equipe=token).first_or_404()
+
+    if request.method == 'POST':
+        try:
+            solicitante = request.form.get('nome_solicitante', '').strip()
+            contato = request.form.get('contato_solicitante', '').strip()
+            setor_obra = request.form.get('setor_obra_destino', '').strip()
+            obs = request.form.get('observacoes', '').strip()
+
+            produtos_ids = request.form.getlist('produto_id[]')
+            quantidades = request.form.getlist('quantidade[]')
+
+            total_existentes = PedidoRequisicao.query.filter_by(empresa_id=empresa.id).count() + 1
+            num_ped = f"REQ-{datetime.now().year}-{total_existentes:04d}"
+
+            novo_pedido = PedidoRequisicao(
+                empresa_id=empresa.id,
+                numero_pedido=num_ped,
+                tipo_origem='requisicao_interna',
+                nome_solicitante=solicitante,
+                contato_solicitante=contato,
+                setor_obra_destino=setor_obra,
+                observacoes=obs,
+                status='pendente'
+            )
+            db.session.add(novo_pedido)
+            db.session.flush()
+
+            for p_id, qtd_str in zip(produtos_ids, quantidades):
+                if p_id and qtd_str and float(qtd_str) > 0:
+                    prod = ProdutoEstoque.query.get(int(p_id))
+                    item_req = ItemPedidoRequisicao(
+                        pedido_id=novo_pedido.id,
+                        produto_id=int(p_id),
+                        quantidade_solicitada=float(qtd_str),
+                        preco_unitario=prod.preco_venda_sugerido if prod else 0.0,
+                        valor_total=float(qtd_str) * (prod.preco_venda_sugerido if prod else 0.0)
+                    )
+                    db.session.add(item_req)
+
+            db.session.commit()
+            return render_template('publico/requisicao_concluida.html', empresa=empresa, pedido=novo_pedido)
+        except Exception as e:
+            db.session.rollback()
+            return f"Erro ao submeter requisição: {str(e)}", 500
+
+    produtos_disponiveis = ProdutoEstoque.query.filter_by(
+        empresa_id=empresa.id,
+        ativo=True
+    ).filter(ProdutoEstoque.quantidade_atual > 0).order_by(ProdutoEstoque.nome.asc()).all()
+
+    return render_template(
+        'publico/requisicao_almoxarifado.html',
+        empresa=empresa,
+        produtos=produtos_disponiveis
+    )
+
+# =============================================================================
+# MÓDULO DEDICADO: VENDAS DE PRODUTOS & MERCADORIAS
+# =============================================================================
+
+@app.route('/vendas')
+@login_required
+def listar_vendas():
+    if not (current_user.empresa.modulo_estoque or current_user.empresa.modulo_vendas_externas) and current_user.nivel_acesso != 'master':
+        flash('O Módulo de Vendas de Produtos não está ativo no seu plano. Habilite-o na aba de assinaturas.', 'warning')
+        return redirect(url_for('perfil_empresa') + '#tab-planos')
+
+    filtro = request.args.get('status', 'todos')
+    query = PedidoRequisicao.query.filter_by(
+        empresa_id=current_user.empresa_id
+    ).filter(PedidoRequisicao.tipo_origem.in_(['venda_balcao', 'venda_web']))
+
+    if filtro == 'pendente':
+        query = query.filter_by(status='pendente')
+    elif filtro == 'aprovado':
+        query = query.filter(PedidoRequisicao.status.in_(['em_separacao', 'conferido']))
+    elif filtro == 'concluido':
+        query = query.filter_by(status='entregue')
+
+    pedidos = query.order_by(PedidoRequisicao.data_solicitacao.desc()).all()
+
+    # Indicadores
+    total_vendas = sum(p.valor_total for p in pedidos if p.status == 'entregue')
+    total_aberto = sum(p.valor_total for p in pedidos if p.status in ['pendente', 'em_separacao', 'conferido'])
+    
+    clientes = Cliente.query.filter_by(empresa_id=current_user.empresa_id).order_by(Cliente.nome.asc()).all()
+    produtos = ProdutoEstoque.query.filter_by(empresa_id=current_user.empresa_id, ativo=True).order_by(ProdutoEstoque.nome.asc()).all()
+
+    # Garante o slug da loja e cria o link externo completo
+    empresa = current_user.empresa
+    if not getattr(empresa, 'slug_loja', None):
+        empresa.slug_loja = f"loja-{empresa.id}-{secrets.token_hex(4)}"
+        db.session.commit()
+
+    link_loja = url_for('portal_pedido_venda_cliente', slug_loja=empresa.slug_loja, _external=True)
+
+    return render_template(
+        'vendas.html',
+        pedidos=pedidos,
+        filtro=filtro,
+        total_vendas=total_vendas,
+        total_aberto=total_aberto,
+        clientes=clientes,
+        produtos=produtos,
+        link_loja=link_loja
+    )
+
+
+@app.route('/vendas/nova', methods=['POST'])
+@login_required
+def criar_venda_produto():
+    try:
+        cliente_id = request.form.get('cliente_id')
+        cli_obj = Cliente.query.get(int(cliente_id)) if cliente_id and cliente_id.isdigit() else None
+        
+        nome_comprador = cli_obj.nome if cli_obj else request.form.get('nome_solicitante', 'Venda Balcão').strip()
+        contato = cli_obj.telefone if cli_obj else request.form.get('contato_solicitante', '').strip()
+        endereco_entrega = request.form.get('endereco_entrega', '').strip()
+        obs = request.form.get('observacoes', '').strip()
+        
+        # Regras Financeiras e Condições de Pagamento
+        gerar_financeiro = bool(request.form.get('gerar_financeiro'))
+        exige_entrada = request.form.get('exige_entrada') in ['1', 'true', 'on']
+        valor_entrada = float(request.form.get('valor_entrada') or 0.0) if exige_entrada else 0.0
+        forma_pagamento_entrada = request.form.get('forma_pagamento_entrada', 'PIX')
+        qtd_parcelas = int(request.form.get('qtd_parcelas') or 1)
+        forma_pagamento_parcelas = request.form.get('forma_pagamento_parcelas', 'Boleto Bancário')
+        intervalo_dias = int(request.form.get('intervalo_dias') or 30)
+
+        produtos_ids = request.form.getlist('produto_id[]')
+        quantidades = request.form.getlist('quantidade[]')
+        valores = request.form.getlist('valor_unitario[]')
+
+        total_existentes = PedidoRequisicao.query.filter_by(empresa_id=current_user.empresa_id).count() + 1
+        num_pedido = f"PED-{datetime.now().year}-{total_existentes:04d}"
+
+        # Se exigir entrada maior que zero, nasce bloqueado aguardando o pagamento do sinal
+        status_inicial_pedido = 'bloqueado_pagamento' if (exige_entrada and valor_entrada > 0) else 'em_separacao'
+
+        novo_pedido = PedidoRequisicao(
+            empresa_id=current_user.empresa_id,
+            cliente_id=cli_obj.id if cli_obj else None,
+            numero_pedido=num_pedido,
+            tipo_origem='venda_balcao',
+            nome_solicitante=nome_comprador,
+            contato_solicitante=contato,
+            setor_obra_destino=endereco_entrega,
+            observacoes=obs,
+            status=status_inicial_pedido,
+            valor_total=0.0,
+            exige_entrada=exige_entrada,
+            valor_entrada=valor_entrada,
+            forma_pagamento_entrada=forma_pagamento_entrada,
+            qtd_parcelas=qtd_parcelas,
+            forma_pagamento_parcelas=forma_pagamento_parcelas,
+            intervalo_dias=intervalo_dias
+        )
+        db.session.add(novo_pedido)
+        db.session.flush()
+
+        valor_total_pedido = 0.0
+
+        for p_id, q_str, v_str in zip(produtos_ids, quantidades, valores):
+            if p_id and q_str and float(q_str) > 0:
+                prod = ProdutoEstoque.query.get(int(p_id))
+                qtd = float(q_str)
+                unit = float(v_str or (prod.preco_venda_sugerido if prod else 0.0))
+                subtotal = round(qtd * unit, 2)
+                valor_total_pedido += subtotal
+
+                item = ItemPedidoRequisicao(
+                    pedido_id=novo_pedido.id,
+                    produto_id=int(p_id),
+                    quantidade_solicitada=qtd,
+                    preco_unitario=unit,
+                    valor_total=subtotal
+                )
+                db.session.add(item)
+
+        novo_pedido.valor_total = round(valor_total_pedido, 2)
+
+        # GERAÇÃO INTEGRADA NO MÓDULO FINANCEIRO (PARCELAS E ENTRADA)
+        if gerar_financeiro and valor_total_pedido > 0:
+            hoje = date.today()
+            fatura = Fatura(
+                empresa_id=current_user.empresa_id,
+                cliente_id=cli_obj.id if cli_obj else None,
+                descricao=f"Venda de Mercadorias - Pedido #{novo_pedido.numero_pedido}",
+                valor_total=valor_total_pedido,
+                data_emissao=hoje
+            )
+            db.session.add(fatura)
+            db.session.flush()
+            novo_pedido.fatura_id = fatura.id
+
+            saldo_parcelar = max(0.0, valor_total_pedido - valor_entrada)
+            total_titulos = (1 if (exige_entrada and valor_entrada > 0) else 0) + (qtd_parcelas if saldo_parcelar > 0 else 0)
+            num_seq = 1
+
+            # 1. Parcela de Entrada
+            if exige_entrada and valor_entrada > 0:
+                p_entrada = ParcelaFatura(
+                    empresa_id=current_user.empresa_id,
+                    fatura_id=fatura.id,
+                    numero_parcela=num_seq,
+                    total_parcelas=total_titulos,
+                    descricao_parcela="Sinal / Entrada Venda",
+                    is_entrada=True,
+                    forma_pagamento=forma_pagamento_entrada,
+                    valor=valor_entrada,
+                    data_vencimento=hoje + timedelta(days=3),
+                    status="A Faturar"
+                )
+                db.session.add(p_entrada)
+                num_seq += 1
+
+            # 2. Saldo Parcelado
+            if saldo_parcelar > 0:
+                valor_cada_parcela = round(saldo_parcelar / qtd_parcelas, 2)
+                for i in range(1, qtd_parcelas + 1):
+                    p_normal = ParcelaFatura(
+                        empresa_id=current_user.empresa_id,
+                        fatura_id=fatura.id,
+                        numero_parcela=num_seq,
+                        total_parcelas=total_titulos,
+                        descricao_parcela=f"Parcela {i}/{qtd_parcelas}" if qtd_parcelas > 1 else "Parcela Única",
+                        is_entrada=False,
+                        forma_pagamento=forma_pagamento_parcelas,
+                        valor=valor_cada_parcela,
+                        data_vencimento=hoje + timedelta(days=i * intervalo_dias),
+                        status="A Faturar"
+                    )
+                    db.session.add(p_normal)
+                    num_seq += 1
+
+        db.session.commit()
+        
+        if status_inicial_pedido == 'bloqueado_pagamento':
+            flash(f'Pedido #{novo_pedido.numero_pedido} criado! Status: BLOQUEADO aguardando o pagamento do sinal de R$ {valor_entrada:,.2f}.', 'warning')
+        else:
+            flash(f'Pedido #{novo_pedido.numero_pedido} criado e liberado para a esteira de expedição!', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao registrar venda: {str(e)}', 'danger')
+
+    return redirect(url_for('listar_vendas'))
+
+
+@app.route('/vendas/<int:id>/aprovar-expedir', methods=['POST'])
+@login_required
+def aprovar_expedir_venda(id):
+    pedido = PedidoRequisicao.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+
+    # Validação de estoque para todos os itens antes da baixa
+    for item in pedido.itens:
+        prod = item.produto
+        if float(prod.quantidade_atual or 0) < float(item.quantidade_solicitada or 0):
+            flash(f'Estoque insuficiente para "{prod.nome}". Disponível: {prod.quantidade_atual} {prod.unidade_medida}, Solicitado: {item.quantidade_solicitada}.', 'danger')
+            return redirect(url_for('listar_vendas'))
+
+    # Efetua a baixa e gera histórico Kardex
+    for item in pedido.itens:
+        prod = item.produto
+        qtd_baixa = float(item.quantidade_solicitada)
+        saldo_anterior = float(prod.quantidade_atual or 0)
+        saldo_novo = saldo_anterior - qtd_baixa
+
+        prod.quantidade_atual = saldo_novo
+        item.quantidade_atendida = qtd_baixa
+
+        mov = MovimentacaoEstoque(
+            empresa_id=current_user.empresa_id,
+            produto_id=prod.id,
+            tipo_movimento='saida_venda',
+            quantidade=qtd_baixa,
+            saldo_anterior=saldo_anterior,
+            saldo_posterior=saldo_novo,
+            motivo_observacao=f"Expedição Venda #{pedido.numero_pedido} ({pedido.nome_solicitante})",
+            usuario_id=current_user.id
+        )
+        db.session.add(mov)
+
+    pedido.status = 'entregue'
+    pedido.data_conclusao = datetime.now()
+    db.session.commit()
+
+    flash(f'Venda #{pedido.numero_pedido} aprovada, despachada e estoque baixado!', 'success')
+    return redirect(url_for('listar_vendas'))
+
+# -----------------------------------------------------------------------------
+# ANEXOS DO PEDIDO (NF E BOLETO NA MESMA LINHA)
+# -----------------------------------------------------------------------------
+@app.route('/vendas/pedido/<int:id>/anexos', methods=['POST'])
+@login_required
+def atualizar_anexos_pedido_venda(id):
+    pedido = PedidoRequisicao.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    
+    if 'arquivo_nf' in request.files:
+        f_nf = request.files['arquivo_nf']
+        if f_nf and f_nf.filename:
+            if pedido.arquivo_nf:
+                excluir_arquivo_supabase(pedido.arquivo_nf)
+            pedido.arquivo_nf = salvar_arquivo_supabase(f_nf, 'notas_fiscais_vendas', current_user.empresa_id)
+
+    if 'arquivo_boleto' in request.files:
+        f_bol = request.files['arquivo_boleto']
+        if f_bol and f_bol.filename:
+            if pedido.arquivo_boleto:
+                excluir_arquivo_supabase(pedido.arquivo_boleto)
+            pedido.arquivo_boleto = salvar_arquivo_supabase(f_bol, 'boletos_vendas', current_user.empresa_id)
+
+    db.session.commit()
+    flash(f'Anexos do Pedido #{pedido.numero_pedido} atualizados com sucesso!', 'success')
+    return redirect(request.referrer or url_for('listar_vendas'))
+
+
+# -----------------------------------------------------------------------------
+# CONFIRMAÇÃO DO PROTOCOLO DE ENTREGA COM ASSINATURA E CONFERÊNCIA
+# -----------------------------------------------------------------------------
+@app.route('/vendas/pedido/<int:id>/confirmar-entrega', methods=['POST'])
+@login_required
+def confirmar_protocolo_entrega(id):
+    pedido = PedidoRequisicao.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+
+    pedido.recebido_por_nome = request.form.get('recebido_por_nome', '').strip()
+    pedido.recebido_por_documento = request.form.get('recebido_por_documento', '').strip()
+    pedido.assinatura_entrega_base64 = request.form.get('assinatura_base64')
+    pedido.data_entrega_realizada = datetime.now()
+
+    foto = request.files.get('foto_comprovante')
+    if foto and foto.filename:
+        pedido.foto_comprovante_entrega = salvar_arquivo_supabase(foto, 'entregas_vendas', current_user.empresa_id)
+
+    if pedido.status != 'entregue':
+        for item in pedido.itens:
+            prod = item.produto
+            qtd_baixa = float(item.quantidade_solicitada or 0.0)
+            saldo_ant = float(prod.quantidade_atual or 0.0)
+            prod.quantidade_atual = max(0.0, saldo_ant - qtd_baixa)
+            item.quantidade_atendida = qtd_baixa
+
+            mov = MovimentacaoEstoque(
+                empresa_id=current_user.empresa_id,
+                produto_id=prod.id,
+                tipo_movimento='saida_venda',
+                quantidade=qtd_baixa,
+                saldo_anterior=saldo_ant,
+                saldo_posterior=prod.quantidade_atual,
+                motivo_observacao=f"Entrega/Conferência Pedido #{pedido.numero_pedido} - Recebido por: {pedido.recebido_por_nome}",
+                usuario_id=current_user.id
+            )
+            db.session.add(mov)
+
+        pedido.status = 'entregue'
+        pedido.data_conclusao = datetime.now()
+
+    db.session.commit()
+    flash(f'Protocolo de Entrega do Pedido #{pedido.numero_pedido} finalizado com sucesso!', 'success')
+    return redirect(request.referrer or url_for('listar_vendas'))
+
+
+# -----------------------------------------------------------------------------
+# IMPRESSÃO 1: ROMANEIO DE SEPARAÇÃO INTERNA DO ESTOQUE (SEM PREÇOS / IMAGENS)
+# -----------------------------------------------------------------------------
+@app.route('/vendas/pedido/<int:id>/pdf-separacao')
+@login_required
+def gerar_pdf_romaneio_separacao(id):
+    pedido = PedidoRequisicao.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    empresa = current_user.empresa
+    buffer = io.BytesIO()
+
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    elementos = []
+    styles = getSampleStyleSheet()
+
+    cor_marca = colors.HexColor(empresa.cor_primaria or "#1e3a8a")
+    estilo_tit = ParagraphStyle('TitSep', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=cor_marca)
+    estilo_sub = ParagraphStyle('SubSep', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=11, textColor=colors.HexColor("#475569"))
+    estilo_corpo = ParagraphStyle('CorpoSep', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=12, textColor=colors.HexColor("#1e293b"))
+    estilo_corpo_bold = ParagraphStyle('CorpoBSep', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, leading=12, textColor=colors.HexColor("#0f172a"))
+
+    topo = [
+        [
+            Paragraph(f"<b>{_limpar_texto(empresa.razao_social).upper()}</b><br/><font size='8'>CONTROLE INTERNO DE ESTOQUE & EXPEDIÇÃO</font>", estilo_tit),
+            Paragraph(f"<b>GUIA DE SEPARAÇÃO: #{pedido.numero_pedido}</b><br/>Emissão: {datetime.now().strftime('%d/%m/%Y %H:%M')}", estilo_sub)
+        ]
+    ]
+    tab_topo = Table(topo, colWidths=[4.5*inch, 3.0*inch])
+    tab_topo.setStyle(TableStyle([('ALIGN', (1,0), (1,0), 'RIGHT'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
+    elementos.append(tab_topo)
+    elementos.append(Spacer(1, 4))
+    elementos.append(HRFlowable(width="100%", thickness=1.5, color=cor_marca, spaceAfter=10))
+
+    origem_txt = "VENDA WEB / PORTAL B2B" if pedido.tipo_origem == 'venda_web' else "BALCÃO / PEDIDO INTERNO"
+    dados_solic = [
+        [Paragraph(f"<b>SOLICITANTE / CLIENTE:</b> {_limpar_texto(pedido.nome_solicitante)}", estilo_corpo_bold), Paragraph(f"<b>ORIGEM:</b> {origem_txt}", estilo_corpo)],
+        [Paragraph(f"<b>SETOR / DESTINO:</b> {_limpar_texto(pedido.setor_obra_destino or 'Retirada no Balcão')}", estilo_corpo), Paragraph(f"<b>CONTATO:</b> {_limpar_texto(pedido.contato_solicitante or '--')}", estilo_corpo)],
+        [Paragraph(f"<b>OBSERVAÇÕES:</b> {_limpar_texto(pedido.observacoes or 'Nenhuma recomendação registrada.')}", estilo_corpo), Paragraph("", estilo_corpo)]
+    ]
+    tab_dados = Table(dados_solic, colWidths=[4.8*inch, 2.7*inch])
+    tab_dados.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f8fafc")),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor("#f1f5f9")),
+        ('PADDING', (0,0), (-1,-1), 5)
+    ]))
+    elementos.append(tab_dados)
+    elementos.append(Spacer(1, 10))
+
+    elementos.append(Paragraph("<b>ITENS PARA CONFERÊNCIA E SEPARAÇÃO NO ESTOQUE</b>", estilo_tit))
+    elementos.append(Spacer(1, 4))
+
+    itens_tabela = [
+        [
+            Paragraph("<b>CONF.</b>", estilo_corpo_bold),
+            Paragraph("<b>CÓDIGO / SKU</b>", estilo_corpo_bold),
+            Paragraph("<b>DESCRIÇÃO DO MATERIAL / PRODUTO</b>", estilo_corpo_bold),
+            Paragraph("<b>UNIDADE</b>", estilo_corpo_bold),
+            Paragraph("<b>QTD SOLICITADA</b>", estilo_corpo_bold)
+        ]
+    ]
+
+    for it in pedido.itens:
+        prod = it.produto
+        sku_txt = _limpar_texto(prod.codigo_sku or '--') if prod else '--'
+        nome_prod = _limpar_texto(prod.nome) if prod else 'Produto Desconhecido'
+        unid = _limpar_texto(prod.unidade_medida) if prod else 'un'
+
+        itens_tabela.append([
+            Paragraph("[  ]", estilo_corpo_bold),
+            Paragraph(sku_txt, estilo_corpo),
+            Paragraph(nome_prod, estilo_corpo),
+            Paragraph(unid.upper(), estilo_corpo),
+            Paragraph(f"<b>{it.quantidade_solicitada}</b>", estilo_corpo_bold)
+        ])
+
+    tab_itens = Table(itens_tabela, colWidths=[0.6*inch, 1.4*inch, 3.8*inch, 0.8*inch, 0.9*inch])
+    tab_itens.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0f172a")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+        ('ALIGN', (0,1), (0,-1), 'CENTER'),
+        ('ALIGN', (3,1), (-1,-1), 'CENTER'),
+        ('PADDING', (0,0), (-1,-1), 5),
+    ]))
+    elementos.append(tab_itens)
+    elementos.append(Spacer(1, 40))
+
+    elementos.append(Table([
+        [
+            Paragraph("____________________________________________<br/><b>RESPONSÁVEL PELA SEPARAÇÃO</b><br/>Almoxarifado / Estoque", estilo_corpo),
+            Paragraph("____________________________________________<br/><b>CONFERIDO POR (EXPEDIÇÃO)</b><br/>Data: ____/____/________", estilo_corpo)
+        ]
+    ], colWidths=[3.75*inch, 3.75*inch], style=[('ALIGN', (0,0), (-1,-1), 'CENTER')]))
+
+    doc.build(elementos)
+    buffer.seek(0)
+    return send_file(buffer, as_attachment=False, download_name=f"Separacao_Pedido_{pedido.numero_pedido}.pdf", mimetype='application/pdf')
+
+
+# -----------------------------------------------------------------------------
+# IMPRESSÃO 2: NOTA DE ENTREGA & PROTOCOLO DO CLIENTE (COM VALORES E CANHOTO)
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# IMPRESSÃO DE ORÇAMENTO / PEDIDO DE VENDA COMERCIAL
+# -----------------------------------------------------------------------------
+@app.route('/vendas/pedido/<int:id>/pdf-orcamento')
+@login_required
+def gerar_pdf_orcamento_venda(id):
+    pedido = PedidoRequisicao.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    empresa = current_user.empresa
+    buffer = io.BytesIO()
+
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=letter, 
+        rightMargin=36, 
+        leftMargin=36, 
+        topMargin=36, 
+        bottomMargin=36
+    )
+    elementos = []
+    styles = getSampleStyleSheet()
+
+    cor_marca = colors.HexColor(empresa.cor_primaria or "#1e3a8a")
+    estilo_emp_nome = ParagraphStyle('EmpNome', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=cor_marca)
+    estilo_emp_sub = ParagraphStyle('EmpSub', parent=styles['Normal'], fontName='Helvetica', fontSize=7.5, leading=10, textColor=colors.HexColor("#475569"))
+    estilo_secao = ParagraphStyle('SecTit', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=cor_marca)
+    estilo_corpo = ParagraphStyle('Corpo', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=12, textColor=colors.HexColor("#1e293b"))
+    estilo_corpo_bold = ParagraphStyle('CorpoB', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, leading=12, textColor=colors.HexColor("#0f172a"))
+    
+    # Estilo específico para o cabeçalho escuro da tabela (texto em branco)
+    estilo_th = ParagraphStyle(
+        'ThTabelaBranco',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8.5,
+        leading=11,
+        textColor=colors.white
+    )
+
+    logo_elemento = _obter_logo_reportlab(empresa.logo_filename, width=1.5*inch, height=0.6*inch)
+    info_emp = f"<b>{_limpar_texto(empresa.razao_social).upper()}</b><br/>CNPJ/CPF: {_limpar_texto(empresa.cnpj or '--')} | Tel: {_limpar_texto(empresa.telefone or '--')}<br/>{_limpar_texto(empresa.endereco_completo or '')}"
+    
+    if logo_elemento:
+        tab_topo = Table([[logo_elemento, Paragraph(info_emp, estilo_emp_sub)]], colWidths=[1.8*inch, 5.7*inch])
+    else:
+        tab_topo = Table([[Paragraph(f"<b>{_limpar_texto(empresa.razao_social).upper()}</b>", estilo_emp_nome), Paragraph(info_emp, estilo_emp_sub)]], colWidths=[2.8*inch, 4.7*inch])
+    
+    tab_topo.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('ALIGN', (1,0), (1,0), 'RIGHT')]))
+    elementos.append(tab_topo)
+    elementos.append(Spacer(1, 4))
+    elementos.append(HRFlowable(width="100%", thickness=1.5, color=cor_marca, spaceAfter=8))
+
+    elementos.append(Paragraph(f"<b>ORÇAMENTO / PEDIDO DE MERCADORIAS Nº #{pedido.numero_pedido}</b>", estilo_secao))
+    elementos.append(Spacer(1, 4))
+
+    dados_cli = [
+        [
+            Paragraph(f"<b>CLIENTE / COMPRADOR:</b> {_limpar_texto(pedido.nome_solicitante)}", estilo_corpo_bold),
+            Paragraph(f"<b>DATA DO PEDIDO:</b> {pedido.data_solicitacao.strftime('%d/%m/%Y') if pedido.data_solicitacao else '--'}", estilo_corpo)
+        ],
+        [
+            Paragraph(f"<b>DESTINO / ENTREGA:</b> {_limpar_texto(pedido.setor_obra_destino or 'Retirada no Balcão')}", estilo_corpo),
+            Paragraph(f"<b>CONTATO / TEL:</b> {_limpar_texto(pedido.contato_solicitante or '--')}", estilo_corpo)
+        ]
+    ]
+    tab_cli = Table(dados_cli, colWidths=[4.8*inch, 2.7*inch], style=[
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f8fafc")),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor("#f1f5f9")),
+        ('PADDING', (0,0), (-1,-1), 5)
+    ])
+    elementos.append(tab_cli)
+    elementos.append(Spacer(1, 10))
+
+    elementos.append(Paragraph("<b>DISCRIMINAÇÃO DOS ITENS SOLICITADOS</b>", estilo_secao))
+    elementos.append(Spacer(1, 4))
+
+    dados_itens = [
+        [
+            Paragraph("<b>Item</b>", estilo_th),
+            Paragraph("<b>Descrição do Produto</b>", estilo_th),
+            Paragraph("<b>Qtd</b>", estilo_th),
+            Paragraph("<b>Valor Unit.</b>", estilo_th),
+            Paragraph("<b>Subtotal</b>", estilo_th)
+        ]
+    ]
+
+    for idx, it in enumerate(pedido.itens, 1):
+        nome_prod = _limpar_texto(it.produto.nome if it.produto else 'Item')
+        unid = _limpar_texto(it.produto.unidade_medida if it.produto else 'un')
+        dados_itens.append([
+            Paragraph(f"{idx:02d}", estilo_corpo),
+            Paragraph(nome_prod, estilo_corpo),
+            Paragraph(f"{it.quantidade_solicitada} {unid}", estilo_corpo),
+            Paragraph(f"R$ {it.preco_unitario:,.2f}", estilo_corpo),
+            Paragraph(f"R$ {it.valor_total:,.2f}", estilo_corpo_bold)
+        ])
+
+    # Linha do Total Geral com mesclagem horizontal (SPAN)
+    dados_itens.append([
+        Paragraph("<b>TOTAL GERAL DO PEDIDO</b>", estilo_corpo_bold),
+        "",
+        "",
+        "",
+        Paragraph(f"<b>R$ {pedido.valor_total:,.2f}</b>", estilo_corpo_bold)
+    ])
+
+    tab_it = Table(dados_itens, colWidths=[0.5*inch, 4.0*inch, 1.0*inch, 1.0*inch, 1.0*inch])
+    tab_it.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0f172a")),
+        ('ALIGN', (2,0), (-1,-1), 'RIGHT'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('GRID', (0,0), (-1,-2), 0.5, colors.HexColor("#cbd5e1")),
+        ('PADDING', (0,0), (-1,-1), 5),
+        
+        # Unifica as 4 primeiras colunas da última linha para não esmagar o texto
+        ('SPAN', (0, -1), (3, -1)),
+        ('ALIGN', (0, -1), (3, -1), 'RIGHT'),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f1f5f9")),
+        ('LINEABOVE', (0, -1), (-1, -1), 1.2, colors.HexColor("#0f172a")),
+        ('BOX', (0, -1), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+    ]))
+    elementos.append(tab_it)
+    elementos.append(Spacer(1, 14))
+
+    # Condições de Pagamento
+    elementos.append(Paragraph("<b>CONDIÇÕES COMERCIAIS & PAGAMENTO</b>", estilo_secao))
+    cond_txt = f"• <b>Forma de Pagamento:</b> {'Sinal de R$ ' + ('%.2f' % pedido.valor_entrada) + ' + ' + str(pedido.qtd_parcelas) + 'x de saldo (' + pedido.forma_pagamento_parcelas + ')' if pedido.exige_entrada and pedido.valor_entrada > 0 else str(pedido.qtd_parcelas) + 'x via ' + (pedido.forma_pagamento_parcelas or 'Boleto')}"
+    if pedido.observacoes:
+        cond_txt += f"<br/>• <b>Observações:</b> {_limpar_texto(pedido.observacoes)}"
+    
+    tab_cond = Table([[Paragraph(cond_txt, estilo_corpo)]], colWidths=[7.5*inch])
+    tab_cond.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f8fafc")),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+        ('PADDING', (0,0), (-1,-1), 6)
+    ]))
+    elementos.append(tab_cond)
+    elementos.append(Spacer(1, 40))
+
+    elementos.append(Table([
+        [
+            Paragraph(f"____________________________________________<br/><b>{_limpar_texto(empresa.razao_social).upper()}</b><br/>Departamento Comercial", estilo_corpo),
+            Paragraph("____________________________________________<br/><b>DE ACORDO DO CLIENTE</b><br/>Aprovação / Data: ____/____/________", estilo_corpo)
+        ]
+    ], colWidths=[3.75*inch, 3.75*inch], style=[('ALIGN', (0,0), (-1,-1), 'CENTER')]))
+
+    doc.build(elementos)
+    buffer.seek(0)
+    return send_file(
+        buffer, 
+        as_attachment=False, 
+        download_name=f"Orcamento_Pedido_{pedido.numero_pedido}.pdf", 
+        mimetype='application/pdf'
+    )
+
+# =============================================================================
+# FLUXO DE VENDAS (COMERCIAL)
+# =============================================================================
+
+@app.route('/vendas/pedido/<int:id>/enviar-expedicao', methods=['POST'])
+@login_required
+def enviar_pedido_para_expedicao(id):
+    pedido = PedidoRequisicao.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    pedido.status = 'em_separacao'
+    db.session.commit()
+    flash(f'Pedido #{pedido.numero_pedido} enviado com sucesso para a fila de expedição!', 'success')
+    return redirect(url_for('listar_vendas'))
+
+@app.route('/vendas/pedido/<int:id>/excluir', methods=['POST'])
+@login_required
+def excluir_pedido_venda(id):
+    pedido = PedidoRequisicao.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+
+    # Trava de segurança: só permite excluir se estiver pendente/orçamento
+    if pedido.status not in ['pendente', 'bloqueado_pagamento']:
+        flash('Não é possível excluir este pedido pois ele já avançou para a expedição ou faturamento.', 'danger')
+        return redirect(url_for('listar_vendas'))
+
+    try:
+        # Se houver fatura vinculada em aberto, remove também
+        if pedido.fatura_vinculada:
+            db.session.delete(pedido.fatura_vinculada)
+
+        db.session.delete(pedido)
+        db.session.commit()
+        flash(f'Orçamento / Pedido #{pedido.numero_pedido} excluído com sucesso!', 'info')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao excluir pedido: {str(e)}', 'danger')
+
+    return redirect(url_for('listar_vendas'))
+
+# -----------------------------------------------------------------------------
+# COMPROVATIVO FORMAL DE ENTREGA ASSINADO (PDF REPORTLAB)
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# COMPROVATIVO FORMAL DE ENTREGA ASSINADO (PDF REPORTLAB)
+# -----------------------------------------------------------------------------
+@app.route('/vendas/pedido/<int:id>/pdf-comprovativo-entrega')
+@login_required
+def gerar_pdf_comprovativo_entrega(id):
+    pedido = PedidoRequisicao.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    empresa = current_user.empresa
+    buffer = io.BytesIO()
+
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=letter, 
+        rightMargin=36, 
+        leftMargin=36, 
+        topMargin=36, 
+        bottomMargin=36
+    )
+    elementos = []
+    styles = getSampleStyleSheet()
+
+    cor_marca = colors.HexColor(empresa.cor_primaria or "#1e3a8a")
+    estilo_emp_nome = ParagraphStyle('EmpNome', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=cor_marca)
+    estilo_emp_sub = ParagraphStyle('EmpSub', parent=styles['Normal'], fontName='Helvetica', fontSize=7.5, leading=10, textColor=colors.HexColor("#475569"))
+    estilo_sub = ParagraphStyle('SubLegenda', parent=styles['Normal'], fontName='Helvetica', fontSize=7.5, leading=10, textColor=colors.HexColor("#475569"), alignment=1)
+    estilo_secao = ParagraphStyle('SecTit', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=cor_marca)
+    estilo_corpo = ParagraphStyle('Corpo', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=12, textColor=colors.HexColor("#1e293b"))
+    estilo_corpo_bold = ParagraphStyle('CorpoB', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, leading=12, textColor=colors.HexColor("#0f172a"))
+    estilo_th = ParagraphStyle('ThBranco', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, leading=11, textColor=colors.white)
+
+    # 1. Cabeçalho da Empresa
+    logo_elemento = _obter_logo_reportlab(empresa.logo_filename, width=1.5*inch, height=0.6*inch)
+    info_emp = f"<b>{_limpar_texto(empresa.razao_social).upper()}</b><br/>CNPJ/CPF: {_limpar_texto(empresa.cnpj or '--')} | Tel: {_limpar_texto(empresa.telefone or '--')}<br/>{_limpar_texto(empresa.endereco_completo or '')}"
+    
+    if logo_elemento:
+        tab_topo = Table([[logo_elemento, Paragraph(info_emp, estilo_emp_sub)]], colWidths=[1.8*inch, 5.7*inch])
+    else:
+        tab_topo = Table([[Paragraph(f"<b>{_limpar_texto(empresa.razao_social).upper()}</b>", estilo_emp_nome), Paragraph(info_emp, estilo_emp_sub)]], colWidths=[2.8*inch, 4.7*inch])
+    
+    tab_topo.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('ALIGN', (1,0), (1,0), 'RIGHT')]))
+    elementos.append(tab_topo)
+    elementos.append(Spacer(1, 4))
+    elementos.append(HRFlowable(width="100%", thickness=1.5, color=cor_marca, spaceAfter=8))
+
+    # 2. Título do Documento
+    elementos.append(Paragraph(f"<b>COMPROVATIVO & PROTOCOLO DE ENTREGA • PEDIDO #{pedido.numero_pedido}</b>", estilo_secao))
+    elementos.append(Spacer(1, 4))
+
+    # 3. Painel de Dados da Entrega
+    dt_entrega_str = pedido.data_entrega_realizada.strftime('%d/%m/%Y às %H:%M') if pedido.data_entrega_realizada else '--'
+    dados_entrega = [
+        [
+            Paragraph(f"<b>DESTINATÁRIO:</b> {_limpar_texto(pedido.nome_solicitante)}", estilo_corpo_bold),
+            Paragraph(f"<b>DATA DA ENTREGA:</b> {dt_entrega_str}", estilo_corpo)
+        ],
+        [
+            Paragraph(f"<b>LOCAL / DESTINO:</b> {_limpar_texto(pedido.setor_obra_destino or 'Balcão')}", estilo_corpo),
+            Paragraph(f"<b>MOTORISTA:</b> {_limpar_texto(pedido.motorista_responsavel.nome if pedido.motorista_responsavel else '--')}", estilo_corpo)
+        ],
+        [
+            Paragraph(f"<b>RECEBIDO POR:</b> {_limpar_texto(pedido.recebido_por_nome or '--')}", estilo_corpo_bold),
+            Paragraph(f"<b>DOCUMENTO / RG:</b> {_limpar_texto(pedido.recebido_por_documento or '--')}", estilo_corpo)
+        ]
+    ]
+    tab_painel = Table(dados_entrega, colWidths=[4.8*inch, 2.7*inch], style=[
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f8fafc")),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor("#f1f5f9")),
+        ('PADDING', (0,0), (-1,-1), 5)
+    ])
+    elementos.append(tab_painel)
+    elementos.append(Spacer(1, 10))
+
+    # 4. Tabela de Itens Entregues
+    elementos.append(Paragraph("<b>MERCADORIAS CONFERIDAS E ENTREGUES</b>", estilo_secao))
+    elementos.append(Spacer(1, 4))
+
+    dados_itens = [
+        [
+            Paragraph("<b>Item</b>", estilo_th),
+            Paragraph("<b>Descrição do Produto</b>", estilo_th),
+            Paragraph("<b>Qtd Entregue</b>", estilo_th),
+            Paragraph("<b>Subtotal</b>", estilo_th)
+        ]
+    ]
+
+    for idx, it in enumerate(pedido.itens, 1):
+        nome_prod = _limpar_texto(it.produto.nome if it.produto else 'Item')
+        unid = _limpar_texto(it.produto.unidade_medida if it.produto else 'un')
+        qtd_ent = it.quantidade_atendida or it.quantidade_solicitada
+        dados_itens.append([
+            Paragraph(f"{idx:02d}", estilo_corpo),
+            Paragraph(nome_prod, estilo_corpo),
+            Paragraph(f"{qtd_ent} {unid}", estilo_corpo),
+            Paragraph(f"R$ {it.valor_total:,.2f}", estilo_corpo_bold)
+        ])
+
+    dados_itens.append([
+        Paragraph("<b>VALOR TOTAL DA CARGA ENTREGUE</b>", estilo_corpo_bold),
+        "",
+        "",
+        Paragraph(f"<b>R$ {pedido.valor_total:,.2f}</b>", estilo_corpo_bold)
+    ])
+
+    tab_it = Table(dados_itens, colWidths=[0.5*inch, 4.5*inch, 1.2*inch, 1.3*inch], style=[
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0f172a")),
+        ('ALIGN', (2,0), (-1,-1), 'RIGHT'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('GRID', (0,0), (-1,-2), 0.5, colors.HexColor("#cbd5e1")),
+        ('SPAN', (0, -1), (2, -1)),
+        ('ALIGN', (0, -1), (2, -1), 'RIGHT'),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#f1f5f9")),
+        ('LINEABOVE', (0, -1), (-1, -1), 1.2, colors.HexColor("#0f172a")),
+        ('PADDING', (0,0), (-1,-1), 5),
+    ])
+    elementos.append(tab_it)
+    elementos.append(Spacer(1, 14))
+
+    # 5. Assinatura Digital (Canvas Base64)
+    if pedido.assinatura_entrega_base64 and 'base64,' in pedido.assinatura_entrega_base64:
+        import base64
+        try:
+            raw_base64 = pedido.assinatura_entrega_base64.split('base64,')[1]
+            img_bytes = BytesIO(base64.b64decode(raw_base64))
+            img_assinatura = RLImage(img_bytes, width=2.5*inch, height=0.9*inch)
+            img_assinatura.hAlign = 'CENTER'
+
+            quadro_ass = [
+                [Paragraph("<b>DECLARAÇÃO DE RECEBIMENTO & ASSINATURA DIGITAL</b>", estilo_corpo_bold)],
+                [img_assinatura],
+                [Paragraph(f"Recebido por: <b>{_limpar_texto(pedido.recebido_por_nome or 'Destinatário')}</b> — Doc: {_limpar_texto(pedido.recebido_por_documento or '--')}<br/><font size='7' color='#64748b'>Assinado digitalmente via Smartphone em {dt_entrega_str}</font>", estilo_sub)]
+            ]
+            tab_quadro_ass = Table(quadro_ass, colWidths=[7.5*inch], style=[
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f8fafc")),
+                ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+                ('PADDING', (0,0), (-1,-1), 6)
+            ])
+            elementos.append(tab_quadro_ass)
+        except Exception as e:
+            print(f"[AVISO ASSINATURA REPORTLAB]: {e}")
+    else:
+        elementos.append(Spacer(1, 20))
+        elementos.append(Table([[
+            Paragraph(f"____________________________________________<br/><b>{_limpar_texto(pedido.recebido_por_nome or 'RECEBEDOR')}</b><br/>Doc: {_limpar_texto(pedido.recebido_por_documento or '--')}", estilo_corpo)
+        ]], colWidths=[7.5*inch], style=[('ALIGN', (0,0), (-1,-1), 'CENTER')]))
+
+    doc.build(elementos)
+    buffer.seek(0)
+    nome_pdf = f"Comprovativo_Entrega_Pedido_{pedido.numero_pedido}.pdf"
+    return send_file(buffer, as_attachment=False, download_name=nome_pdf, mimetype='application/pdf')
+
+# =============================================================================
+# FLUXO DE EXPEDIÇÃO & LOGÍSTICA (ALMOXARIFE / CHEFE DE EXPEDIÇÃO)
+# =============================================================================
+
+@app.route('/expedicao')
+@login_required
+def painel_expedicao():
+    if not (current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_expedicao or current_user.perm_estoque):
+        flash('Acesso restrito ao setor de expedição e logística.', 'danger')
+        return redirect(url_for('index'))
+
+    status_filtro = request.args.get('status', 'todos')
+    motorista_filtro = request.args.get('motorista_id', '')
+    termo_busca = request.args.get('busca', '').strip()
+
+    query = PedidoRequisicao.query.filter_by(empresa_id=current_user.empresa_id)
+
+    # 1. Filtro por Estado
+    if status_filtro == 'separacao':
+        query = query.filter_by(status='em_separacao')
+    elif status_filtro == 'em_rota':
+        query = query.filter_by(status='em_rota')
+    elif status_filtro == 'entregue':
+        query = query.filter_by(status='entregue')
+    else:
+        query = query.filter(PedidoRequisicao.status.in_(['em_separacao', 'em_rota', 'entregue']))
+
+    # 2. Filtro por Motorista
+    if motorista_filtro == 'sem_motorista':
+        query = query.filter(PedidoRequisicao.operador_id.is_(None))
+    elif motorista_filtro.isdigit():
+        query = query.filter_by(operador_id=int(motorista_filtro))
+
+    # 3. Busca por Nome de Cliente, Nº Pedido ou Destino
+    if termo_busca:
+        from sqlalchemy import or_
+        query = query.filter(
+            or_(
+                PedidoRequisicao.nome_solicitante.ilike(f'%{termo_busca}%'),
+                PedidoRequisicao.numero_pedido.ilike(f'%{termo_busca}%'),
+                PedidoRequisicao.setor_obra_destino.ilike(f'%{termo_busca}%')
+            )
+        )
+
+    pedidos = query.order_by(PedidoRequisicao.ordem_entrega.asc(), PedidoRequisicao.data_solicitacao.desc()).all()
+    motoristas = OperadorCampo.query.filter_by(empresa_id=current_user.empresa_id, ativo=True).all()
+
+    for m in motoristas:
+        m.gerar_token_se_necessario()
+    db.session.commit()
+
+    # Contadores globais da empresa
+    pedidos_todos = PedidoRequisicao.query.filter_by(empresa_id=current_user.empresa_id).all()
+    total_separacao = sum(1 for p in pedidos_todos if p.status == 'em_separacao')
+    total_em_rota = sum(1 for p in pedidos_todos if p.status == 'em_rota')
+    total_entregues = sum(1 for p in pedidos_todos if p.status == 'entregue')
+
+    return render_template(
+        'expedicao.html',
+        pedidos=pedidos,
+        motoristas=motoristas,
+        status_filtro=status_filtro,
+        motorista_filtro=motorista_filtro,
+        termo_busca=termo_busca,
+        total_separacao=total_separacao,
+        total_em_rota=total_em_rota,
+        total_entregues=total_entregues,
+        hoje=date.today()
+    )
+
+
+@app.route('/expedicao/alocar-motorista/<int:id>', methods=['POST'])
+@login_required
+def alocar_motorista_pedido(id):
+    pedido = PedidoRequisicao.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    
+    motorista_id = request.form.get('motorista_id')
+    data_entrega = request.form.get('data_agendada_entrega')
+    ordem_entrega = request.form.get('ordem_entrega', 1)
+
+    if motorista_id and motorista_id.isdigit():
+        pedido.operador_id = int(motorista_id)
+        pedido.status = 'em_rota'
+    else:
+        pedido.operador_id = None
+        pedido.status = 'em_separacao'
+
+    if data_entrega:
+        pedido.data_agendada_entrega = datetime.strptime(data_entrega, '%Y-%m-%d').date()
+    
+    if ordem_entrega:
+        pedido.ordem_entrega = int(ordem_entrega)
+
+    db.session.commit()
+    flash(f'Logística do Pedido #{pedido.numero_pedido} atualizada com sucesso!', 'success')
+    return redirect(url_for('painel_expedicao'))
+
+
+# =============================================================================
+# ÁREA MOBILE DEDICADA DO ENTREGADOR / MOTORISTA (SEM LOGIN PESADO)
+# =============================================================================
+
+@app.route('/motorista/rota/<token>')
+def painel_mobile_motorista(token):
+    motorista = OperadorCampo.query.filter_by(token_acesso=token).first_or_404()
+    empresa = motorista.empresa
+
+    hoje = date.today()
+    entregas = PedidoRequisicao.query.filter_by(
+        empresa_id=empresa.id,
+        operador_id=motorista.id
+    ).filter(PedidoRequisicao.status.in_(['em_rota', 'entregue'])).order_by(
+        PedidoRequisicao.ordem_entrega.asc(),
+        PedidoRequisicao.id.asc()
+    ).all()
+
+    return render_template(
+        'publico/painel_motorista.html',
+        motorista=motorista,
+        empresa=empresa,
+        entregas=entregas,
+        hoje=hoje
+    )
+
+
+@app.route('/motorista/reordenar-rota/<token>', methods=['POST'])
+def reordenar_rota_motorista(token):
+    motorista = OperadorCampo.query.filter_by(token_acesso=token).first_or_404()
+    dados = request.get_json(silent=True) or {}
+    ordem_pedidos = dados.get('ordem_pedidos', []) # Lista de IDs na nova ordem
+
+    for index, p_id in enumerate(ordem_pedidos, 1):
+        ped = PedidoRequisicao.query.filter_by(id=p_id, operador_id=motorista.id).first()
+        if ped:
+            ped.ordem_entrega = index
+
+    db.session.commit()
+    return jsonify({'status': 'success', 'mensagem': 'Ordem das entregas atualizada!'})
+
+
+@app.route('/motorista/concluir-entrega/<int:id>', methods=['POST'])
+def motorista_finalizar_entrega(id):
+    pedido = PedidoRequisicao.query.get_or_404(id)
+
+    pedido.recebido_por_nome = request.form.get('recebido_por_nome', '').strip()
+    pedido.recebido_por_documento = request.form.get('recebido_por_documento', '').strip()
+    pedido.assinatura_entrega_base64 = request.form.get('assinatura_base64')
+    pedido.data_entrega_realizada = datetime.now()
+
+    foto = request.files.get('foto_comprovante')
+    if foto and foto.filename:
+        pedido.foto_comprovante_entrega = salvar_arquivo_supabase(foto, 'entregas_vendas', pedido.empresa_id)
+
+    # Baixa no estoque
+    if pedido.status != 'entregue':
+        for item in pedido.itens:
+            prod = item.produto
+            qtd_baixa = float(item.quantidade_solicitada or 0.0)
+            saldo_ant = float(prod.quantidade_atual or 0.0)
+            prod.quantidade_atual = max(0.0, saldo_ant - qtd_baixa)
+            item.quantidade_atendida = qtd_baixa
+
+            mov = MovimentacaoEstoque(
+                empresa_id=pedido.empresa_id,
+                produto_id=prod.id,
+                tipo_movimento='saida_venda',
+                quantidade=qtd_baixa,
+                saldo_anterior=saldo_ant,
+                saldo_posterior=prod.quantidade_atual,
+                motivo_observacao=f"Entrega Rota Motorista - Pedido #{pedido.numero_pedido} (Recebido por: {pedido.recebido_por_nome})",
+                usuario_id=None
+            )
+            db.session.add(mov)
+
+        pedido.status = 'entregue'
+        pedido.data_conclusao = datetime.now()
+
+    db.session.commit()
+    token = pedido.motorista_responsavel.token_acesso if pedido.motorista_responsavel else ''
+    return redirect(url_for('painel_mobile_motorista', token=token))
+
+# =============================================================================
+# MÓDULO EXCLUSIVO: GESTÃO DE MOTORISTAS & FROTAS
+# =============================================================================
+
+@app.route('/motoristas', methods=['GET', 'POST'])
+@login_required
+def gestao_motoristas():
+    if not (current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_expedicao):
+        flash('Acesso restrito ao setor de logística e expedição.', 'danger')
+        return redirect(url_for('index'))
+
+    # CADASTRO DE NOVO MOTORISTA
+    if request.method == 'POST':
+        nome = request.form.get('nome', '').strip()
+        telefone = re.sub(r'\D', '', request.form.get('telefone', ''))
+        placa = request.form.get('veiculo_placa', '').strip().upper()
+        documento = request.form.get('documento_registro', '').strip()
+        email = request.form.get('email', '').strip().lower()
+
+        if not nome or not telefone:
+            flash('Nome e WhatsApp do motorista são obrigatórios.', 'warning')
+            return redirect(url_for('gestao_motoristas'))
+
+        novo_motorista = OperadorCampo(
+            empresa_id=current_user.empresa_id,
+            nome=nome,
+            cargo='Motorista / Entregador',
+            telefone=telefone,
+            tipo_operador='motorista',
+            veiculo_placa=placa or None,
+            documento_registro=documento or None,
+            email=email or None
+        )
+        novo_motorista.gerar_token_se_necessario()
+        db.session.add(novo_motorista)
+        db.session.commit()
+
+        flash(f'Motorista "{nome}" cadastrado com sucesso!', 'success')
+        return redirect(url_for('gestao_motoristas'))
+
+    motoristas = OperadorCampo.query.filter_by(
+        empresa_id=current_user.empresa_id,
+        tipo_operador='motorista'
+    ).order_by(OperadorCampo.nome.asc()).all()
+
+    for m in motoristas:
+        m.gerar_token_se_necessario()
+    db.session.commit()
+
+    hoje = date.today()
+
+    # 1. BUSCA RÁPIDA DE COMPROVANTE (POR CLIENTE, CPF/CNPJ OU NÚMERO DO PEDIDO)
+    termo_busca = request.args.get('busca_entrega', '').strip()
+    entregas_busca = []
+
+    if termo_busca:
+        doc_limpo = re.sub(r'\D', '', termo_busca)
+        query_entregas = PedidoRequisicao.query.filter_by(
+            empresa_id=current_user.empresa_id
+        ).outerjoin(Cliente, PedidoRequisicao.cliente_id == Cliente.id)
+
+        condicoes = [
+            PedidoRequisicao.nome_solicitante.ilike(f'%{termo_busca}%'),
+            PedidoRequisicao.numero_pedido.ilike(f'%{termo_busca}%'),
+            PedidoRequisicao.recebido_por_nome.ilike(f'%{termo_busca}%')
+        ]
+        if doc_limpo:
+            condicoes.append(Cliente.cnpj_cpf.ilike(f'%{doc_limpo}%'))
+            condicoes.append(PedidoRequisicao.recebido_por_documento.ilike(f'%{doc_limpo}%'))
+
+        from sqlalchemy import or_
+        entregas_busca = query_entregas.filter(or_(*condicoes)).order_by(
+            PedidoRequisicao.data_entrega_realizada.desc().nullslast(),
+            PedidoRequisicao.id.desc()
+        ).all()
+
+    # 2. ENTREGAS DO DIA (MONITORIZAÇÃO EM DIRETO POR MOTORISTA)
+    entregas_hoje_todas = PedidoRequisicao.query.filter_by(
+        empresa_id=current_user.empresa_id
+    ).filter(
+        PedidoRequisicao.operador_id.isnot(None),
+        (PedidoRequisicao.data_agendada_entrega == hoje) | 
+        ((PedidoRequisicao.status == 'em_rota') & (PedidoRequisicao.data_agendada_entrega.is_(None)))
+    ).order_by(PedidoRequisicao.ordem_entrega.asc(), PedidoRequisicao.id.asc()).all()
+
+    monitoramento_motoristas = {}
+    for m in motoristas:
+        pedidos_motorista = [p for p in entregas_hoje_todas if p.operador_id == m.id]
+        if pedidos_motorista:
+            total_pedidos = len(pedidos_motorista)
+            concluidos = sum(1 for p in pedidos_motorista if p.status in ['entregue', 'concluido'])
+            monitoramento_motoristas[m.id] = {
+                'motorista': m,
+                'pedidos': pedidos_motorista,
+                'total': total_pedidos,
+                'concluidos': concluidos,
+                'percentual': round((concluidos / total_pedidos * 100) if total_pedidos > 0 else 0)
+            }
+
+    # 3. HISTÓRICO AGRUPADO POR DIAS
+    historico_por_dia = defaultdict(lambda: defaultdict(list))
+    todas_entregas_passadas = PedidoRequisicao.query.filter_by(
+        empresa_id=current_user.empresa_id
+    ).filter(
+        PedidoRequisicao.operador_id.isnot(None),
+        PedidoRequisicao.status.in_(['entregue', 'concluido'])
+    ).order_by(
+        PedidoRequisicao.data_entrega_realizada.desc().nullslast(),
+        PedidoRequisicao.data_solicitacao.desc()
+    ).all()
+
+    for p in todas_entregas_passadas:
+        dt_ref = p.data_entrega_realizada.date() if p.data_entrega_realizada else (p.data_agendada_entrega or p.data_solicitacao.date())
+        dt_str = dt_ref.strftime('%d/%m/%Y')
+        historico_por_dia[p.operador_id][dt_str].append(p)
+
+    return render_template(
+        'motoristas.html',
+        motoristas=motoristas,
+        monitoramento_motoristas=monitoramento_motoristas,
+        historico_por_dia=historico_por_dia,
+        entregas_busca=entregas_busca,
+        termo_busca=termo_busca,
+        hoje=hoje
+    )
+
+
+@app.route('/motoristas/<int:id>/editar', methods=['POST'])
+@login_required
+def editar_motorista(id):
+    if not (current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_expedicao):
+        flash('Acesso restrito.', 'danger')
+        return redirect(url_for('gestao_motoristas'))
+
+    mot = OperadorCampo.query.filter_by(id=id, empresa_id=current_user.empresa_id, tipo_operador='motorista').first_or_404()
+    
+    nome = request.form.get('nome', '').strip()
+    telefone = re.sub(r'\D', '', request.form.get('telefone', ''))
+    placa = request.form.get('veiculo_placa', '').strip().upper()
+    documento = request.form.get('documento_registro', '').strip()
+    email = request.form.get('email', '').strip().lower()
+
+    if not nome or not telefone:
+        flash('Nome e WhatsApp são obrigatórios para atualizar o motorista.', 'warning')
+        return redirect(url_for('gestao_motoristas'))
+
+    mot.nome = nome
+    mot.telefone = telefone
+    mot.veiculo_placa = placa or None
+    mot.documento_registro = documento or None
+    mot.email = email or None
+
+    db.session.commit()
+    flash(f'Dados do motorista "{mot.nome}" atualizados com sucesso!', 'success')
+    return redirect(url_for('gestao_motoristas'))
+
+
+@app.route('/motoristas/<int:id>/status', methods=['POST'])
+@login_required
+def alternar_status_motorista(id):
+    mot = OperadorCampo.query.filter_by(id=id, empresa_id=current_user.empresa_id, tipo_operador='motorista').first_or_404()
+    mot.ativo = not mot.ativo
+    db.session.commit()
+    flash(f'Status do motorista "{mot.nome}" atualizado!', 'info')
+    return redirect(url_for('gestao_motoristas'))
+
+
+@app.route('/motoristas/<int:id>/excluir', methods=['POST'])
+@login_required
+def excluir_motorista(id):
+    mot = OperadorCampo.query.filter_by(id=id, empresa_id=current_user.empresa_id, tipo_operador='motorista').first_or_404()
+    db.session.delete(mot)
+    db.session.commit()
+    flash('Motorista removido da equipe com sucesso.', 'info')
+    return redirect(url_for('gestao_motoristas'))
+
+
+
+# =============================================================================
+# PORTAL DE AUTOATENDIMENTO B2B: REQUISIÇÃO DE COMPRA DO CLIENTE
+# =============================================================================
+
+@app.route('/api/portal-vendas/consultar-cliente/<int:empresa_id>', methods=['POST'])
+def api_consultar_cliente_portal(empresa_id):
+    """Verifica se o cliente existe pelo CPF ou CNPJ cadastrado na empresa."""
+    dados = request.get_json(silent=True) or {}
+    documento_raw = dados.get('documento', '')
+    doc_limpo = re.sub(r'\D', '', documento_raw)
+
+    if not doc_limpo:
+        return jsonify({'encontrado': False, 'mensagem': 'Informe um CPF ou CNPJ válido.'}), 400
+
+    # Busca clientes da empresa cujo documento limpo coincida
+    clientes = Cliente.query.filter_by(empresa_id=empresa_id).all()
+    cliente_encontrado = None
+    for c in clientes:
+        if re.sub(r'\D', '', c.cnpj_cpf or '') == doc_limpo:
+            cliente_encontrado = c
+            break
+
+    if not cliente_encontrado:
+        return jsonify({
+            'encontrado': False, 
+            'mensagem': 'CPF/CNPJ não localizado na nossa base. Entre em contato conosco para realizar o seu cadastro antes de submeter o pedido.'
+        })
+
+    end_completo = f"{cliente_encontrado.logradouro or ''}, {cliente_encontrado.numero or 'S/N'} {cliente_encontrado.complemento or ''} - {cliente_encontrado.bairro or ''}, {cliente_encontrado.cidade or ''}/{cliente_encontrado.estado or ''}".strip(" ,-/")
+
+    return jsonify({
+        'encontrado': True,
+        'id': cliente_encontrado.id,
+        'nome': cliente_encontrado.nome,
+        'nome_fantasia': cliente_encontrado.nome_fantasia or '',
+        'documento': cliente_encontrado.cnpj_cpf,
+        'telefone': cliente_encontrado.telefone or '',
+        'email': cliente_encontrado.email or cliente_encontrado.email_financeiro or '',
+        'endereco': end_completo or 'Retirada no Balcão'
+    })
+
+
+@app.route('/pedido-venda/<slug_loja>', methods=['GET', 'POST'])
+def portal_pedido_venda_cliente(slug_loja):
+    """Tela externa acessada pelo cliente para fazer a requisição de compra com validação de estoque."""
+    empresa = Empresa.query.filter_by(slug_loja=slug_loja).first_or_404()
+
+    # Se a loja estiver desativada pelo plano, renderiza a tela com fallback seguro
+    if not (empresa.modulo_vendas_externas or empresa.modulo_estoque):
+        try:
+            return render_template('publico/modulo_indisponivel.html', empresa=empresa), 403
+        except Exception:
+            return f"<div style='font-family:sans-serif;text-align:center;padding:50px;'><h2>Canal Indisponível</h2><p>O catálogo de compras de <b>{empresa.razao_social}</b> está temporariamente desativado.</p></div>", 403
+
+    if request.method == 'POST':
+        try:
+            cliente_id = request.form.get('cliente_id')
+            if not cliente_id or not cliente_id.isdigit():
+                flash('É obrigatório validar seu cadastro via CNPJ/CPF antes de enviar o pedido.', 'danger')
+                return redirect(url_for('portal_pedido_venda_cliente', slug_loja=slug_loja))
+
+            cliente = Cliente.query.filter_by(id=int(cliente_id), empresa_id=empresa.id).first_or_404()
+
+            produtos_ids = request.form.getlist('produto_id[]')
+            quantidades = request.form.getlist('quantidade[]')
+            observacoes = request.form.get('observacoes', '').strip()
+            endereco_entrega = request.form.get('endereco_entrega', '').strip()
+
+            if not produtos_ids:
+                flash('Inclua ao menos um produto no pedido.', 'warning')
+                return redirect(url_for('portal_pedido_venda_cliente', slug_loja=slug_loja))
+
+            total_existentes = PedidoRequisicao.query.filter_by(empresa_id=empresa.id).count() + 1
+            num_pedido = f"WEB-{datetime.now().year}-{total_existentes:04d}"
+
+            novo_pedido = PedidoRequisicao(
+                empresa_id=empresa.id,
+                cliente_id=cliente.id,
+                numero_pedido=num_pedido,
+                tipo_origem='venda_web',
+                nome_solicitante=cliente.nome,
+                contato_solicitante=cliente.telefone or '',
+                setor_obra_destino=endereco_entrega or 'Endereço Cadastrado',
+                observacoes=observacoes,
+                status='pendente',
+                valor_total=0.0
+            )
+            db.session.add(novo_pedido)
+            db.session.flush()
+            valor_total_acumulado = 0.0
+
+            for p_id, qtd_str in zip(produtos_ids, quantidades):
+                if p_id and qtd_str and float(qtd_str) > 0:
+                    prod = ProdutoEstoque.query.filter_by(id=int(p_id), empresa_id=empresa.id, ativo=True).first()
+                    if prod:
+                        qtd = float(qtd_str)
+                        # Garante que não ultrapasse o saldo físico atual
+                        qtd_atendivel = min(qtd, float(prod.quantidade_atual or 0.0))
+                        if qtd_atendivel > 0:
+                            unit = float(prod.preco_venda_sugerido or 0.0)
+                            subtotal = round(qtd_atendivel * unit, 2)
+                            valor_total_acumulado += subtotal
+
+                            item = ItemPedidoRequisicao(
+                                pedido_id=novo_pedido.id,
+                                produto_id=prod.id,
+                                quantidade_solicitada=qtd_atendivel,
+                                preco_unitario=unit,
+                                valor_total=subtotal
+                            )
+                            db.session.add(item)
+
+            novo_pedido.valor_total = round(valor_total_acumulado, 2)
+            db.session.commit()
+
+            return render_template('publico/pedido_venda_sucesso.html', empresa=empresa, pedido=novo_pedido)
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Erro ao processar o seu pedido: {str(e)}", "danger")
+            return redirect(url_for('portal_pedido_venda_cliente', slug_loja=slug_loja))
+
+    # Lista apenas produtos ativos e com saldo positivo em estoque
+    produtos_disponiveis = ProdutoEstoque.query.filter_by(
+        empresa_id=empresa.id,
+        ativo=True
+    ).filter(ProdutoEstoque.quantidade_atual > 0).order_by(ProdutoEstoque.nome.asc()).all()
+
+    return render_template(
+        'publico/portal_venda_cliente.html',
+        empresa=empresa,
+        produtos=produtos_disponiveis
+    )
+
+# -----------------------------------------------------------------------------
+# RELATÓRIO CONTÁBIL CONSOLIDADO: RECEBIMENTOS & CUSTOS (SERVIÇOS + VENDAS)
+# -----------------------------------------------------------------------------
+@app.route('/relatorios/contabil')
+@login_required
+def relatorio_contabil():
+    if current_user.nivel_acesso not in ['admin', 'master'] and not current_user.perm_financeiro:
+        flash('Acesso restrito ao setor financeiro e contábil.', 'danger')
+        return redirect(url_for('index'))
+
+    empresa_id = current_user.empresa_id
+    hoje = date.today()
+
+    # Filtros de Período (Padrão: Mês atual)
+    data_inicio_str = request.args.get('data_inicio')
+    data_fim_str = request.args.get('data_fim')
+
+    if data_inicio_str and data_fim_str:
+        dt_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
+        dt_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+    else:
+        dt_inicio = date(hoje.year, hoje.month, 1)
+        dt_fim = (dt_inicio + relativedelta(months=1)) - timedelta(days=1)
+
+    # 1. RECEBIMENTOS EFETIVADOS (PARCELAS PAGAS NO PERÍODO)
+    parcelas_pagas = ParcelaFatura.query.join(Fatura).filter(
+        ParcelaFatura.empresa_id == empresa_id,
+        ParcelaFatura.status == 'Pago',
+        ParcelaFatura.data_vencimento >= dt_inicio,
+        ParcelaFatura.data_vencimento <= dt_fim
+    ).order_by(ParcelaFatura.data_vencimento.desc()).all()
+
+    recebimentos_consolidados = []
+    total_servicos_recebido = 0.0
+    total_vendas_recebido = 0.0
+
+    for p in parcelas_pagas:
+        fat = p.fatura
+        cli = fat.cliente
+        origem_tipo = 'Venda de Mercadoria' if fat.pedido_venda else 'Prestação de Serviços'
+
+        if fat.pedido_venda:
+            total_vendas_recebido += p.valor
+        else:
+            total_servicos_recebido += p.valor
+
+        recebimentos_consolidados.append({
+            'data': p.data_vencimento,
+            'cliente_nome': cli.nome if cli else 'Consumidor Final',
+            'cliente_doc': cli.cnpj_cpf if cli else '--',
+            'origem': origem_tipo,
+            'documento_ref': fat.descricao,
+            'forma_pagamento': p.forma_pagamento or 'Boleto/Transferência',
+            'valor': p.valor,
+            'arquivo_nf': fat.arquivo_nf,
+            'arquivo_comprovante': p.arquivo_comprovante_boleto
+        })
+
+    # 2. APURAÇÃO DE CUSTOS DIRETOS (CMV VENDAS + CUSTOS SERVIÇOS)
+    # Custos de Vendas (CMV) concluídas no período
+    vendas_periodo = PedidoRequisicao.query.filter_by(empresa_id=empresa_id).filter(
+        PedidoRequisicao.status == 'entregue',
+        PedidoRequisicao.data_solicitacao >= datetime.combine(dt_inicio, datetime.min.time()),
+        PedidoRequisicao.data_solicitacao <= datetime.combine(dt_fim, datetime.max.time())
+    ).all()
+
+    cmv_vendas = sum(
+        (it.quantidade_solicitada * (it.produto.preco_custo or 0.0))
+        for v in vendas_periodo for it in v.itens if it.produto
+    )
+
+    # Custos Analíticos de Serviços de Propostas Aprovadas no período
+    propostas_periodo = Proposta.query.filter_by(empresa_id=empresa_id, status='Aprovado').filter(
+        Proposta.data_criacao >= dt_inicio,
+        Proposta.data_criacao <= dt_fim
+    ).all()
+
+    custo_servicos = sum(p.custo_total_previsto for p in propostas_periodo)
+
+    total_recebido = total_servicos_recebido + total_vendas_recebido
+    total_custos = cmv_vendas + custo_servicos
+    resultado_liquido = total_recebido - total_custos
+
+    return render_template(
+        'relatorio_contabil.html',
+        dt_inicio=dt_inicio,
+        dt_fim=dt_fim,
+        recebimentos=recebimentos_consolidados,
+        total_servicos=total_servicos_recebido,
+        total_vendas=total_vendas_recebido,
+        total_recebido=total_recebido,
+        cmv_vendas=cmv_vendas,
+        custo_servicos=custo_servicos,
+        total_custos=total_custos,
+        resultado_liquido=resultado_liquido
+    )
+
+# -----------------------------------------------------------------------------
+# EXPORTAÇÃO CSV PARA O SOFTWARE DO CONTADOR (DOMÍNIO / ALTERDATA / CONTMATIC)
+# -----------------------------------------------------------------------------
+@app.route('/relatorios/contabil/exportar-csv')
+@login_required
+def exportar_contabil_csv():
+    if current_user.nivel_acesso not in ['admin', 'master'] and not current_user.perm_financeiro:
+        abort(403)
+
+    empresa_id = current_user.empresa_id
+    data_inicio_str = request.args.get('data_inicio')
+    data_fim_str = request.args.get('data_fim')
+
+    dt_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date() if data_inicio_str else date(date.today().year, date.today().month, 1)
+    dt_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else date.today()
+
+    parcelas_pagas = ParcelaFatura.query.join(Fatura).filter(
+        ParcelaFatura.empresa_id == empresa_id,
+        ParcelaFatura.status == 'Pago',
+        ParcelaFatura.data_vencimento >= dt_inicio,
+        ParcelaFatura.data_vencimento <= dt_fim
+    ).order_by(ParcelaFatura.data_vencimento.asc()).all()
+
+    si = StringIO()
+    cw = csv.writer(si, delimiter=';')
+    cw.writerow(['DATA_LIQUIDACAO', 'CLIENTE', 'CNPJ_CPF', 'TIPO_RECEITA', 'DOCUMENTO_REFERENCIA', 'FORMA_PAGAMENTO', 'VALOR_BRUTO_RECEBIDO'])
+
+    for p in parcelas_pagas:
+        fat = p.fatura
+        cli = fat.cliente
+        origem = 'Mercadorias' if fat.pedido_venda else 'Servicos'
+        cw.writerow([
+            p.data_vencimento.strftime('%d/%m/%Y'),
+            cli.nome if cli else 'Consumidor',
+            cli.cnpj_cpf if cli else '--',
+            origem,
+            fat.descricao,
+            p.forma_pagamento or 'Transferencia',
+            f"{p.valor:.2f}".replace('.', ',')
+        ])
+
+    output = make_response(si.getvalue().encode('latin-1', 'replace'))
+    output.headers["Content-Disposition"] = f"attachment; filename=extrato_contabil_{dt_inicio.strftime('%Y%m')}.csv"
+    output.headers["Content-type"] = "text/csv; charset=latin-1"
+    return output
+
+@app.route('/relatorios/contabil/pdf')
+@login_required
+def gerar_pdf_relatorio_contabil():
+    if current_user.nivel_acesso not in ['admin', 'master'] and not current_user.perm_financeiro:
+        abort(403)
+
+    empresa = current_user.empresa
+    hoje = date.today()
+
+    data_inicio_str = request.args.get('data_inicio')
+    data_fim_str = request.args.get('data_fim')
+
+    if data_inicio_str and data_fim_str:
+        dt_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
+        dt_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+    else:
+        dt_inicio = date(hoje.year, hoje.month, 1)
+        dt_fim = (dt_inicio + relativedelta(months=1)) - timedelta(days=1)
+
+    # 1. Parcelas Pagas
+    parcelas_pagas = ParcelaFatura.query.join(Fatura).filter(
+        ParcelaFatura.empresa_id == empresa.id,
+        ParcelaFatura.status == 'Pago',
+        ParcelaFatura.data_vencimento >= dt_inicio,
+        ParcelaFatura.data_vencimento <= dt_fim
+    ).order_by(ParcelaFatura.data_vencimento.asc()).all()
+
+    total_servicos = sum(p.valor for p in parcelas_pagas if not p.fatura.pedido_venda)
+    total_vendas = sum(p.valor for p in parcelas_pagas if p.fatura.pedido_venda)
+    total_recebido = total_servicos + total_vendas
+
+    # 2. Custos
+    vendas_periodo = PedidoRequisicao.query.filter_by(empresa_id=empresa.id).filter(
+        PedidoRequisicao.status == 'entregue',
+        PedidoRequisicao.data_solicitacao >= datetime.combine(dt_inicio, datetime.min.time()),
+        PedidoRequisicao.data_solicitacao <= datetime.combine(dt_fim, datetime.max.time())
+    ).all()
+    cmv_vendas = sum((it.quantidade_solicitada * (it.produto.preco_custo or 0.0)) for v in vendas_periodo for it in v.itens if it.produto)
+
+    propostas_periodo = Proposta.query.filter_by(empresa_id=empresa.id, status='Aprovado').filter(
+        Proposta.data_criacao >= dt_inicio, Proposta.data_criacao <= dt_fim
+    ).all()
+    custo_servicos = sum(p.custo_total_previsto for p in propostas_periodo)
+    total_custos = cmv_vendas + custo_servicos
+    lucro_liquido = total_recebido - total_custos
+
+    # GERAÇÃO DO PDF REPORTLAB
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    elementos = []
+    styles = getSampleStyleSheet()
+
+    cor_marca = colors.HexColor(empresa.cor_primaria or "#1e3a8a")
+    estilo_emp = ParagraphStyle('PdfEmp', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=cor_marca)
+    estilo_sub = ParagraphStyle('PdfSub', parent=styles['Normal'], fontName='Helvetica', fontSize=7.5, leading=10, textColor=colors.HexColor("#475569"))
+    estilo_secao = ParagraphStyle('PdfSec', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=cor_marca)
+    estilo_corpo = ParagraphStyle('PdfCorpo', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=11, textColor=colors.HexColor("#1e293b"))
+    estilo_corpo_bold = ParagraphStyle('PdfCorpoB', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, leading=11, textColor=colors.HexColor("#0f172a"))
+
+    logo_elemento = _obter_logo_reportlab(empresa.logo_filename, width=1.5*inch, height=0.6*inch)
+    info_emp = f"<b>{_limpar_texto(empresa.razao_social).upper()}</b><br/>CNPJ/CPF: {_limpar_texto(empresa.cnpj or '--')} | Tel: {_limpar_texto(empresa.telefone or '--')}<br/>{_limpar_texto(empresa.endereco_completo or '')}"
+
+    if logo_elemento:
+        tab_topo = Table([[logo_elemento, Paragraph(info_emp, estilo_sub)]], colWidths=[1.8*inch, 5.7*inch])
+    else:
+        tab_topo = Table([[Paragraph(f"<b>{_limpar_texto(empresa.razao_social).upper()}</b>", estilo_emp), Paragraph(info_emp, estilo_sub)]], colWidths=[2.8*inch, 4.7*inch])
+    tab_topo.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('ALIGN', (1,0), (1,0), 'RIGHT')]))
+    elementos.append(tab_topo)
+    elementos.append(Spacer(1, 4))
+    elementos.append(HRFlowable(width="100%", thickness=1.5, color=cor_marca, spaceAfter=8))
+
+    # Título do Relatório
+    periodo_formatado = f"{dt_inicio.strftime('%d/%m/%Y')} a {dt_fim.strftime('%d/%m/%Y')}"
+    elementos.append(Paragraph(f"<b>DEMONSTRATIVO CONTÁBIL DE ENTRADAS & CUSTOS (REGIME DE CAIXA)</b>", estilo_secao))
+    elementos.append(Paragraph(f"<font color='#64748b' size='8'>Período de Apuração: {periodo_formatado} | Emissão: {datetime.now().strftime('%d/%m/%Y %H:%M')}</font>", estilo_corpo))
+    elementos.append(Spacer(1, 8))
+
+    # Tabela Síntese Financeira
+    resumo_dados = [
+        [Paragraph("<b>TOTAL SERVIÇOS</b>", estilo_corpo_bold), Paragraph("<b>TOTAL MERCADORIAS</b>", estilo_corpo_bold), Paragraph("<b>CUSTOS DIRETOS (CMV/MAT)</b>", estilo_corpo_bold), Paragraph("<b>RESULTADO LÍQUIDO</b>", estilo_corpo_bold)],
+        [Paragraph(f"R$ {total_servicos:,.2f}", estilo_corpo), Paragraph(f"R$ {total_vendas:,.2f}", estilo_corpo), Paragraph(f"R$ {total_custos:,.2f}", estilo_corpo), Paragraph(f"<b>R$ {lucro_liquido:,.2f}</b>", estilo_corpo_bold)]
+    ]
+    tab_res = Table(resumo_dados, colWidths=[1.87*inch, 1.87*inch, 1.87*inch, 1.87*inch])
+    tab_res.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#f1f5f9")),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+        ('PADDING', (0,0), (-1,-1), 5),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER')
+    ]))
+    elementos.append(tab_res)
+    elementos.append(Spacer(1, 10))
+
+    elementos.append(Paragraph("<b>DISCRIMINAÇÃO DOS ITENS SOLICITADOS</b>", estilo_secao))
+    elementos.append(Spacer(1, 4))
+
+    # Estilo específico em branco puro para o cabeçalho da tabela
+    estilo_th = ParagraphStyle(
+        'ThTabelaBranco',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8.5,
+        leading=11,
+        textColor=colors.white
+    )
+
+    itens_tabela = [
+        [Paragraph("<b>Data</b>", estilo_corpo_bold), Paragraph("<b>Cliente / Fonte Pagadora</b>", estilo_corpo_bold), Paragraph("<b>CNPJ / CPF</b>", estilo_corpo_bold), Paragraph("<b>Origem</b>", estilo_corpo_bold), Paragraph("<b>Meio Pgto</b>", estilo_corpo_bold), Paragraph("<b>Valor (R$)</b>", estilo_corpo_bold)]
+    ]
+
+    for p in parcelas_pagas:
+        cli = p.fatura.cliente
+        origem = 'Mercadoria' if p.fatura.pedido_venda else 'Serviço'
+        itens_tabela.append([
+            Paragraph(p.data_vencimento.strftime('%d/%m/%Y'), estilo_corpo),
+            Paragraph(_limpar_texto(cli.nome if cli else 'Consumidor')[:26], estilo_corpo),
+            Paragraph(_limpar_texto(cli.cnpj_cpf if cli else '--'), estilo_corpo),
+            Paragraph(origem, estilo_corpo),
+            Paragraph(_limpar_texto(p.forma_pagamento or 'Boleto')[:12], estilo_corpo),
+            Paragraph(f"{p.valor:,.2f}", estilo_corpo_bold)
+        ])
+
+    itens_tabela.append([
+        Paragraph("<b>TOTAL GERAL RECEBIDO</b>", estilo_corpo_bold), Paragraph("", estilo_corpo), Paragraph("", estilo_corpo), Paragraph("", estilo_corpo), Paragraph("", estilo_corpo),
+        Paragraph(f"<b>R$ {total_recebido:,.2f}</b>", estilo_corpo_bold)
+    ])
+
+    tab_itens = Table(itens_tabela, colWidths=[0.8*inch, 2.5*inch, 1.3*inch, 0.9*inch, 1.0*inch, 1.0*inch])
+    tab_itens.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#0f172a")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('ALIGN', (5,0), (5,-1), 'RIGHT'),
+        ('GRID', (0,0), (-1,-2), 0.5, colors.HexColor("#cbd5e1")),
+        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor("#f8fafc")),
+        ('LINEABOVE', (0,-1), (-1,-1), 1.2, colors.HexColor("#0f172a")),
+        ('PADDING', (0,0), (-1,-1), 4)
+    ]))
+    elementos.append(tab_itens)
+    elementos.append(Spacer(1, 35))
+
+    # Assinaturas
+    tab_ass = Table([
+        [
+            Paragraph(f"____________________________________________<br/><b>{_limpar_texto(empresa.razao_social).upper()}</b><br/>Responsável Legal", estilo_corpo),
+            Paragraph("____________________________________________<br/><b>RESPONSÁVEL CONTÁBIL</b><br/>CRC / Declaração de Conferência", estilo_corpo)
+        ]
+    ], colWidths=[3.75*inch, 3.75*inch], style=[('ALIGN', (0,0), (-1,-1), 'CENTER')])
+    elementos.append(tab_ass)
+
+    doc.build(elementos)
+    buffer.seek(0)
+    return send_file(buffer, as_attachment=True, download_name=f"Demonstrativo_Contabil_{dt_inicio.strftime('%Y%m')}.pdf", mimetype='application/pdf')
+
+# -----------------------------------------------------------------------------
+# PACOTE ZIP DE AUDITORIA CONTÁBIL / FISCAL (NOTAS FISCAIS RENOMEADAS + CSV)
+# -----------------------------------------------------------------------------
+@app.route('/relatorios/contabil/baixar-pacote-nf-zip')
+@login_required
+def baixar_pacote_nf_zip():
+    if current_user.nivel_acesso not in ['admin', 'master'] and not current_user.perm_financeiro:
+        abort(403)
+
+    empresa_id = current_user.empresa_id
+    hoje = date.today()
+
+    data_inicio_str = request.args.get('data_inicio')
+    data_fim_str = request.args.get('data_fim')
+
+    if data_inicio_str and data_fim_str:
+        dt_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
+        dt_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+    else:
+        dt_inicio = date(hoje.year, hoje.month, 1)
+        dt_fim = (dt_inicio + relativedelta(months=1)) - timedelta(days=1)
+
+    # 1. NOTAS FISCAIS DE SERVIÇOS (Faturas com NF anexada)
+    faturas_com_nf = Fatura.query.filter(
+        Fatura.empresa_id == empresa_id,
+        Fatura.arquivo_nf.isnot(None),
+        Fatura.data_emissao >= dt_inicio,
+        Fatura.data_emissao <= dt_fim
+    ).all()
+
+    # 2. NOTAS FISCAIS DE VENDAS DE MERCADORIAS (Pedidos com NF anexada)
+    pedidos_com_nf = PedidoRequisicao.query.filter(
+        PedidoRequisicao.empresa_id == empresa_id,
+        PedidoRequisicao.arquivo_nf.isnot(None),
+        PedidoRequisicao.data_solicitacao >= datetime.combine(dt_inicio, datetime.min.time()),
+        PedidoRequisicao.data_solicitacao <= datetime.combine(dt_fim, datetime.max.time())
+    ).all()
+
+    if not faturas_com_nf and not pedidos_com_nf:
+        flash('Nenhum anexo de Nota Fiscal localizado no período selecionado.', 'warning')
+        return redirect(url_for('relatorio_contabil', data_inicio=dt_inicio.strftime('%Y-%m-%d'), data_fim=dt_fim.strftime('%Y-%m-%d')))
+
+    # Buffer em memória para montar o arquivo ZIP sem gravar no disco
+    zip_buffer = BytesIO()
+
+    # Lista para o CSV sumário de conferência
+    linhas_relatorio = [
+        ['TIPO', 'NUMERO_REF', 'DATA_DOCUMENTO', 'CLIENTE', 'CNPJ_CPF', 'VALOR_TOTAL', 'NOME_ARQUIVO_NO_ZIP']
+    ]
+
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        
+        # A) Processa NFs de Serviços
+        for fat in faturas_com_nf:
+            stream_arquivo = obter_arquivo_bytes(fat.arquivo_nf)
+            if not stream_arquivo:
+                continue
+
+            cli_nome = re.sub(r'[^a-zA-Z0-9]', '_', (fat.cliente.nome if fat.cliente else 'Cliente')[:30]).strip('_')
+            cli_doc = fat.cliente.cnpj_cpf if fat.cliente else '--'
+            dt_ref = (fat.data_emissao or hoje).strftime('%Y-%m-%d')
+            extensao = fat.arquivo_nf.rsplit('.', 1)[-1].lower() if '.' in fat.arquivo_nf else 'pdf'
+            
+            nome_amigavel = f"{dt_ref}_NF_Servico_{cli_nome}_FAT{fat.id:04d}.{extensao}"
+
+            # Grava no ZIP
+            zip_file.writestr(f"Notas_Fiscais/{nome_amigavel}", stream_arquivo.getvalue())
+
+            linhas_relatorio.append([
+                'Serviço',
+                f"FAT-{fat.id:04d}",
+                dt_ref,
+                fat.cliente.nome if fat.cliente else 'Consumidor',
+                cli_doc,
+                f"{fat.valor_total:.2f}".replace('.', ','),
+                nome_amigavel
+            ])
+
+        # B) Processa NFs de Vendas de Mercadorias
+        for ped in pedidos_com_nf:
+            stream_arquivo = obter_arquivo_bytes(ped.arquivo_nf)
+            if not stream_arquivo:
+                continue
+
+            cli_nome = re.sub(r'[^a-zA-Z0-9]', '_', (ped.nome_solicitante or 'Cliente')[:30]).strip('_')
+            dt_ref = (ped.data_solicitacao.date() if ped.data_solicitacao else hoje).strftime('%Y-%m-%d')
+            extensao = ped.arquivo_nf.rsplit('.', 1)[-1].lower() if '.' in ped.arquivo_nf else 'pdf'
+
+            nome_amigavel = f"{dt_ref}_NF_Venda_{cli_nome}_{ped.numero_pedido}.{extensao}"
+
+            zip_file.writestr(f"Notas_Fiscais/{nome_amigavel}", stream_arquivo.getvalue())
+
+            linhas_relatorio.append([
+                'Venda Mercadoria',
+                ped.numero_pedido,
+                dt_ref,
+                ped.nome_solicitante,
+                getattr(ped.cliente, 'cnpj_cpf', '--') if ped.cliente else '--',
+                f"{ped.valor_total:.2f}".replace('.', ','),
+                nome_amigavel
+            ])
+
+        # C) Cria e anexa o Sumário em CSV dentro da raiz do ZIP
+        csv_buffer = StringIO()
+        csv_writer = csv.writer(csv_buffer, delimiter=';')
+        csv_writer.writerows(linhas_relatorio)
+        zip_file.writestr("RELATORIO_SUMARIO_AUDITORIA.csv", csv_buffer.getvalue().encode('latin-1', 'replace'))
+
+    zip_buffer.seek(0)
+    nome_zip = f"Auditoria_NFs_{dt_inicio.strftime('%Y%m%d')}_a_{dt_fim.strftime('%Y%m%d')}.zip"
+
+    return send_file(
+        zip_buffer,
+        as_attachment=True,
+        download_name=nome_zip,
+        mimetype='application/zip'
     )
 
 # -----------------------------------------------------------------------------

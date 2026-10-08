@@ -5,25 +5,28 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ==========================================
+# CONFIGURAÇÃO DE PLANOS & CICLOS
+# ==========================================
 PLANOS_CONFIG = {
     'MENSAL': {
-        'nome': 'Mensal',
-        'valor_total': 39.90,
-        'valor_exibicao': 39.90,
+        'nome': 'Básico Mensal',
+        'valor_total': 14.90,
+        'valor_exibicao': 14.90,
         'parcelas': 1,
         'dias_validade': 30
     },
     'SEMESTRAL': {
-        'nome': 'Semestral',
-        'valor_total': 209.40,
-        'valor_exibicao': 34.90,
+        'nome': 'Pro Semestral',
+        'valor_total': 78.67,  # R$ 14,90 x 6 com 12% OFF
+        'valor_exibicao': 13.11,
         'parcelas': 6,
         'dias_validade': 180
     },
     'ANUAL': {
-        'nome': 'Anual',
-        'valor_total': 358.80,
-        'valor_exibicao': 29.90,
+        'nome': 'Founder Anual',
+        'valor_total': 134.10,  # R$ 14,90 x 12 com 25% OFF
+        'valor_exibicao': 11.17,
         'parcelas': 12,
         'dias_validade': 365
     }
@@ -48,25 +51,18 @@ def criar_cobranca_mercadopago(empresa, nome_plano, valor, forma_pagamento, cart
     doc_limpo = _limpar_documento(empresa.cnpj)
     tipo_doc = "CNPJ" if len(doc_limpo) == 14 else "CPF"
 
-    chave_plano = str(nome_plano).upper().replace("PLANO ", "").strip()
-    if 'ANUAL' in chave_plano:
-        cfg = PLANOS_CONFIG['ANUAL']
-    elif 'SEMESTRAL' in chave_plano:
-        cfg = PLANOS_CONFIG['SEMESTRAL']
-    else:
-        cfg = PLANOS_CONFIG['MENSAL']
-
     nome_pagador = empresa.razao_social or empresa.nome_fantasia or "Cliente Trivium"
     partes_nome = nome_pagador.split()
     primeiro_nome = partes_nome[0]
     sobrenome = " ".join(partes_nome[1:]) if len(partes_nome) > 1 else "Empresa"
     email_pagador = empresa.email or "contato@triviumerp.com.br"
+    valor_float = round(float(valor), 2)
 
     # 1. PIX
     if forma_pagamento == 'PIX':
         payment_data = {
-            "transaction_amount": float(valor),
-            "description": f"Assinatura Trivium ERP - {cfg['nome']} (PIX)",
+            "transaction_amount": valor_float,
+            "description": f"Assinatura Trivium ERP - {nome_plano} (PIX)",
             "payment_method_id": "pix",
             "payer": {
                 "email": email_pagador,
@@ -77,7 +73,7 @@ def criar_cobranca_mercadopago(empresa, nome_plano, valor, forma_pagamento, cart
                     "number": doc_limpo
                 }
             },
-            "external_reference": f"emp_{empresa.id}_{cfg['nome']}"
+            "external_reference": f"emp_{empresa.id}_{nome_plano}"
         }
 
         payment_response = sdk.payment().create(payment_data)
@@ -92,18 +88,17 @@ def criar_cobranca_mercadopago(empresa, nome_plano, valor, forma_pagamento, cart
                     "encodedImage": poi.get("qr_code_base64", ""),
                     "payload": poi.get("qr_code", ""),
                     "ticket_url": poi.get("ticket_url", "")
-                },
-                "plano_info": cfg
+                }
             }
         else:
             msg = payment.get("message", "Erro ao gerar cobrança Pix no Mercado Pago.")
             return {"sucesso": False, "mensagem": msg}
 
-    # 2. BOLETO
+    # 2. BOLETO BANCÁRIO
     elif forma_pagamento == 'BOLETO':
         payment_data = {
-            "transaction_amount": float(valor),
-            "description": f"Assinatura Trivium ERP - {cfg['nome']} (Boleto)",
+            "transaction_amount": valor_float,
+            "description": f"Assinatura Trivium ERP - {nome_plano} (Boleto)",
             "payment_method_id": "bolbradesco",
             "payer": {
                 "email": email_pagador,
@@ -122,7 +117,7 @@ def criar_cobranca_mercadopago(empresa, nome_plano, valor, forma_pagamento, cart
                     "federal_unit": empresa.estado or "SP"
                 }
             },
-            "external_reference": f"emp_{empresa.id}_{cfg['nome']}"
+            "external_reference": f"emp_{empresa.id}_{nome_plano}"
         }
 
         payment_response = sdk.payment().create(payment_data)
@@ -134,8 +129,7 @@ def criar_cobranca_mercadopago(empresa, nome_plano, valor, forma_pagamento, cart
                 "sucesso": True,
                 "dados": payment,
                 "bankSlipUrl": url_boleto,
-                "invoiceUrl": url_boleto,
-                "plano_info": cfg
+                "invoiceUrl": url_boleto
             }
         else:
             msg = payment.get("message", "Erro ao gerar Boleto no Mercado Pago.")
@@ -143,13 +137,15 @@ def criar_cobranca_mercadopago(empresa, nome_plano, valor, forma_pagamento, cart
 
     # 3. CARTÃO DE CRÉDITO
     elif forma_pagamento == 'CREDIT_CARD':
-        token_cartao = cartao_dados.get("token") if cartao_dados else None
+        if not cartao_dados or not cartao_dados.get('token'):
+            return {"sucesso": False, "mensagem": "Token do cartão não fornecido."}
+
         payment_data = {
-            "transaction_amount": float(valor),
-            "token": token_cartao,
-            "description": f"Assinatura Trivium ERP - {cfg['nome']}",
+            "transaction_amount": valor_float,
+            "token": cartao_dados.get("token"),
+            "description": f"Assinatura Trivium ERP - {nome_plano} (Cartão)",
             "installments": int(parcelas),
-            "payment_method_id": cartao_dados.get("payment_method_id", "visa") if cartao_dados else "visa",
+            "payment_method_id": cartao_dados.get("payment_method_id", "visa"),
             "payer": {
                 "email": email_pagador,
                 "identification": {
@@ -157,14 +153,14 @@ def criar_cobranca_mercadopago(empresa, nome_plano, valor, forma_pagamento, cart
                     "number": doc_limpo
                 }
             },
-            "external_reference": f"emp_{empresa.id}_{cfg['nome']}"
+            "external_reference": f"emp_{empresa.id}_{nome_plano}"
         }
 
         payment_response = sdk.payment().create(payment_data)
         payment = payment_response.get("response", {})
 
         if payment_response.get("status") in (200, 201) and payment.get("status") == "approved":
-            return {"sucesso": True, "dados": payment, "plano_info": cfg}
+            return {"sucesso": True, "dados": payment}
         else:
             msg = payment.get("status_detail", "Cartão recusado ou dados inválidos.")
             return {"sucesso": False, "mensagem": f"Transação não autorizada: {msg}"}
@@ -184,10 +180,8 @@ def criar_preferencia_mercado_pago(empresa, plano, valor_total, cupom_codigo=Non
     else:
         cfg = PLANOS_CONFIG['MENSAL']
 
-    # Se houver desconto de cupom validado no front, usa o valor com desconto
     valor_final = float(valor_total) if valor_total else float(cfg['valor_total'])
-
-    base_url = "https://app.triviumerp.com.br" # Substitua se necessário pelo seu domínio em produção
+    base_url = os.getenv("APP_BASE_URL", "https://app.triviumerp.com.br").rstrip("/")
 
     preference_data = {
         "items": [

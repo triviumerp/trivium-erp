@@ -133,11 +133,32 @@
         }
 
         .content-body { padding: 1.5rem; flex-grow: 1; }
+        
         .card-custom {
             background: #ffffff;
             border: 1px solid var(--border-color);
             border-radius: 16px;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.01);
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .card-custom:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.06);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%);
+            border: none;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+            transition: filter 0.2s ease;
+        }
+        .btn-primary:hover {
+            filter: brightness(1.1);
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
         }
     </style>
 </head>
@@ -160,15 +181,16 @@
 
         <div class="sidebar-badge flex-shrink-0">
             <i class="bi bi-shield-check text-primary"></i>
-            <span>Trivium Gestão Pro</span>
+            <span>{{ current_user.empresa.plano or 'Trivium Gestão Pro' }}</span>
         </div>
 
         <nav class="nav flex-column mb-3">
+            <!-- GESTÃO MASTER SUPERADMIN -->
             {% if current_user.is_authenticated and current_user.nivel_acesso == 'master' %}
             <div class="mt-2 mb-1 px-3">
                 <small class="text-uppercase fw-bold text-danger" style="font-size: 0.68rem; letter-spacing: 0.5px;">Gestão SaaS</small>
             </div>
-            <a href="{{ url_for('admin_master_dashboard') }}" class="nav-link-custom text-danger {% if request.endpoint == 'admin_master_dashboard' %}active{% endif %}">
+            <a href="{{ url_for('admin_master_dashboard') }}" class="nav-link-custom text-danger {% if request.endpoint in ['admin_master_dashboard', 'admin_auditoria_parceiro'] %}active{% endif %}">
                 <i class="bi bi-shield-lock-fill"></i><span>Painel Master</span>
             </a>
             <a href="{{ url_for('admin_master_usuarios') }}" class="nav-link-custom text-danger {% if request.endpoint == 'admin_master_usuarios' %}active{% endif %}">
@@ -183,74 +205,145 @@
             <hr class="my-2 border-secondary opacity-25">
             {% endif %}
 
-            <!-- Painel de Controlo -->
+            <!-- MÓDULO AFILIADO (SE FOR PARCEIRO) -->
+            {% if current_user.is_authenticated and current_user.nivel_acesso == 'afiliado' %}
+            <a href="{{ url_for('painel_afiliado') }}" class="nav-link-custom text-success fw-bold {% if request.endpoint == 'painel_afiliado' %}active{% endif %}">
+                <i class="bi bi-wallet2"></i><span>Painel Afiliado</span>
+            </a>
+            <hr class="my-2 border-secondary opacity-25">
+            {% endif %}
+
+            <!-- Painel de Controlo (Base) -->
             <a href="{{ url_for('index') }}" id="tour-dashboard" class="nav-link-custom {% if request.endpoint == 'index' %}active{% endif %}">
                 <i class="bi bi-grid-1x2-fill"></i><span>Painel de Controlo</span>
             </a>
 
-            <!-- Clientes -->
+            <!-- Clientes (Base) -->
             {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_clientes %}
             <a href="{{ url_for('listar_clientes') }}" id="tour-clientes" class="nav-link-custom {% if request.endpoint in ['listar_clientes', 'novo_cliente', 'detalhe_cliente', 'editar_cliente'] %}active{% endif %}">
-                <i class="bi bi-people-fill"></i><span>Clientes</span>
+                <i class="bi bi-people-fill"></i><span>{% if current_user.empresa and current_user.empresa.modulo_atendimentos %}Pacientes{% else %}Clientes{% endif %}</span>
             </a>
             {% endif %}
 
-            <!-- Catálogo -->
-            {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_propostas %}
+            <!-- Catálogo (Base) -->
+            {% if (current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_propostas) and (current_user.empresa.modulo_servicos_campo or current_user.empresa.modulo_atendimentos or current_user.nivel_acesso == 'master') %}
             <a href="{{ url_for('listar_catalogo') }}" id="tour-catalogo" class="nav-link-custom {% if request.endpoint == 'listar_catalogo' %}active{% endif %}">
                 <i class="bi bi-journal-bookmark-fill"></i><span>Catálogo</span>
             </a>
             {% endif %}
 
-            <!-- Propostas -->
-            {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_propostas %}
+            <!-- Propostas & Orçamentos (Base) -->
+            {% if (current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_propostas) and (current_user.empresa.modulo_servicos_campo or current_user.nivel_acesso == 'master') %}
             <a href="{{ url_for('listar_propostas') }}" id="tour-propostas" class="nav-link-custom {% if request.endpoint in ['listar_propostas', 'nova_proposta'] %}active{% endif %}">
                 <i class="bi bi-file-earmark-text-fill"></i><span>Propostas</span>
             </a>
             {% endif %}
 
-            <!-- MÓDULO SERVIÇOS / OS (COM SUBMENUS INDEPENDENTES) -->
-            {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_servicos %}
+            <!-- MÓDULO SERVIÇOS / OS (COM SUBMENUS) -->
+            {% if (current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_servicos) and (current_user.empresa.modulo_servicos_campo or current_user.empresa.modulo_servicos_campo is none or current_user.empresa.modulo_atendimentos or current_user.nivel_acesso == 'master') %}
             <div class="nav-item">
                 <a class="nav-link-custom d-flex justify-content-between align-items-center {% if request.endpoint in ['consultar_servicos', 'listar_atendimentos', 'gestao_operadores', 'visualizar_ficha_servico'] %}active{% endif %}" 
                    data-bs-toggle="collapse" href="#submenuServicos" role="button">
                     <div class="d-flex align-items-center gap-2">
                         <i class="bi bi-briefcase-fill"></i>
-                        <span>Serviços / OS</span>
+                        <span>Serviços & Ordens</span>
                     </div>
                     <i class="bi bi-chevron-down small opacity-75"></i>
                 </a>
                 <div class="collapse {% if request.endpoint in ['consultar_servicos', 'listar_atendimentos', 'gestao_operadores', 'visualizar_ficha_servico'] %}show{% endif %}" id="submenuServicos">
                     <div class="ps-3 py-1 d-flex flex-column gap-1">
+                        {% if current_user.empresa.modulo_servicos_campo or current_user.nivel_acesso == 'master' %}
                         <a href="{{ url_for('consultar_servicos') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'consultar_servicos' %}active fw-bold text-primary{% endif %}">
                             <i class="bi bi-tools"></i><span>Ordens de Serviço</span>
                         </a>
+                        {% endif %}
+
+                        <!-- Fichas de Atendimento Clínico -->
+                        {% if current_user.empresa.modulo_atendimentos or current_user.nivel_acesso == 'master' %}
                         <a href="{{ url_for('listar_atendimentos') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'listar_atendimentos' %}active fw-bold text-primary{% endif %}">
-                            <i class="bi bi-person-lines-fill"></i><span>Fichas de Atendimento</span>
+                            <i class="bi bi-person-lines-fill"></i><span>Fichas Clínicas</span>
                         </a>
+                        {% endif %}
+
+                        <!-- Técnicos & Operadores de Campo -->
+                        {% if current_user.empresa.modulo_gestao_tecnicos or current_user.nivel_acesso == 'master' %}
                         <a href="{{ url_for('gestao_operadores') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'gestao_operadores' %}active fw-bold text-primary{% endif %}">
-                            <i class="bi bi-people"></i><span>Técnicos & Operadores</span>
+                            <i class="bi bi-people"></i><span>Técnicos & Equipe</span>
                         </a>
+                        {% endif %}
                     </div>
                 </div>
             </div>
             {% endif %}
 
-            <!-- Financeiro -->
+            <!-- MÓDULO VENDAS DE MERCADORIAS -->
+            {% if current_user.empresa.modulo_estoque or current_user.empresa.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}
+            <a href="{{ url_for('listar_vendas') }}" class="nav-link-custom {% if request.endpoint == 'listar_vendas' %}active{% endif %}">
+                <i class="bi bi-cart-check-fill"></i><span>Pedidos & Vendas</span>
+            </a>
+            {% endif %}
+
+            <!-- MÓDULO EXPEDIÇÃO & LOGÍSTICA -->
+            {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_expedicao or current_user.perm_estoque %}
+            <a href="{{ url_for('painel_expedicao') }}" class="nav-link-custom {% if request.endpoint == 'painel_expedicao' %}active{% endif %}">
+                <i class="bi bi-truck"></i><span>Expedição & Cargas</span>
+            </a>
+            <a href="{{ url_for('gestao_motoristas') }}" class="nav-link-custom {% if request.endpoint == 'gestao_motoristas' %}active{% endif %}">
+                <i class="bi bi-person-badge-fill"></i><span>Motoristas & Frotas</span>
+            </a>
+            {% endif %}
+
+            <!-- MÓDULO ESTOQUE -->
+            {% if current_user.empresa.modulo_estoque or current_user.nivel_acesso == 'master' %}
+            <a href="{{ url_for('listar_estoque') }}" class="nav-link-custom {% if request.endpoint in ['listar_estoque', 'listar_requisicoes_estoque'] %}active{% endif %}">
+                <i class="bi bi-boxes"></i><span>Estoque & Almoxarifado</span>
+            </a>
+            {% endif %}
+
+            <!-- Financeiro (Base) -->
             {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
             <a href="{{ url_for('financeiro') }}" id="tour-financeiro" class="nav-link-custom {% if request.endpoint == 'financeiro' %}active{% endif %}">
                 <i class="bi bi-cash-stack"></i><span>Financeiro</span>
             </a>
             {% endif %}
 
-            <!-- Lucratividade -->
+            <!-- RELATÓRIOS GERENCIAIS & CONTÁBEIS (COM SUBMENU) -->
             {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
-            <a href="{{ url_for('relatorio_lucratividade') }}" id="tour-lucratividade" class="nav-link-custom {% if request.endpoint == 'relatorio_lucratividade' %}active{% endif %}">
-                <i class="bi bi-graph-up-arrow"></i><span>Lucratividade</span>
-            </a>
+            <div class="nav-item">
+                <a class="nav-link-custom d-flex justify-content-between align-items-center {% if request.endpoint in ['relatorio_contabil', 'relatorio_lucratividade', 'relatorio_vendas'] %}active{% endif %}" 
+                   data-bs-toggle="collapse" href="#submenuRelatorios" role="button">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-bar-chart-line-fill"></i>
+                        <span>Relatórios & DRE</span>
+                    </div>
+                    <i class="bi bi-chevron-down small opacity-75"></i>
+                </a>
+                <div class="collapse {% if request.endpoint in ['relatorio_contabil', 'relatorio_lucratividade', 'relatorio_vendas'] %}show{% endif %}" id="submenuRelatorios">
+                    <div class="ps-3 py-1 d-flex flex-column gap-1">
+                        <!-- Relatório Contábil (ZIP/CSV) -->
+                        <a href="{{ url_for('relatorio_contabil') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'relatorio_contabil' %}active fw-bold text-primary{% endif %}">
+                            <i class="bi bi-journal-check"></i><span>Contábil & Fiscal</span>
+                        </a>
+
+                        <!-- Lucratividade Serviços (ART/Margem) -->
+                        {% if current_user.empresa.modulo_servicos_campo or current_user.nivel_acesso == 'master' %}
+                        <a href="{{ url_for('relatorio_lucratividade') }}" id="tour-lucratividade" class="nav-link-custom py-1 small {% if request.endpoint == 'relatorio_lucratividade' %}active fw-bold text-primary{% endif %}">
+                            <i class="bi bi-graph-up-arrow"></i><span>Lucratividade Serviços</span>
+                        </a>
+                        {% endif %}
+
+                        <!-- Rentabilidade Vendas (CMV) -->
+                        {% if current_user.empresa.modulo_estoque or current_user.empresa.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}
+                        <a href="{{ url_for('relatorio_vendas') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'relatorio_vendas' %}active fw-bold text-primary{% endif %}">
+                            <i class="bi bi-receipt"></i><span>Rentabilidade Vendas</span>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
             {% endif %}
 
-            <!-- Configurações -->
+            <!-- Configurações (Base) -->
             {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_configuracoes %}
             <a href="{{ url_for('perfil_empresa') }}" id="tour-config" class="nav-link-custom {% if request.endpoint == 'perfil_empresa' %}active{% endif %}">
                 <i class="bi bi-gear-wide-connected"></i><span>Configurações</span>
@@ -262,7 +355,7 @@
             <a href="{{ url_for('faq') }}" class="nav-link-custom {% if request.endpoint == 'faq' %}active{% endif %}">
                 <i class="bi bi-question-circle-fill"></i><span>Ajuda & FAQ</span>
             </a>
-            <a href="{{ url_for('suporte') }}" class="nav-link-custom {% if request.endpoint in ['suporte', 'detalhe_chamado'] %}active{% endif %}">
+            <a href="{{ url_for('suporte') }}" class="nav-link-custom {% if request.endpoint in ['suporte', 'novo_chamado', 'detalhe_chamado'] %}active{% endif %}">
                 <i class="bi bi-headset"></i><span>Suporte</span>
             </a>
             <a href="{{ url_for('auth.logout') }}" class="nav-link-custom text-danger mt-1">
@@ -271,104 +364,10 @@
         </div>
     </aside>
 
-    <!-- MENU OFFCANVAS MOBILE -->
-    <div class="offcanvas offcanvas-start d-md-none" tabindex="-1" id="mobileMenu">
-        <div class="offcanvas-header border-bottom">
-            <a href="{{ url_for('index') }}" class="d-flex align-items-center gap-2 text-decoration-none">
-                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Trivium ERP" style="height: 32px;" onerror="this.style.display='none'">
-                <span class="brand-logo-text mb-0" style="font-size: 1.2rem;">Trivium <span>ERP</span></span>
-            </a>
-            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-        </div>
-        <div class="offcanvas-body d-flex flex-column">
-            <nav class="nav flex-column mb-auto">
-                <a href="{{ url_for('index') }}" class="nav-link-custom {% if request.endpoint == 'index' %}active{% endif %}">
-                    <i class="bi bi-grid-1x2-fill"></i><span>Painel de Controlo</span>
-                </a>
-
-                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_clientes %}
-                <a href="{{ url_for('listar_clientes') }}" class="nav-link-custom {% if request.endpoint in ['listar_clientes', 'novo_cliente', 'detalhe_cliente', 'editar_cliente'] %}active{% endif %}">
-                    <i class="bi bi-people-fill"></i><span>Clientes</span>
-                </a>
-                {% endif %}
-
-                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_propostas %}
-                <a href="{{ url_for('listar_catalogo') }}" class="nav-link-custom {% if request.endpoint == 'listar_catalogo' %}active{% endif %}">
-                    <i class="bi bi-journal-bookmark-fill"></i><span>Catálogo</span>
-                </a>
-                {% endif %}
-
-                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_propostas %}
-                <a href="{{ url_for('listar_propostas') }}" class="nav-link-custom {% if request.endpoint in ['listar_propostas', 'nova_proposta'] %}active{% endif %}">
-                    <i class="bi bi-file-earmark-text-fill"></i><span>Propostas</span>
-                </a>
-                {% endif %}
-
-                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_servicos %}
-                <div class="nav-item">
-                    <a class="nav-link-custom d-flex justify-content-between align-items-center {% if request.endpoint in ['consultar_servicos', 'gestao_operadores'] %}active{% endif %}" 
-                       data-bs-toggle="collapse" href="#submenuServicosMobile" role="button">
-                        <div class="d-flex align-items-center gap-2">
-                            <i class="bi bi-briefcase-fill"></i><span>Serviços / OS</span>
-                        </div>
-                        <i class="bi bi-chevron-down small"></i>
-                    </a>
-                    <div class="collapse show" id="submenuServicosMobile">
-                        <div class="ps-3 py-1 d-flex flex-column gap-1">
-                            <a href="{{ url_for('consultar_servicos') }}" class="nav-link-custom py-1 small">
-                                <i class="bi bi-clipboard-check"></i><span>Ordens de Serviço</span>
-                            </a>
-                            <a href="{{ url_for('consultar_servicos', tipo='atendimentos') }}" class="nav-link-custom py-1 small">
-                                <i class="bi bi-person-lines-fill"></i><span>Fichas de Atendimento</span>
-                            </a>
-                            <a href="{{ url_for('gestao_operadores') }}" class="nav-link-custom py-1 small">
-                                <i class="bi bi-people"></i><span>Técnicos & Operadores</span>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-
-                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
-                <a href="{{ url_for('financeiro') }}" class="nav-link-custom {% if request.endpoint == 'financeiro' %}active{% endif %}">
-                    <i class="bi bi-cash-stack"></i><span>Financeiro</span>
-                </a>
-                {% endif %}
-                
-                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
-                <a href="{{ url_for('relatorio_lucratividade') }}" class="nav-link-custom {% if request.endpoint == 'relatorio_lucratividade' %}active{% endif %}">
-                    <i class="bi bi-graph-up-arrow"></i><span>Lucratividade</span>
-                </a>
-                {% endif %}
-                
-                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_configuracoes %}
-                <a href="{{ url_for('perfil_empresa') }}" class="nav-link-custom {% if request.endpoint == 'perfil_empresa' %}active{% endif %}">
-                    <i class="bi bi-gear-wide-connected"></i><span>Configurações</span>
-                </a>
-                {% endif %}
-
-                <a href="{{ url_for('faq') }}" class="nav-link-custom {% if request.endpoint == 'faq' %}active{% endif %}">
-                    <i class="bi bi-question-circle-fill"></i><span>Ajuda & FAQ</span>
-                </a>
-                <a href="{{ url_for('suporte') }}" class="nav-link-custom {% if request.endpoint in ['suporte', 'detalhe_chamado'] %}active{% endif %}">
-                    <i class="bi bi-headset"></i><span>Suporte</span>
-                </a>
-            </nav>
-            <div class="pt-3 border-top mt-4">
-                <a href="{{ url_for('auth.logout') }}" class="nav-link-custom text-danger">
-                    <i class="bi bi-box-arrow-left"></i><span>Sair</span>
-                </a>
-            </div>
-        </div>
-    </div>
-
     <!-- WRAPPER PRINCIPAL -->
     <div class="main-wrapper">
         <header class="top-navbar">
             <div class="d-flex align-items-center gap-3">
-                <button class="btn btn-light d-md-none p-1 shadow-sm border" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu">
-                    <i class="bi bi-list fs-4"></i>
-                </button>
                 <h6 class="mb-0 fw-bold text-muted d-none d-sm-block">
                     {% if current_user.is_authenticated and current_user.empresa %}
                         {{ current_user.empresa.razao_social }}
@@ -379,24 +378,29 @@
             </div>
 
             <div class="d-flex align-items-center gap-3">
-                <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="iniciarTourGuiado()" title="Ver Tour pelo Sistema">
-                    <i class="bi bi-question-circle me-1"></i> Fazer Tour
-                </button>
                 <a href="{{ url_for('auth.logout') }}" class="btn btn-sm btn-outline-danger d-none d-sm-inline-flex align-items-center gap-1">
                     <i class="bi bi-box-arrow-left"></i> Sair
                 </a>
             </div>
         </header>
 
-        <!-- Mensagens Flash -->
-        <div class="px-3 px-md-4 pt-3">
+        <!-- CONTAINER DE TOASTS FLUTUANTES -->
+        <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 2050;">
             {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show card-custom border-0 shadow-sm mb-2" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
+                    {% set bg_color = 'bg-success text-white' if category == 'success' else ('bg-danger text-white' if category in ['error', 'danger'] else ('bg-warning text-dark' if category == 'warning' else 'bg-primary text-white')) %}
+                    {% set icon_tipo = 'bi-check-circle-fill' if category == 'success' else ('bi-exclamation-triangle-fill' if category in ['error', 'danger', 'warning'] else 'bi-info-circle-fill') %}
+
+                    <div class="toast align-items-center {{ bg_color }} border-0 shadow-lg rounded-4 mb-2 show" role="alert" aria-live="assertive" aria-atomic="true">
+                        <div class="d-flex">
+                            <div class="toast-body d-flex align-items-center gap-2 fw-semibold py-3 px-3">
+                                <i class="bi {{ icon_tipo }} fs-5 flex-shrink-0"></i>
+                                <div>{{ message }}</div>
+                            </div>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                        </div>
+                    </div>
                 {% endfor %}
             {% endif %}
             {% endwith %}
@@ -407,8 +411,19 @@
         </main>
     </div>
 
-    <!-- Bootstrap 5 JS -->
+    <!-- Bootstrap 5 JS & Driver.js -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const toasts = document.querySelectorAll('.toast');
+            toasts.forEach(t => {
+                setTimeout(() => {
+                    t.classList.remove('show');
+                    setTimeout(() => t.remove(), 300);
+                }, 4500);
+            });
+        });
+    </script>
 </body>
 </html>

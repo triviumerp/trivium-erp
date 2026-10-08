@@ -56,6 +56,32 @@ class Empresa(db.Model):
     chamados = db.relationship('ChamadoSuporte', back_populates='empresa', lazy=True, cascade="all, delete-orphan")
     operadores = db.relationship('OperadorCampo', backref='empresa', lazy=True, cascade="all, delete-orphan")
 
+    # Configuração Modular e Precificação SaaS
+    valor_base_plano = db.Column(db.Float, default=14.90)
+    limite_usuarios = db.Column(db.Integer, default=5)
+    modulo_servicos_campo = db.Column(db.Boolean, default=True)
+    modulo_atendimentos = db.Column(db.Boolean, default=False)
+    modulo_gestao_tecnicos = db.Column(db.Boolean, default=False)
+    modulo_estoque = db.Column(db.Boolean, default=False)
+    modulo_vendas_externas = db.Column(db.Boolean, default=False)
+    token_requisicao_equipe = db.Column(db.String(64), unique=True, index=True, nullable=True)
+    slug_loja = db.Column(db.String(100), unique=True, nullable=True)
+
+    # Relacionamentos com Estoque e Pedidos
+    produtos = db.relationship('ProdutoEstoque', backref='empresa', lazy=True, cascade="all, delete-orphan")
+    movimentacoes_estoque = db.relationship('MovimentacaoEstoque', backref='empresa', lazy=True, cascade="all, delete-orphan")
+    pedidos_requisicoes = db.relationship('PedidoRequisicao', backref='empresa', lazy=True, cascade="all, delete-orphan")
+
+    def gerar_token_requisicao_se_necessario(self):
+        if not self.token_requisicao_equipe:
+            self.token_requisicao_equipe = secrets.token_urlsafe(32)
+        return self.token_requisicao_equipe
+
+    def gerar_slug_vendas_se_necessario(self):
+        if not self.slug_loja:
+            self.slug_loja = f"loja-{self.id}-{secrets.token_hex(4)}"
+        return self.slug_loja
+
     cupom_utilizado = db.Column(db.String(30), nullable=True)
     afiliado_id = db.Column(db.Integer, db.ForeignKey('cupons_desconto.id'), nullable=True)
     data_expiracao_cupom = db.Column(db.Date, nullable=True)
@@ -94,6 +120,8 @@ class Usuario(UserMixin, db.Model):
     perm_configuracoes = db.Column(db.Boolean, default=False)
     aceitou_termos_beta = db.Column(db.Boolean, default=True)
     data_aceite_termos = db.Column(db.DateTime, nullable=True)
+    perm_estoque = db.Column(db.Boolean, default=False)
+    perm_expedicao = db.Column(db.Boolean, default=False)
 
     # Dados do Afiliado / Parceiro
     cpf_cnpj = db.Column(db.String(20), nullable=True)
@@ -145,6 +173,7 @@ class Cliente(db.Model):
     faturas = db.relationship('Fatura', backref='cliente', lazy=True, cascade="all, delete-orphan")
     contratos_gerados = db.relationship('ContratoGerado', backref='cliente', lazy=True, cascade="all, delete-orphan")
 
+    
     @property
     def total_concluido(self):
         return sum(float(s.valor_cobrado or 0.0) for s in self.servicos if s.status == 'Concluido')
@@ -303,11 +332,20 @@ class OperadorCampo(db.Model):
     telefone = db.Column(db.String(30), nullable=False)
     documento_registro = db.Column(db.String(50), nullable=True)
     email = db.Column(db.String(120), nullable=True)
+    tipo_operador = db.Column(db.String(30), default='tecnico')  # 'tecnico' ou 'motorista'
+    veiculo_placa = db.Column(db.String(20), nullable=True)
+    token_acesso = db.Column(db.String(64), unique=True, index=True, nullable=True)
     ativo = db.Column(db.Boolean, default=True)
     data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
 
     cliente_alocado = db.relationship('Cliente', backref='operadores_alocados', lazy=True)
     ordens_servico = db.relationship('ServicoCliente', backref='operador_responsavel', lazy=True)
+    entregas = db.relationship('PedidoRequisicao', backref='motorista_responsavel', lazy=True)
+
+    def gerar_token_se_necessario(self):
+        if not self.token_acesso:
+            self.token_acesso = secrets.token_urlsafe(32)
+        return self.token_acesso
 
     @property
     def total_os_concluidas(self):
@@ -420,13 +458,17 @@ class ItemProposta(db.Model):
     __tablename__ = 'itens_proposta'
     id = db.Column(db.Integer, primary_key=True)
     proposta_id = db.Column(db.Integer, db.ForeignKey('propostas.id'), nullable=False)
-    tipo_servico_id = db.Column(db.Integer, db.ForeignKey('tipos_servico.id'), nullable=False)
+    tipo_servico_id = db.Column(db.Integer, db.ForeignKey('tipos_servico.id'), nullable=True)
     
     unidade = db.Column(db.String(30), default='un')
     quantidade = db.Column(db.Float, default=1.0)
     valor_unitario = db.Column(db.Float, nullable=False, default=0.0)
     descricao_personalizada = db.Column(db.Text, nullable=True)
     exibir_detalhamento_proposta = db.Column(db.Boolean, default=False)
+
+    tipo_item_origem = db.Column(db.String(20), default='servico')  # 'servico' ou 'produto'
+    produto_id = db.Column(db.Integer, db.ForeignKey('produtos_estoque.id'), nullable=True)
+    produto_vinculado = db.relationship('ProdutoEstoque', lazy='joined')
 
     tipo_servico = db.relationship('TipoServico', lazy='joined')
     custos = db.relationship('ItemPropostaCusto', backref='item_proposta', lazy='select', cascade="all, delete-orphan")
@@ -657,3 +699,98 @@ class RepasseAfiliado(db.Model):
     observacoes = db.Column(db.Text, nullable=True)
 
     comissoes = db.relationship('ComissaoAfiliado', backref='repasse', lazy=True)
+
+class ProdutoEstoque(db.Model):
+    __tablename__ = 'produtos_estoque'
+    id = db.Column(db.Integer, primary_key=True)
+    empresa_id = db.Column(db.Integer, db.ForeignKey('empresas.id'), nullable=False)
+    nome = db.Column(db.String(150), nullable=False)
+    codigo_sku = db.Column(db.String(50), nullable=True)
+    codigo_barras = db.Column(db.String(50), nullable=True)
+    unidade_medida = db.Column(db.String(20), default='un')
+    tipo_item = db.Column(db.String(30), default='misto')  # 'venda', 'consumo_interno', 'misto'
+    quantidade_atual = db.Column(db.Float, default=0.0)
+    quantidade_minima = db.Column(db.Float, default=5.0)
+    preco_custo = db.Column(db.Float, default=0.0)
+    preco_venda_sugerido = db.Column(db.Float, default=0.0)
+    descricao = db.Column(db.Text, nullable=True)
+    foto_arquivo = db.Column(db.String(255), nullable=True)
+    ativo = db.Column(db.Boolean, default=True)
+    data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
+
+    movimentacoes = db.relationship('MovimentacaoEstoque', backref='produto', lazy=True, cascade="all, delete-orphan")
+
+    @property
+    def alerta_estoque_baixo(self):
+        return (self.quantidade_atual or 0.0) <= (self.quantidade_minima or 0.0)
+
+
+class MovimentacaoEstoque(db.Model):
+    __tablename__ = 'movimentacoes_estoque'
+    id = db.Column(db.Integer, primary_key=True)
+    empresa_id = db.Column(db.Integer, db.ForeignKey('empresas.id'), nullable=False)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produtos_estoque.id'), nullable=False)
+    tipo_movimento = db.Column(db.String(30), nullable=False)
+    quantidade = db.Column(db.Float, nullable=False)
+    saldo_anterior = db.Column(db.Float, nullable=False)
+    saldo_posterior = db.Column(db.Float, nullable=False)
+    motivo_observacao = db.Column(db.String(255), nullable=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    data_movimento = db.Column(db.DateTime, default=datetime.utcnow)
+
+    usuario = db.relationship('Usuario')
+
+
+class PedidoRequisicao(db.Model):
+    __tablename__ = 'pedidos_requisicoes'
+    id = db.Column(db.Integer, primary_key=True)
+    empresa_id = db.Column(db.Integer, db.ForeignKey('empresas.id'), nullable=False)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=True)
+    proposta_origem_id = db.Column(db.Integer, db.ForeignKey('propostas.id'), nullable=True)
+    operador_id = db.Column(db.Integer, db.ForeignKey('operadores_campo.id'), nullable=True)
+    numero_pedido = db.Column(db.String(50), nullable=False)
+    tipo_origem = db.Column(db.String(30), default='requisicao_interna')
+    nome_solicitante = db.Column(db.String(120), nullable=False)
+    contato_solicitante = db.Column(db.String(50), nullable=True)
+    setor_obra_destino = db.Column(db.String(150), nullable=True)
+    observacoes = db.Column(db.Text, nullable=True)
+    valor_total = db.Column(db.Float, default=0.0)
+    status = db.Column(db.String(30), default='pendente') # 'pendente', 'em_separacao', 'em_rota', 'entregue'
+    ordem_entrega = db.Column(db.Integer, default=1)
+    data_solicitacao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_agendada_entrega = db.Column(db.Date, nullable=True)
+    data_conclusao = db.Column(db.DateTime, nullable=True)
+
+    # Anexos do Pedido (Mesma Linha)
+    arquivo_nf = db.Column(db.String(255), nullable=True)
+    arquivo_boleto = db.Column(db.String(255), nullable=True)
+
+    # Protocolo de Entrega / Separação
+    recebido_por_nome = db.Column(db.String(120), nullable=True)
+    recebido_por_documento = db.Column(db.String(50), nullable=True)
+    assinatura_entrega_base64 = db.Column(db.Text, nullable=True)
+    foto_comprovante_entrega = db.Column(db.String(255), nullable=True)
+    data_entrega_realizada = db.Column(db.DateTime, nullable=True)
+
+    fatura_id = db.Column(db.Integer, db.ForeignKey('faturas.id'), nullable=True)
+    fatura_vinculada = db.relationship('Fatura', backref=db.backref('pedido_venda', uselist=False))
+    exige_entrada = db.Column(db.Boolean, default=False)
+    valor_entrada = db.Column(db.Float, default=0.0)
+    forma_pagamento_entrada = db.Column(db.String(50), default='PIX')
+    qtd_parcelas = db.Column(db.Integer, default=1)
+    forma_pagamento_parcelas = db.Column(db.String(50), default='Boleto Bancário')
+    intervalo_dias = db.Column(db.Integer, default=30)
+
+    itens = db.relationship('ItemPedidoRequisicao', backref='pedido', lazy=True, cascade="all, delete-orphan")
+
+class ItemPedidoRequisicao(db.Model):
+    __tablename__ = 'itens_pedido_requisicao'
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_id = db.Column(db.Integer, db.ForeignKey('pedidos_requisicoes.id'), nullable=False)
+    produto_id = db.Column(db.Integer, db.ForeignKey('produtos_estoque.id'), nullable=False)
+    quantidade_solicitada = db.Column(db.Float, nullable=False)
+    quantidade_atendida = db.Column(db.Float, default=0.0)
+    preco_unitario = db.Column(db.Float, default=0.0)
+    valor_total = db.Column(db.Float, default=0.0)
+
+    produto = db.relationship('ProdutoEstoque')

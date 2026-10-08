@@ -3,409 +3,912 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Criar Conta - Trivium ERP</title>
-
-    <!-- Google Fonts -->
+    <title>Configuração do Ambiente - Trivium ERP</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logofav.png') }}">
+    
+    <!-- Google Fonts & Bootstrap -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
-    <!-- Bootstrap 5 CSS & Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
     <style>
-        body {
+    * { box-sizing: border-box; }
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow-x: hidden;
             font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: #f8fafc;
-            color: #0f172a;
-            min-height: 100vh;
+            background-color: #0b0f19;
+            color: #f8fafc;
+        }
+
+        body {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 2rem 1rem;
+            padding: 1rem;
         }
-        .card-registro {
-            max-width: 540px;
+
+        /* FUNDO DINÂMICO AURORA MESH */
+        .aurora-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.45;
+            animation: orbFloat 22s infinite alternate ease-in-out;
+        }
+
+        .orb-1 {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, #2563eb 0%, transparent 70%);
+            top: -100px;
+            left: -100px;
+        }
+
+        .orb-2 {
+            width: 550px;
+            height: 550px;
+            background: radial-gradient(circle, #059669 0%, transparent 70%);
+            bottom: -100px;
+            right: -100px;
+            animation-delay: -7s;
+            animation-duration: 26s;
+        }
+
+        .orb-3 {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, #6366f1 0%, transparent 70%);
+            top: 40%;
+            left: 35%;
+            animation-delay: -12s;
+            animation-duration: 18s;
+        }
+
+        @keyframes orbFloat {
+            0% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(60px, 40px) scale(1.1); }
+            100% { transform: translate(-40px, 70px) scale(0.95); }
+        }
+
+        /* ============================================================== */
+        /* QUADRO PRINCIPAL COM O LED AZUL GIRANDO NA BORDA               */
+        /* ============================================================== */
+        .glass-card-panoramic {
+            position: relative;
+            max-width: 1050px;
             width: 100%;
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05);
-            padding: 2.5rem;
+            padding: 2rem 2.5rem;
+            border-radius: 26px;
+            overflow: hidden;
+            z-index: 10;
+            box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 30px rgba(37, 99, 235, 0.2);
         }
-        .brand-logo-text {
-            font-size: 1.6rem;
-            font-weight: 800;
-            letter-spacing: -0.8px;
-            color: #1e3a8a;
-            text-decoration: none;
+
+        /* 1. FEIXE DE LED AZUL CONTÍNUO */
+        .glass-card-panoramic::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: conic-gradient(
+                transparent,
+                transparent 65%,
+                rgba(37, 99, 235, 0.5) 80%,
+                #38bdf8 92%,
+                #ffffff 100%
+            );
+            animation: girarLed 4.5s linear infinite;
+            z-index: -2;
         }
-        .brand-logo-text span {
-            color: #2563eb;
+
+        /* 2. CAMADA INTERNA DE VIDRO ESCURO */
+        .glass-card-panoramic::after {
+            content: '';
+            position: absolute;
+            inset: 1.5px; /* Espessura da linha de LED */
+            background: rgba(17, 24, 39, 0.94);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border-radius: 24.5px;
+            z-index: -1;
         }
-        .termos-scroll-box {
-            max-height: 520px;
-            overflow-y: auto;
-            padding-right: 14px;
+
+        .glass-card-panoramic > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        @keyframes girarLed {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* ============================================================== */
+        /* CARDS DE SELEÇÃO INTERNOS (LIMPOS, SEM LED GIRATÓRIO)          */
+        /* ============================================================== */
+        .grid-cards-5 {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+        }
+
+        .grid-cards-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        @media (max-width: 991px) {
+            .grid-cards-5 { grid-template-columns: repeat(2, 1fr); }
+            .grid-cards-3 { grid-template-columns: 1fr; }
+            .glass-card-panoramic { padding: 1.5rem; }
+        }
+
+        .card-square-option {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1.5px solid rgba(255, 255, 255, 0.08);
+            border-radius: 18px;
+            padding: 1.1rem 0.9rem;
+            cursor: pointer;
+            transition: all 0.22s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            justify-content: flex-start;
+            min-height: 185px;
+        }
+
+        .card-square-option:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(37, 99, 235, 0.5);
+            transform: translateY(-3px);
+        }
+
+        .card-square-option.selected {
+            background: rgba(37, 99, 235, 0.18);
+            border-color: #3b82f6;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+        }
+
+        .card-square-option .option-icon-square {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.45rem;
+            color: #60a5fa;
+            margin-bottom: 0.75rem;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }
+
+        .card-square-option.selected .option-icon-square {
+            background: #2563eb;
+            color: #ffffff;
+        }
+
+        .card-square-option strong {
             font-size: 0.88rem;
-            line-height: 1.75;
-            color: #334155;
+            line-height: 1.25;
+            color: #ffffff;
+            margin-bottom: 0.35rem;
         }
-        .termos-scroll-box::-webkit-scrollbar {
-            width: 6px;
+
+        .card-square-option small {
+            font-size: 0.72rem;
+            line-height: 1.35;
+            color: rgba(255, 255, 255, 0.55);
         }
-        .termos-scroll-box::-webkit-scrollbar-track {
-            background: #f1f5f9;
+
+        /* COMPONENTES COMPLEMENTARES */
+        .toast-floating-container {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 1050;
+            max-width: 450px;
+        }
+
+        .toast-error-box {
+            background: #7f1d1d;
+            border: 1.5px solid #ef4444;
+            color: #ffffff;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border-radius: 14px;
+            padding: 0.9rem 1.2rem;
+            animation: slideInDown 0.3s ease forwards;
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+
+        @keyframes slideInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .progress-pill {
+            height: 5px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #2563eb, #10b981);
+            transition: width 0.35s ease;
+        }
+
+        .btn-brand {
+            background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+            border: none;
+            color: #ffffff;
+            font-weight: 700;
+            border-radius: 12px;
+            padding: 0.8rem 1.6rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+        }
+        .btn-brand:hover {
+            filter: brightness(1.1);
+            color: #ffffff;
+        }
+
+        .form-control-dark {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            color: #ffffff;
+            border-radius: 10px;
+            padding: 0.65rem 0.9rem;
+            font-size: 0.9rem;
+        }
+        .form-control-dark:focus {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: #3b82f6;
+            color: #ffffff;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+        }
+
+        .badge-trial {
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid #10b981;
+            color: #34d399;
+            font-weight: 700;
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.76rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .password-meter {
+            height: 4px;
             border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            margin-top: 5px;
+            overflow: hidden;
         }
-        .termos-scroll-box::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
+        .password-meter-fill {
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease, background-color 0.3s ease;
         }
-        .termos-scroll-box::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
+
+        .modal-glass {
+            background: rgba(15, 23, 42, 0.96);
+            backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            color: #f8fafc;
+            border-radius: 24px;
         }
+
+        .pulse-loader {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 3px solid rgba(59, 130, 246, 0.2);
+            border-top-color: #3b82f6;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
-    <div class="card-registro">
-        <div class="text-center mb-4">
-            <a href="{{ url_for('auth.login') }}" class="brand-logo-text">Trivium <span>ERP</span></a>
-            <p class="text-muted small mt-1">Crie sua conta e comece o seu período de testes</p>
-        </div>
-
-        <!-- Mensagens Flash -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-            <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show small mb-3" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-            {% endfor %}
-        {% endif %}
-        {% endwith %}
-
-        <form method="POST" id="formRegistro">
-            {% if cupom_ref %}
-            <div class="alert alert-success small py-2 mb-3">
-                <i class="bi bi-tag-fill me-1"></i> Cupom promocional aplicado: <strong>{{ cupom_ref }}</strong>
-                <input type="hidden" name="cupom_indicacao" value="{{ cupom_ref }}">
-            </div>
-            {% endif %}
-
-            {% if afiliado_id %}
-            <input type="hidden" name="afiliado_id" value="{{ afiliado_id }}">
-            {% endif %}
-
-            <!-- TIPO DE PESSOA -->
-            <div class="mb-3 p-2 bg-light rounded-3 border d-flex gap-4 small">
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="tipo_pessoa" id="tipoPJ" value="PJ" checked onchange="alternarTipoPessoaReg('PJ')">
-                    <label class="form-check-label fw-bold" for="tipoPJ">Pessoa Jurídica (CNPJ)</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="tipo_pessoa" id="tipoPF" value="PF" onchange="alternarTipoPessoaReg('PF')">
-                    <label class="form-check-label fw-bold" for="tipoPF">Autônomo (CPF)</label>
-                </div>
-            </div>
-
-            <div class="row g-2 mb-3">
-                <div class="col-md-7">
-                    <label class="form-label small fw-bold" id="labelNomeReg">Razão Social / Nome da Empresa *</label>
-                    <input type="text" name="razao_social" id="inputRazaoSocial" class="form-control form-control-sm" required placeholder="Nome ou Razão Social">
-                </div>
-                <div class="col-md-5" id="colDocReg">
-                    <label class="form-label small fw-bold" id="labelDocReg">CNPJ *</label>
-                    <input type="text" name="cnpj" id="inputDocReg" class="form-control form-control-sm font-monospace" required placeholder="00.000.000/0000-00">
-                </div>
-            </div>
-
-            <div class="row g-2 mb-3">
-                <div class="col-md-7">
-                    <label class="form-label small fw-bold">Seu Nome Completo *</label>
-                    <input type="text" name="nome_usuario" class="form-control form-control-sm" required placeholder="Nome do administrador">
-                </div>
-                <div class="col-md-5">
-                    <label class="form-label small fw-bold">Telefone / WhatsApp *</label>
-                    <input type="text" name="telefone" class="form-control form-control-sm" required placeholder="(11) 99999-9999">
-                </div>
-            </div>
-
-            <!-- E-MAIL E CONFIRMAÇÃO DE E-MAIL -->
-            <div class="mb-3">
-                <label class="form-label small fw-bold">E-mail de Acesso *</label>
-                <input type="email" name="email" id="email" class="form-control form-control-sm" required placeholder="seu@email.com">
-            </div>
-
-            <div class="mb-3">
-                <label class="form-label small fw-bold">Confirme seu E-mail *</label>
-                <input type="email" name="confirma_email" id="confirma_email" class="form-control form-control-sm" required placeholder="Digite o e-mail novamente">
-                <div id="erroEmail" class="invalid-feedback">Os e-mails digitados não conferem.</div>
-            </div>
-
-            <!-- SENHAS -->
-            <div class="row g-2 mb-3">
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">Senha de Acesso *</label>
-                    <input type="password" name="senha" class="form-control form-control-sm" required placeholder="Mínimo 8 caracteres">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold">Confirme a Senha *</label>
-                    <input type="password" name="confirma_senha" class="form-control form-control-sm" required placeholder="Repita a senha">
-                </div>
-            </div>
-
-            <!-- ACEITE DOS TERMOS COM POP-UP MODAL -->
-            <div class="form-check mb-3 small">
-                <input class="form-check-input" type="checkbox" id="checkTermos" required>
-                <label class="form-check-label text-muted" for="checkTermos">
-                    Li e concordo com os <a href="#" data-bs-toggle="modal" data-bs-target="#modalTermosJuridicos" class="text-primary fw-bold text-decoration-underline">Termos de Uso, Política de Reembolso e LGPD</a>.
-                </label>
-            </div>
-
-            <button type="submit" class="btn btn-primary fw-bold w-100 py-2 shadow-sm mb-3">
-                <i class="bi bi-rocket-takeoff me-1"></i> Criar Minha Conta Grátis
-            </button>
-
-            <div class="text-center small">
-                <span class="text-muted">Já tem uma conta?</span> <a href="{{ url_for('auth.login') }}" class="fw-bold text-decoration-none">Faça login</a>
-            </div>
-        </form>
+    <!-- FUNDO DINÂMICO AURORA -->
+    <div class="aurora-bg">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
     </div>
 
-    <!-- ================================================================= -->
-    <!-- MODAL (POP-UP) COM TODO O TEXTO JURÍDICO INTEGRAL -->
-    <!-- ================================================================= -->
-    <div class="modal fade" id="modalTermosJuridicos" tabindex="-1" aria-labelledby="modalTermosLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-            <div class="modal-content rounded-4 border-0 shadow-lg">
-                <div class="modal-header bg-light border-bottom py-3">
-                    <div>
-                        <h5 class="modal-title fw-bold text-dark mb-0" id="modalTermosLabel">
-                            <i class="bi bi-shield-check text-primary me-2"></i>Termos de Uso, Licenciamento, Reembolso & LGPD
-                        </h5>
-                        <small class="text-muted">Trivium ERP • Plataforma de Gestão em Nuvem</small>
+    <!-- MENSAGENS FLASH (AUTO-DISMISS EM 5S) -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="toast-floating-container" id="floatingAlerts">
+                {% for category, message in messages %}
+                    <div class="toast-error-box d-flex justify-content-between align-items-center mb-2">
+                        <div class="d-flex align-items-center gap-2 small">
+                            <i class="bi bi-exclamation-triangle-fill fs-5 text-warning"></i>
+                            <span>{{ message }}</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 ms-2">
+                            {% if email_duplicado %}
+                                <a href="{{ url_for('auth.login') }}" class="btn btn-xs btn-light fw-bold py-1 px-2 text-nowrap" style="font-size: 0.75rem;">
+                                    Entrar
+                                </a>
+                            {% endif %}
+                            <button type="button" class="btn-close btn-close-white btn-sm" onclick="closeToast(this.parentElement.parentElement)"></button>
+                        </div>
                     </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <div class="glass-card-panoramic">
+        <!-- HEADER -->
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h4 class="fw-bold mb-0 text-white">
+                Trivium <span class="text-primary">ERP</span>
+            </h4>
+            <span class="badge-trial">
+                <i class="bi bi-shield-check"></i> 14 Dias Grátis • Sem Cartão
+            </span>
+        </div>
+
+        <!-- PROGRESS BAR -->
+        <div class="progress-pill">
+            <div class="progress-fill" id="progressFill" style="width: {% if abrir_step3 %}100%{% else %}33%{% endif %};"></div>
+        </div>
+
+        <form method="POST" action="{{ url_for('auth.registro') }}" id="formOnboarding">
+            <input type="hidden" name="perfil_operacao" id="inputPerfilOperacao" value="{{ perfil_operacao or 'servicos_campo' }}">
+            <input type="hidden" name="equipe_porte" id="inputEquipePorte" value="{{ equipe_porte or '1' }}">
+            <input type="hidden" name="usar_financeiro" id="inputUsarFinanceiro" value="{% if usar_financeiro is defined %}{{ 1 if usar_financeiro else 0 }}{% else %}1{% endif %}">
+            <input type="hidden" name="cupom_indicacao" value="{{ cupom_ref or '' }}">
+
+            <!-- ============================================================== -->
+            <!-- ETAPA 1: ESCOPO DO NEGÓCIO (5 CARDS HORIZONTAIS)               -->
+            <!-- ============================================================== -->
+            <div id="step1" class="step-pane {% if abrir_step3 %}d-none{% endif %}">
+                <div class="mb-3">
+                    <h5 class="fw-bold text-white mb-0">Qual é o foco principal da sua operação?</h5>
+                    <small class="text-white-50">Selecione o modelo para personalizarmos os módulos na tela.</small>
                 </div>
-                
-                <div class="modal-body p-4 p-md-5">
-                    <div class="termos-scroll-box">
 
-                        <!-- ================================================================= -->
-                        <!-- TERMOS DE USO E LICENCIAMENTO DE SOFTWARE -->
-                        <!-- ================================================================= -->
-                        <h3 class="fw-bold text-dark mb-1">Termos de Uso e Licenciamento de Software</h3>
-                        <p class="text-muted small mb-4">Última atualização: Setembro de 2026</p>
+                <div class="grid-cards-5 mb-4">
+                    <div class="card-square-option {% if (perfil_operacao or 'servicos_campo') == 'servicos_campo' %}selected{% endif %}" onclick="selectOption('perfil', 'servicos_campo', this)">
+                        <div class="option-icon-square"><i class="bi bi-tools"></i></div>
+                        <strong>Serviços & Manutenção</strong>
+                        <small>Empreiteiras, ordens de serviço e vistorias em campo.</small>
+                    </div>
 
-                        <p>Este Instrumento Particular de Termos de Uso ("Termo") constitui um contrato vinculante entre a plataforma <strong>TRIVIUM ERP</strong> ("Licenciante" ou "Plataforma") e a pessoa física ou jurídica devidamente qualificada no ato do cadastro ("Licenciada", "Contratante" ou "Usuário").</p>
+                    <div class="card-square-option {% if perfil_operacao == 'saude' %}selected{% endif %}" onclick="selectOption('perfil', 'saude', this)">
+                        <div class="option-icon-square"><i class="bi bi-heart-pulse"></i></div>
+                        <strong>Saúde & Terapias</strong>
+                        <small>Psicólogos, clínicas e prontuários SOAP.</small>
+                    </div>
 
-                        <h5 class="fw-bold text-dark mt-4">1. Objeto e Concessão da Licença</h5>
-                        <p>1.1. O presente instrumento tem por objeto a concessão de licença de uso temporária, pessoal, onerosa, intransferível e não exclusiva do software como serviço (SaaS) denominado <strong>Trivium ERP</strong>, destinado à gestão operacional, emissão de propostas, controle de ordens de serviço e gestão financeira empresarial.</p>
-                        <p>1.2. O presente Termo não transfere à Licenciada qualquer direito de propriedade intelectual sobre o software, banco de dados, layout, algoritmos, marcas ou códigos-fonte, que permanecem sob propriedade exclusiva da Licenciante.</p>
+                    <div class="card-square-option {% if perfil_operacao == 'distribuidora' %}selected{% endif %}" onclick="selectOption('perfil', 'distribuidora', this)">
+                        <div class="option-icon-square"><i class="bi bi-boxes"></i></div>
+                        <strong>Vendas & Expedição</strong>
+                        <small>Distribuição, catálogo com imagens e motoristas.</small>
+                    </div>
 
-                        <h5 class="fw-bold text-dark mt-4">2. Do Cadastro e Período de Avaliação Gratuita (Trial)</h5>
-                        <p>2.1. O acesso poderá ser precedido por um período de avaliação gratuita de 14 (quatorze) dias ("Trial"), sem exigência prévia de dados de cartão de crédito.</p>
-                        <p>2.2. A Licenciada é a única responsável pela veracidade, exatidão e atualização dos dados cadastrais fornecidos (como CNPJ, CPF, razão social e e-mails). O uso de dados de terceiros ou informações fraudulentas ensejará o cancelamento imediato da conta, sem prejuízo das sanções civis e criminais cabíveis.</p>
-                        <p>2.3. As credenciais de login e senha são de uso pessoal e intransferível. A Licenciada responde integralmente por todos os atos praticados sob suas credenciais.</p>
+                    <div class="card-square-option {% if perfil_operacao == 'estoque_interno' %}selected{% endif %}" onclick="selectOption('perfil', 'estoque_interno', this)">
+                        <div class="option-icon-square"><i class="bi bi-box-seam"></i></div>
+                        <strong>Estoque Puro</strong>
+                        <small>Almoxarifado e requisições (sem foco comercial).</small>
+                    </div>
 
-                        <h5 class="fw-bold text-dark mt-4">3. Planos, Cobrança e Formas de Pagamento</h5>
-                        <p>3.1. Encerrado o período de Trial, a continuidade do serviço dependerá da adesão a um dos planos comerciais vigentes (Mensal, Semestral ou Anual).</p>
-                        <p>3.2. As cobranças serão processadas via intermediadores de pagamento integrados (Mercado Pago / Asaas), por meio de Cartão de Crédito, PIX ou Boleto Bancário.</p>
-                        <p>3.3. No plano <strong>Mensal</strong>, a cobrança opera sob regime de recorrência automática. Nos planos <strong>Semestrais ou Anuais</strong> com parcelamento no cartão de crédito, o valor total do período compromete o limite do cartão e é faturado nas faturas mensais da operadora.</p>
-                        <p>3.4. O atraso no pagamento de qualquer título superior a 5 (cinco) dias corridos facultará à Licenciante o bloqueio preventivo de acesso ao sistema até a respectiva regularização, sem prejuízo da incidência de juros moratórios de 1% ao mês e multa compensatória de 2% sobre o montante em aberto.</p>
-
-                        <h5 class="fw-bold text-dark mt-4 text-danger">4. Política de Arrependimento e Reembolso</h5>
-                        <p>4.1. Em observância ao Artigo 49 do Código de Defesa do Consumidor (Lei Federal nº 8.078/1990), a Licenciada poderá exercer o direito de arrependimento e solicitar o cancelamento com estorno integral no prazo improrrogável de até <strong>7 (sete) dias corridos</strong> contados da data da primeira contratação on-line.</p>
-                        <p>4.2. <strong>Da Inexistência de Reembolso Proporcional (Pró-rata):</strong> Transcorrido o prazo legal de 7 (sete) dias, ou após o decurso voluntário do período de testes (Trial), <strong>não haverá qualquer devolução ou reembolso, integral ou proporcional, de quantias já pagas</strong> referentes aos ciclos vigentes (mensais, semestrais ou anuais), tendo em vista a alocação imediata de servidores, armazenamento em nuvem e licenças de infraestrutura tecnológica dedicadas à conta da Licenciada.</p>
-                        <p>4.3. Em caso de cancelamento de planos anuais ou semestrais pagos à vista ou parcelados, a Licenciada manterá o direito de uso até o término do período contratado, cessando a cobrança após o término do ciclo, sem direito a estorno do saldo residual.</p>
-
-                        <h5 class="fw-bold text-dark mt-4">5. Reajuste Anual de Preços</h5>
-                        <p>5.1. Os valores contratados para as assinaturas poderão ser reajustados a cada período de 12 (doze) meses, tendo como referência a variação positiva acumulada do <strong>IPCA (Índice Nacional de Preços ao Consumidor Amplo)</strong>, medido pelo IBGE, ou, na sua ausência, pelo IGP-M ou índice legalmente admitido.</p>
-                        <p>5.2. Quaisquer reajustes que excedam a recomposição inflacionária ordinária serão precedidos de notificação formal por e-mail com antecedência mínima de 30 (trinta) dias, facultando à Licenciada rescindir o contrato antes da vigência dos novos valores.</p>
-
-                        <h5 class="fw-bold text-dark mt-4">6. Nível de Serviço (SLA) e Disponibilidade</h5>
-                        <p>6.1. A Licenciante empenhará seus melhores esforços técnicos para manter a Plataforma com índice de disponibilidade de 99% (noventa e nove por cento) ao mês.</p>
-                        <p>6.2. Não computam para o índice de indisponibilidade as interrupções decorrentes de: (a) falhas na infraestrutura de internet do usuário; (b) manutenções programadas comunicadas previamente; (c) falhas em serviços de nuvem de terceiros (hospedagem, S3/Supabase, gateways de pagamento); e (d) eventos de força maior ou caso fortuito.</p>
-
-                        <h5 class="fw-bold text-dark mt-4">7. Limitação de Responsabilidade</h5>
-                        <p>7.1. A Plataforma constitui ferramenta de apoio à gestão corporativa. A Licenciante não fiscaliza, valida ou audita o conteúdo técnico de ordens de serviço, vistorias, laudos periciais com ART, cálculos tributários ou descrições fiscais inseridas pelos usuários.</p>
-                        <p>7.2. Sob nenhuma hipótese a Licenciante responderá por danos indiretos, lucros cessantes, perdas financeiras comerciais, autuações fiscais, perda de contratos ou danos morais decorrentes do uso ou da impossibilidade de uso do software.</p>
-
-                        <h5 class="fw-bold text-dark mt-4">8. Rescisão e Guarda dos Dados</h5>
-                        <p>8.1. A Licenciada poderá solicitar a rescisão do contrato a qualquer momento através do painel de controle ou por chamado de suporte.</p>
-                        <p>8.2. Em caso de encerramento da assinatura ou inadimplência superior a 60 (sessenta) dias, a Licenciante reserva-se o direito de excluir permanentemente os bancos de dados e documentos anexados da conta, sendo de exclusiva responsabilidade da Licenciada a exportação de seus relatórios e arquivos antes do término da vigência.</p>
-
-                        <h5 class="fw-bold text-dark mt-4">9. Foro</h5>
-                        <p>9.1. Para dirimir quaisquer litígios oriundos do presente Termo de Uso, as partes elegem o Foro da Comarca de Suzano, Estado de São Paulo, com renúncia expressa a qualquer outro, por mais privilegiado que seja.</p>
-
-                        <hr class="my-5">
-
-                        <!-- ================================================================= -->
-                        <!-- POLÍTICA DE PRIVACIDADE E LGPD -->
-                        <!-- ================================================================= -->
-                        <h3 class="fw-bold text-dark mb-1">Política de Privacidade e Proteção de Dados (LGPD)</h3>
-                        <p class="text-muted small mb-4">Em conformidade com a Lei Geral de Proteção de Dados Pessoais (Lei Federal nº 13.709/2018)</p>
-
-                        <h5 class="fw-bold text-dark mt-4">1. Definições e Papéis na LGPD</h5>
-                        <p>Para fins da legislação aplicável de proteção de dados:</p>
-                        <ul>
-                            <li><strong>Controlador:</strong> A Licenciada (Empresa Contratante) é a única Controladora dos dados pessoais de seus clientes finais, colaboradores e fornecedores inseridos no ERP.</li>
-                            <li><strong>Operador:</strong> O Trivium ERP atua estritamente na condição de Operador técnico, tratando os dados exclusivamente sob as instruções da Licenciada e nos limites da execução do software.</li>
-                            <li><strong>Titular:</strong> Pessoas físicas a quem os dados se referem.</li>
-                        </ul>
-
-                        <h5 class="fw-bold text-dark mt-4">2. Dados Coletados pela Plataforma</h5>
-                        <p>2.1. <strong>Dados Cadastrais do Contratante:</strong> Nome completo, razão social, CNPJ, CPF, endereço comercial, telefone, e-mail e credenciais de login com senhas criptografadas via hash unidirecional (PBKDF2/SHA-256).</p>
-                        <p>2.2. <strong>Dados Operacionais Inseridos no Sistema:</strong> Nomes, documentos, endereços de atendimento, dados de faturamento e arquivos técnicos anexados pela Licenciada no exercício de suas atividades.</p>
-                        <p>2.3. <strong>Dados de Conexão:</strong> Endereço IP, tipo de navegador, registros de auditoria interna (*logs* de requisições) e data/hora de acesso para cumprimento do Marco Civil da Internet (Lei nº 12.965/2014).</p>
-
-                        <h5 class="fw-bold text-dark mt-4">3. Finalidade do Tratamento de Dados</h5>
-                        <p>O tratamento de dados restringe-se às seguintes bases legais:</p>
-                        <ul>
-                            <li>Execução de contrato ou de procedimentos preliminares (Art. 7º, V da LGPD);</li>
-                            <li>Cumprimento de obrigação legal ou regulatória (emissão de documentos fiscais e guarda de registros por 6 meses conforme o Marco Civil da Internet);</li>
-                            <li>Legítimo interesse do Controlador para gestão de seus clientes e agenda técnica.</li>
-                        </ul>
-
-                        <h5 class="fw-bold text-dark mt-4">4. Compartilhamento de Dados com Terceiros</h5>
-                        <p>O Trivium ERP não comercializa, aluga ou cede dados a terceiros para fins publicitários. O compartilhamento ocorre exclusivamente com subcontratados essenciais para a operação da infraestrutura:</p>
-                        <ul>
-                            <li><strong>Infraestrutura de Nuvem e Banco de Dados:</strong> Render Cloud Services (servidor e PostgreSQL);</li>
-                            <li><strong>Armazenamento de Arquivos em Nuvem:</strong> Supabase Inc. (S3 Storage com URLs temporárias pré-assinadas);</li>
-                            <li><strong>Gateways de Pagamento:</strong> Mercado Pago e Asaas Gestão Financeira (para liquidação de cobranças);</li>
-                            <li><strong>Serviço Transacional de E-mail:</strong> Resend Inc. (envio de alertas e links de redefinição de senha).</li>
-                        </ul>
-
-                        <h5 class="fw-bold text-dark mt-4">5. Medidas de Segurança da Informação</h5>
-                        <p>A Plataforma emprega salvaguardas técnicas adequadas para proteger os dados pessoais contra acesso não autorizado, destruição acidental ou alteração indevida, tais como:</p>
-                        <ul>
-                            <li>Comunicação 100% criptografada via protocolo HTTPS / TLS 1.3;</li>
-                            <li>Isolamento de banco de dados e segregação lógica multi-tenant pelo identificador da empresa (<code>empresa_id</code>);</li>
-                            <li>Armazenamento de arquivos com URLs pré-assinadas com tempo de expiração de 15 minutos;</li>
-                            <li>Senhas armazenadas obrigatoriamente sob hash criptográfico seguro.</li>
-                        </ul>
-
-                        <h5 class="fw-bold text-dark mt-4">6. Direitos do Titular dos Dados</h5>
-                        <p>O Titular tem direito de solicitar o acesso, retificação, anonimização, portabilidade ou eliminação de seus dados. Caso o titular seja um cliente final da Licenciada, a solicitação deve ser dirigida primeiramente à Licenciada (Controladora), a quem incumbe instruir a exclusão no sistema.</p>
-
-                        <hr class="my-5">
-
-                        <!-- ================================================================= -->
-                        <!-- POLÍTICA DE COOKIES -->
-                        <!-- ================================================================= -->
-                        <h3 class="fw-bold text-dark mb-1">Política de Cookies e Tecnologias de Sessão</h3>
-
-                        <p>A Plataforma utiliza cookies exclusivamente técnicos e estritamente necessários para permitir a autenticação contínua e a segurança da navegação corporativa.</p>
-
-                        <div class="table-responsive my-3">
-                            <table class="table table-bordered small">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Cookie</th>
-                                        <th>Tipo</th>
-                                        <th>Finalidade</th>
-                                        <th>Validade</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td><code>session</code></td>
-                                        <td>Essencial / HTTPOnly</td>
-                                        <td>Armazena o identificador criptografado da sessão do usuário no Flask-Login.</td>
-                                        <td>Sessão / 8 horas</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>remember_token</code></td>
-                                        <td>Essencial / Seguro</td>
-                                        <td>Permite ao usuário permanecer conectado ao fechar e reabrir o navegador.</td>
-                                        <td>30 dias</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>trivium_cookie_aceite</code></td>
-                                        <td>Preferência (LocalStorage)</td>
-                                        <td>Registra que o usuário tomou ciência e aceitou as políticas do site.</td>
-                                        <td>Permanente</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <p class="small text-muted">A desativação dos cookies essenciais nas configurações do navegador impedirá o login e a navegação no sistema.</p>
-
-                        <div class="alert alert-light border mt-4 p-3 rounded-3 text-center small text-muted">
-                            Dúvidas ou solicitações relacionadas a estes termos podem ser enviadas ao Encarregado de Dados (DPO) através da Central de Suporte da Plataforma.
-                        </div>
-
+                    <div class="card-square-option {% if perfil_operacao == 'documentos' %}selected{% endif %}" onclick="selectOption('perfil', 'documentos', this)">
+                        <div class="option-icon-square"><i class="bi bi-file-earmark-text"></i></div>
+                        <strong>Contratos & Minutas</strong>
+                        <small>Gestão de clientes e geração de documentos PDF.</small>
                     </div>
                 </div>
 
-                <div class="modal-footer bg-light border-top py-2 d-flex justify-content-between">
-                    <span class="small text-muted">Role para leitura e clique para aceitar.</span>
-                    <button type="button" class="btn btn-primary fw-bold px-4" onclick="aceitarTermosModal()">
-                        <i class="bi bi-check2-circle me-1"></i> Li e Concordo com os Termos
+                <div class="d-flex justify-content-end align-items-center">
+                    <button type="button" class="btn btn-brand" onclick="goToStep(2)">
+                        Avançar <i class="bi bi-arrow-right ms-1"></i>
                     </button>
                 </div>
             </div>
+
+            <!-- ============================================================== -->
+            <!-- ETAPA 2: EQUIPE & FINANCEIRO (3 CARDS HORIZONTAIS)             -->
+            <!-- ============================================================== -->
+            <div id="step2" class="step-pane d-none">
+                <div class="mb-3">
+                    <h5 class="fw-bold text-white mb-0">Como sua estrutura está organizada?</h5>
+                    <small class="text-white-50">Definiremos os limites e a presença dos recursos financeiros.</small>
+                </div>
+
+                <label class="form-label small fw-bold text-white-50 mb-2">Quem utilizará o sistema?</label>
+                <div class="grid-cards-3 mb-3">
+                    <div class="card-square-option {% if (equipe_porte or '1') == '1' %}selected{% endif %}" onclick="selectOption('equipe', '1', this)" style="min-height: 140px;">
+                        <div class="option-icon-square"><i class="bi bi-person"></i></div>
+                        <strong>Apenas Eu (Individual)</strong>
+                        <small>Autônomo ou uso próprio.</small>
+                    </div>
+
+                    <div class="card-square-option {% if equipe_porte == '2_5' %}selected{% endif %}" onclick="selectOption('equipe', '2_5', this)" style="min-height: 140px;">
+                        <div class="option-icon-square"><i class="bi bi-people"></i></div>
+                        <strong>Pequena Equipe (2 a 5)</strong>
+                        <small>Colaboradores ou técnicos.</small>
+                    </div>
+
+                    <div class="card-square-option {% if equipe_porte == 'mais_5' %}selected{% endif %}" onclick="selectOption('equipe', 'mais_5', this)" style="min-height: 140px;">
+                        <div class="option-icon-square"><i class="bi bi-building"></i></div>
+                        <strong>Equipe Ampla (+5)</strong>
+                        <small>Múltiplos operadores e setores.</small>
+                    </div>
+                </div>
+
+                <label class="form-label small fw-bold text-white-50 mb-2">Deseja gerenciar Faturamento & Financeiro?</label>
+                <div class="row g-2 mb-4">
+                    <div class="col-6">
+                        <div class="card-square-option py-2 {% if (usar_financeiro is not defined) or usar_financeiro %}selected{% endif %}" onclick="selectOption('financeiro', '1', this)" style="min-height: 80px; flex-direction: row; gap: 12px; justify-content: center;">
+                            <i class="bi bi-cash-stack fs-4 text-success"></i>
+                            <div class="text-start">
+                                <strong class="d-block mb-0">Sim, Ativar Financeiro</strong>
+                                <small>Contas a receber, boletos e sinal</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card-square-option py-2 {% if (usar_financeiro is defined) and not usar_financeiro %}selected{% endif %}" onclick="selectOption('financeiro', '0', this)" style="min-height: 80px; flex-direction: row; gap: 12px; justify-content: center;">
+                            <i class="bi bi-slash-circle fs-4 text-secondary"></i>
+                            <div class="text-start">
+                                <strong class="d-block mb-0">Sem Financeiro</strong>
+                                <small>Apenas controle operacional interno</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center">
+                    <button type="button" class="btn btn-outline-secondary text-white btn-sm px-3" onclick="goToStep(1)">
+                        <i class="bi bi-arrow-left me-1"></i> Voltar
+                    </button>
+                    <button type="button" class="btn btn-brand" onclick="goToStep(3)">
+                        Avançar para Cadastro <i class="bi bi-arrow-right ms-1"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ============================================================== -->
+            <!-- ETAPA 3: FICHA DE CADASTRO                                      -->
+            <!-- ============================================================== -->
+            <div id="step3" class="step-pane {% if not abrir_step3 %}d-none{% endif %}">
+                <div class="p-2 px-3 rounded-3 mb-3 d-flex justify-content-between align-items-center" style="background: rgba(37, 99, 235, 0.12); border: 1px solid rgba(59, 130, 246, 0.3);">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-check-circle-fill text-primary"></i>
+                        <div>
+                            <strong class="text-primary small text-uppercase" id="displayNomePlano">PERFIL CONFIGURADO</strong>
+                            <span class="text-white-50 small d-block" id="displayDescricaoPlano" style="font-size: 0.75rem;">Módulos moldados para sua atividade.</span>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-1" id="displayTagsPlano"></div>
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold text-white-50 mb-1">Nome Completo *</label>
+                        <input type="text" name="nome_usuario" id="inputNomeUsuario" class="form-control form-control-dark" placeholder="Ex: Sérgio Cavalcante" required>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label small fw-bold text-white-50 mb-0">Razão Social / Empresa</label>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="checkPessoaFisica" name="is_pessoa_fisica" value="1" onchange="togglePessoaFisica(this)">
+                                <label class="form-check-label text-white-50 small" for="checkPessoaFisica" style="font-size: 0.72rem;">Sou Pessoa Física</label>
+                            </div>
+                        </div>
+                        <input type="text" name="razao_social" id="inputRazaoSocial" class="form-control form-control-dark" placeholder="Ex: Cavalcante Serviços Ltda">
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold text-white-50 mb-1">E-mail *</label>
+                        <input type="email" name="email" id="inputEmail" class="form-control form-control-dark" placeholder="nome@exemplo.com" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold text-white-50 mb-1">Confirme o E-mail *</label>
+                        <input type="email" name="confirma_email" class="form-control form-control-dark" placeholder="nome@exemplo.com" required>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold text-white-50 mb-1">Palavra-passe *</label>
+                        <input type="password" name="senha" id="inputSenha" class="form-control form-control-dark" oninput="validarForcaSenha(this.value); checarConferenciaSenha();" placeholder="••••••••" required>
+                        <div class="password-meter"><div class="password-meter-fill" id="meterFill"></div></div>
+                        <small class="text-white-50" style="font-size: 0.7rem;" id="meterTexto">Mínimo 8 caracteres, maiúscula, número e símbolo.</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold text-white-50 mb-1">Confirme a Palavra-passe *</label>
+                        <input type="password" name="confirma_senha" id="inputConfirmaSenha" class="form-control form-control-dark" oninput="checarConferenciaSenha();" placeholder="••••••••" required>
+                        <div id="alertaSenhaNaoConfere" class="small fw-bold text-danger d-none mt-1" style="font-size: 0.75rem;">
+                            <i class="bi bi-x-circle-fill me-1"></i> As palavras-passe não coincidem.
+                        </div>
+                        <div id="alertaSenhaConfere" class="small fw-bold text-success d-none mt-1" style="font-size: 0.75rem;">
+                            <i class="bi bi-check-circle-fill me-1"></i> As palavras-passe coincidem!
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <button type="button" class="btn btn-outline-secondary text-white btn-sm px-3" onclick="goToStep(2)">
+                        <i class="bi bi-arrow-left me-1"></i> Voltar
+                    </button>
+                    <!-- BOTÃO QUE DISPARA A ANIMAÇÃO DE CÁLCULO E RECOMENDAÇÃO -->
+                    <button type="button" class="btn btn-brand" onclick="iniciarCalculoPlano()">
+                        Calcular Meu Plano Sob Medida <i class="bi bi-stars ms-1"></i>
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <div class="text-center mt-3 pt-2 border-top border-white border-opacity-10">
+            <small class="text-white-50">Já possui conta? <a href="{{ url_for('auth.login') }}" class="text-primary text-decoration-none fw-bold">Fazer login</a></small>
         </div>
     </div>
 
-    <!-- Bootstrap 5 JS Bundle -->
+    <!-- MODAL 1: ANIMAÇÃO DE CÁLCULO E PROCESSAMENTO DO PLANO (LABOR ILLUSION) -->
+    <div class="modal fade" id="modalCalculandoPlano" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content modal-glass border-0 text-center p-4">
+                <div class="d-flex justify-content-center mb-3">
+                    <div class="pulse-loader"></div>
+                </div>
+                <h5 class="fw-bold text-white mb-2" id="textoCarregandoTitulo">Analisando suas respostas...</h5>
+                <p class="small text-white-50 mb-3" id="textoCarregandoDescricao">Mapeando ferramentas e calibrando acessos operacionais.</p>
+                <div class="progress" style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" id="barraCalculoPlano" style="width: 15%; transition: width 0.4s ease;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: APRESENTAÇÃO DO PLANO + CTA DE TESTE 14 DIAS (REVERSÃO TOTAL DE RISCO) -->
+    <div class="modal fade" id="modalResultadoPlano" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content modal-glass border-0 shadow-lg p-3 p-md-4">
+                <div class="modal-header border-0 pt-0 px-0 pb-2">
+                    <div>
+                        <span class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-25 small mb-1">
+                            CONFIGURAÇÃO RECOMENDADA
+                        </span>
+                        <h4 class="fw-bold text-white mb-0" id="modalNomePerfil">Perfil Especialista</h4>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body px-0 py-3">
+                    <!-- CARD DO PLANO CALCULADO -->
+                    <div class="p-3 rounded-4 mb-3" style="background: rgba(255, 255, 255, 0.04); border: 1.5px solid rgba(59, 130, 246, 0.35);">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <strong class="d-block text-white" id="modalTituloPlano">Plano Sob Medida</strong>
+                                <small class="text-white-50">Ambiente otimizado para sua demanda</small>
+                            </div>
+                            <div class="text-end">
+                                <!-- VALOR EM BRANCO PARA ATUALIZAÇÃO FUTURA -->
+                                <span class="fs-4 fw-bold text-success" id="modalValorPlano">R$ --,--</span>
+                                <small class="text-white-50 d-block" style="font-size: 0.7rem;">/mês após o teste</small>
+                            </div>
+                        </div>
+
+                        <hr class="border-secondary border-opacity-25 my-2">
+
+                        <h6 class="small fw-bold text-primary mb-2"><i class="bi bi-check-all me-1"></i>O que este plano cobre:</h6>
+                        <ul class="list-unstyled small text-white-50 mb-0" id="modalListaCobertura" style="line-height: 1.6;">
+                            <!-- Injetado dinamicamente -->
+                        </ul>
+                    </div>
+
+                    <!-- CAIXA DE CONVERSÃO / REVERSÃO DE RISCO -->
+                    <div class="p-3 rounded-3 text-center mb-2" style="background: rgba(16, 185, 129, 0.1); border: 1px dashed rgba(16, 185, 129, 0.4);">
+                        <i class="bi bi-shield-fill-check fs-4 text-success d-block mb-1"></i>
+                        <strong class="text-white d-block small">Teste por 14 dias grátis sem qualquer compromisso</strong>
+                        <p class="text-white-50 small mb-0" style="font-size: 0.76rem;">
+                            Conheça toda a potência do Trivium ERP na prática. Sem taxas ocultas, sem cartão de crédito exigido e com cancelamento livre a qualquer momento.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 p-0 d-flex flex-column gap-2">
+                    <!-- BOTÃO PRINCIPAL DE FECHAMENTO -->
+                    <button type="button" class="btn btn-brand w-100 py-2 fs-6 fw-bold shadow-lg" onclick="finalizarCadastroAprovado()">
+                        Ativar Meus 14 Dias Grátis Agora <i class="bi bi-arrow-right ms-1"></i>
+                    </button>
+                    <div class="d-flex justify-content-center gap-3 text-white-50" style="font-size: 0.72rem;">
+                        <span><i class="bi bi-lock-fill text-success me-1"></i>Dados Protegidos</span>
+                        <span><i class="bi bi-clock-history text-info me-1"></i>Acesso Imediato</span>
+                        <span><i class="bi bi-x-circle text-muted me-1"></i>Sem Fidelidade</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
     <script>
-    function alternarTipoPessoaReg(tipo) {
-        const inputDoc = document.getElementById('inputDocReg');
-        const labelDoc = document.getElementById('labelDocReg');
-        const labelNome = document.getElementById('labelNomeReg');
+        let modalCalculando = null;
+        let modalResultado = null;
 
-        if (tipo === 'PF') {
-            labelNome.innerText = 'Seu Nome / Nome Profissional *';
-            labelDoc.innerText = 'CPF *';
-            inputDoc.name = 'cpf';
-            inputDoc.placeholder = '000.000.000-00';
-        } else {
-            labelNome.innerText = 'Razão Social / Nome da Empresa *';
-            labelDoc.innerText = 'CNPJ *';
-            inputDoc.name = 'cnpj';
-            inputDoc.placeholder = '00.000.000/0000-00';
+        document.addEventListener('DOMContentLoaded', function() {
+            modalCalculando = new bootstrap.Modal(document.getElementById('modalCalculandoPlano'));
+            modalResultado = new bootstrap.Modal(document.getElementById('modalResultadoPlano'));
+            
+            {% if abrir_step3 %}
+                atualizarResumoPlano();
+            {% endif %}
+
+            const floatingContainer = document.getElementById('floatingAlerts');
+            if (floatingContainer) {
+                setTimeout(() => {
+                    floatingContainer.style.opacity = '0';
+                    floatingContainer.style.transform = 'translateY(-20px)';
+                    setTimeout(() => floatingContainer.remove(), 500);
+                }, 5000);
+            }
+        });
+
+        function closeToast(el) {
+            el.style.opacity = '0';
+            setTimeout(() => el.remove(), 300);
         }
-    }
 
-    // Função que marca o checkbox no formulário e fecha o modal
-    function aceitarTermosModal() {
-        const check = document.getElementById('checkTermos');
-        if (check) check.checked = true;
-        
-        const modalEl = document.getElementById('modalTermosJuridicos');
-        const modalInstance = bootstrap.Modal.getInstance(modalEl);
-        if (modalInstance) {
-            modalInstance.hide();
+        function goToStep(step) {
+            document.querySelectorAll('.step-pane').forEach(el => el.classList.add('d-none'));
+            document.getElementById(`step${step}`).classList.remove('d-none');
+
+            const progress = document.getElementById('progressFill');
+            if (step === 1) progress.style.width = '33%';
+            if (step === 2) progress.style.width = '66%';
+            if (step === 3) {
+                progress.style.width = '100%';
+                atualizarResumoPlano();
+            }
         }
-    }
 
-    // Validação preventiva do e-mail no envio do formulário
-    document.addEventListener('DOMContentLoaded', () => {
-        const emailInput = document.getElementById('email');
-        const confirmaInput = document.getElementById('confirma_email');
-        const form = document.getElementById('formRegistro');
+        function selectOption(tipo, valor, el) {
+            const container = el.parentElement;
+            container.querySelectorAll('.card-square-option').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
 
-        if (form && emailInput && confirmaInput) {
-            form.addEventListener('submit', (e) => {
-                if (emailInput.value.trim().toLowerCase() !== confirmaInput.value.trim().toLowerCase()) {
-                    e.preventDefault();
-                    confirmaInput.classList.add('is-invalid');
-                    alert('Os campos de e-mail não conferem. Por favor, revise a digitação.');
-                    confirmaInput.focus();
-                } else {
-                    confirmaInput.classList.remove('is-invalid');
-                }
-            });
+            if (tipo === 'perfil') document.getElementById('inputPerfilOperacao').value = valor;
+            if (tipo === 'equipe') document.getElementById('inputEquipePorte').value = valor;
+            if (tipo === 'financeiro') document.getElementById('inputUsarFinanceiro').value = valor;
         }
-    });
+
+        function togglePessoaFisica(checkbox) {
+            const inputEmpresa = document.getElementById('inputRazaoSocial');
+            if (checkbox.checked) {
+                inputEmpresa.disabled = true;
+                inputEmpresa.value = '';
+                inputEmpresa.placeholder = 'Nome pessoal será assumido';
+                inputEmpresa.style.opacity = '0.35';
+            } else {
+                inputEmpresa.disabled = false;
+                inputEmpresa.placeholder = 'Ex: Cavalcante Serviços Ltda';
+                inputEmpresa.style.opacity = '1';
+            }
+        }
+
+        function atualizarResumoPlano() {
+            const perfil = document.getElementById('inputPerfilOperacao').value;
+            const financeiro = document.getElementById('inputUsarFinanceiro').value === '1';
+
+            const nomeEl = document.getElementById('displayNomePlano');
+            const descEl = document.getElementById('displayDescricaoPlano');
+            const tagsEl = document.getElementById('displayTagsPlano');
+
+            tagsEl.innerHTML = '';
+            const criarTag = (texto) => `<span class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-25" style="font-size: 0.72rem;">${texto}</span>`;
+
+            if (perfil === 'saude') {
+                nomeEl.innerText = 'CLÍNICAS & CONSULTAS';
+                descEl.innerText = 'Prontuários SOAP, agenda clínica e histórico.';
+                tagsEl.innerHTML = criarTag('Prontuários') + criarTag('Agenda');
+            } else if (perfil === 'servicos_campo') {
+                nomeEl.innerText = 'SERVIÇOS TÉCNICOS & ENGENHARIA';
+                descEl.innerText = 'Ordens de serviço, app de campo e propostas.';
+                tagsEl.innerHTML = criarTag('O.S.') + criarTag('Campo');
+            } else if (perfil === 'distribuidora') {
+                nomeEl.innerText = 'DISTRIBUIÇÃO & EXPEDIÇÃO';
+                descEl.innerText = 'Venda com imagens, portal B2B e motoristas.';
+                tagsEl.innerHTML = criarTag('Vendas B2B') + criarTag('Rotas');
+            } else if (perfil === 'estoque_interno') {
+                nomeEl.innerText = 'ALMOXARIFADO PURO';
+                descEl.innerText = 'Controle físico de saldo e requisições internas.';
+                tagsEl.innerHTML = criarTag('Saldo Kardex') + criarTag('Requisições');
+            } else {
+                nomeEl.innerText = 'DOCUMENTOS & MINUTAS';
+                descEl.innerText = 'Cadastro de clientes e minutas contratuais PDF.';
+                tagsEl.innerHTML = criarTag('Minutas PDF') + criarTag('Clientes');
+            }
+
+            if (financeiro) {
+                tagsEl.innerHTML += criarTag('Financeiro Ativo');
+            }
+        }
+
+        function validarForcaSenha(senha) {
+            const meter = document.getElementById('meterFill');
+            const texto = document.getElementById('meterTexto');
+            let pontos = 0;
+
+            if (senha.length >= 8) pontos += 25;
+            if (/[A-Z]/.test(senha)) pontos += 25;
+            if (/[0-9]/.test(senha)) pontos += 25;
+            if (/[!@#$%^&*(),.?":{}|<>_\-\\\/\[\]~+=\`]/.test(senha)) pontos += 25;
+
+            meter.style.width = `${pontos}%`;
+
+            if (pontos <= 25) {
+                meter.style.backgroundColor = '#ef4444';
+                texto.innerText = 'Fraca: adicione maiúsculas, números e símbolos.';
+                texto.style.color = '#ef4444';
+            } else if (pontos <= 75) {
+                meter.style.backgroundColor = '#f59e0b';
+                texto.innerText = 'Média: quase pronta.';
+                texto.style.color = '#fbbf24';
+            } else {
+                meter.style.backgroundColor = '#10b981';
+                texto.innerText = 'Excelente! Palavra-passe segura.';
+                texto.style.color = '#34d399';
+            }
+        }
+
+        function checarConferenciaSenha() {
+            const senha = document.getElementById('inputSenha').value;
+            const confirma = document.getElementById('inputConfirmaSenha').value;
+            const alertaErro = document.getElementById('alertaSenhaNaoConfere');
+            const alertaOk = document.getElementById('alertaSenhaConfere');
+
+            if (!confirma) {
+                alertaErro.classList.add('d-none');
+                alertaOk.classList.add('d-none');
+                return;
+            }
+
+            if (senha !== confirma) {
+                alertaErro.classList.remove('d-none');
+                alertaOk.classList.add('d-none');
+            } else {
+                alertaErro.classList.add('d-none');
+                alertaOk.classList.remove('d-none');
+            }
+        }
+
+        /* ANIMAÇÃO DE CÁLCULO E RECOMENDAÇÃO (LABOR ILLUSION) */
+        function iniciarCalculoPlano() {
+            const form = document.getElementById('formOnboarding');
+            const senha = document.getElementById('inputSenha').value;
+            const confirma = document.getElementById('inputConfirmaSenha').value;
+
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+
+            if (senha !== confirma) {
+                document.getElementById('inputConfirmaSenha').focus();
+                checarConferenciaSenha();
+                return;
+            }
+
+            modalCalculando.show();
+
+            const barra = document.getElementById('barraCalculoPlano');
+            const titulo = document.getElementById('textoCarregandoTitulo');
+            const desc = document.getElementById('textoCarregandoDescricao');
+
+            barra.style.width = "25%";
+
+            setTimeout(() => {
+                barra.style.width = "55%";
+                titulo.innerText = "Dimensionando ferramentas e usuários...";
+                desc.innerText = "Eliminando telas e menus desnecessários.";
+            }, 800);
+
+            setTimeout(() => {
+                barra.style.width = "85%";
+                titulo.innerText = "Calculando recomendação comercial...";
+                desc.innerText = "Liberando condições e período de 14 dias grátis.";
+            }, 1600);
+
+            setTimeout(() => {
+                barra.style.width = "100%";
+                modalCalculando.hide();
+                montarApresentacaoPlano();
+                modalResultado.show();
+            }, 2400);
+        }
+
+        function montarApresentacaoPlano() {
+            const perfil = document.getElementById('inputPerfilOperacao').value;
+            const equipe = document.getElementById('inputEquipePorte').value;
+            const financeiro = document.getElementById('inputUsarFinanceiro').value === '1';
+
+            const nomePerfil = document.getElementById('modalNomePerfil');
+            const tituloPlano = document.getElementById('modalTituloPlano');
+            const lista = document.getElementById('modalListaCobertura');
+
+            lista.innerHTML = '';
+            const addItem = (txt) => lista.innerHTML += `<li class="d-flex align-items-center gap-2 mb-1"><i class="bi bi-check-circle-fill text-success"></i> ${txt}</li>`;
+
+            if (perfil === 'saude') {
+                nomePerfil.innerText = "Profissional Clínico / Saúde";
+                tituloPlano.innerText = "Plano Saúde & Bem-Estar";
+                addItem("Prontuários SOAP com Queixa, Anamnese e Conduta");
+                addItem("Agenda técnica e histórico cronológico do paciente");
+                addItem("Emissão de declarações e relatórios clínicos");
+            } else if (perfil === 'servicos_campo') {
+                nomePerfil.innerText = "Empresas de Serviços & Campo";
+                tituloPlano.innerText = "Plano Operação Técnica";
+                addItem("Ordens de Serviço com cronograma Gantt");
+                addItem("App mobile sem login para técnicos colherem assinatura");
+                addItem("Propostas comerciais com ART e custos analíticos");
+            } else if (perfil === 'distribuidora') {
+                nomePerfil.innerText = "Comércio, Atacado & Distribuição";
+                tituloPlano.innerText = "Plano Logística & Vendas";
+                addItem("Controle de estoque por SKU com imagens de produto");
+                addItem("Portal B2B de autoatendimento para clientes");
+                addItem("Painel de expedição e roteirização com motoristas");
+            } else if (perfil === 'estoque_interno') {
+                nomePerfil.innerText = "Almoxarifado & Controle Interno";
+                tituloPlano.innerText = "Plano Almoxarifado Puro";
+                addItem("Controle de saldo físico e histórico Kardex");
+                addItem("Canal de requisição interna para setores/obras");
+                addItem("Interface enxuta (sem telas de vendas comerciais)");
+            } else {
+                nomePerfil.innerText = "Gestão de Clientes & Documentos";
+                tituloPlano.innerText = "Plano Gestão Documental";
+                addItem("Base centralizada de clientes PF e PJ");
+                addItem("Gerador de minutas e contratos em PDF");
+                addItem("Armazenamento seguro de arquivos anexos");
+            }
+
+            if (equipe === '1') addItem("Licença individual com acesso simplificado");
+            else if (equipe === '2_5') addItem("Até 5 colaboradores e operadores conectados");
+            else addItem("Estrutura corporativa com múltiplos setores");
+
+            // VERSÃO AJUSTADA E COERENTE:
+            if (financeiro) addItem("Controle de faturas, parcelas a receber e sinal de entrada");
+            else addItem("Interface enxuta sem rotinas financeiras (foco 100% operacional)");
+        }
+
+        function finalizarCadastroAprovado() {
+            modalResultado.hide();
+            document.getElementById('formOnboarding').submit();
+        }
     </script>
 </body>
 </html>

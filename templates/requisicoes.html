@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+
+{% block title %}Fila de Requisições & Separação - Trivium ERP{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4 d-print-none">
+    <div>
+        <a href="{{ url_for('listar_estoque') }}" class="text-decoration-none small text-muted mb-1 d-inline-block">
+            <i class="bi bi-arrow-left"></i> Voltar ao Estoque
+        </a>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-inbox-fill text-primary me-2"></i>Fila de Requisições & Separação (Picking)
+        </h2>
+        <p class="text-muted mb-0">Atendimento de pedidos de campo, separação física e baixa automática no estoque</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary fw-bold" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i> Imprimir Tela
+        </button>
+    </div>
+</div>
+
+<!-- FILTROS DE STATUS -->
+<div class="d-flex gap-2 mb-3 d-print-none">
+    <a href="{{ url_for('listar_requisicoes_estoque', status='todos') }}" class="btn btn-sm {% if filtro_status == 'todos' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}">
+        Todas ({{ pedidos|length }})
+    </a>
+    <a href="{{ url_for('listar_requisicoes_estoque', status='pendentes') }}" class="btn btn-sm {% if filtro_status == 'pendentes' %}btn-warning fw-bold{% else %}btn-outline-secondary{% endif %}">
+        Pendentes de Separação
+    </a>
+    <a href="{{ url_for('listar_requisicoes_estoque', status='separacao') }}" class="btn btn-sm {% if filtro_status == 'separacao' %}btn-info fw-bold{% else %}btn-outline-secondary{% endif %}">
+        Em Separação
+    </a>
+    <a href="{{ url_for('listar_requisicoes_estoque', status='concluidas') }}" class="btn btn-sm {% if filtro_status == 'concluidas' %}btn-success fw-bold{% else %}btn-outline-secondary{% endif %}">
+        Concluídas / Baixadas
+    </a>
+</div>
+
+<!-- LISTA DE PEDIDOS -->
+<div class="d-flex flex-column gap-3">
+    {% for ped in pedidos %}
+    <div class="card border-0 shadow-sm rounded-4 p-3 p-md-4">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 border-bottom pb-3 mb-3">
+            <div>
+                <span class="badge {% if ped.status == 'pendente' %}bg-warning-subtle text-warning-emphasis border border-warning-subtle{% elif ped.status == 'em_separacao' %}bg-info-subtle text-info-emphasis border border-info-subtle{% elif ped.status == 'entregue' %}bg-success-subtle text-success border border-success-subtle{% else %}bg-secondary{% endif %} fw-bold mb-1">
+                    {{ ped.status|upper }}
+                </span>
+                <h5 class="fw-bold text-dark mb-0">Pedido #{{ ped.numero_pedido }}</h5>
+                <small class="text-muted">
+                    Solicitante: <strong class="text-dark">{{ ped.nome_solicitante }}</strong> 
+                    {% if ped.contato_solicitante %} • Tel: {{ ped.contato_solicitante }}{% endif %}
+                    • Destino/Obra: <strong>{{ ped.setor_obra_destino or 'Almoxarifado Geral' }}</strong>
+                </small>
+            </div>
+            <div class="text-md-end">
+                <span class="small text-muted d-block">Data: {{ ped.data_solicitacao.strftime('%d/%m/%Y às %H:%M') if ped.data_solicitacao else '--' }}</span>
+                {% if ped.data_conclusao %}
+                    <small class="text-success fw-bold d-block"><i class="bi bi-check-all"></i> Baixado em {{ ped.data_conclusao.strftime('%d/%m/%Y') }}</small>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ITENS SOLICITADOS -->
+        <div class="table-responsive mb-3">
+            <table class="table table-sm align-middle mb-0 small">
+                <thead class="table-light">
+                    <tr>
+                        <th>ITEM / MATERIAL</th>
+                        <th>UNIDADE</th>
+                        <th>QTD SOLICITADA</th>
+                        <th>ESTOQUE ATUAL</th>
+                        <th class="d-print-table-cell d-none text-center">CONFERIDO [ ]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for it in ped.itens %}
+                    <tr>
+                        <td>
+                            <strong class="text-dark">{{ it.produto.nome }}</strong>
+                            {% if it.produto.codigo_sku %}<span class="text-muted">({{ it.produto.codigo_sku }})</span>{% endif %}
+                        </td>
+                        <td>{{ it.produto.unidade_medida }}</td>
+                        <td><strong class="text-primary fs-6">{{ it.quantidade_solicitada }}</strong></td>
+                        <td>
+                            {% if it.produto.quantidade_atual >= it.quantidade_solicitada %}
+                                <span class="badge bg-success-subtle text-success">Saldo: {{ it.produto.quantidade_atual }}</span>
+                            {% else %}
+                                <span class="badge bg-danger-subtle text-danger">Insuficiente: {{ it.produto.quantidade_atual }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="d-print-table-cell d-none text-center fs-5">[  ]</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if ped.observacoes %}
+            <p class="small text-muted bg-light p-2 rounded mb-3"><strong>Justificativa / Obs:</strong> {{ ped.observacoes }}</p>
+        {% endif %}
+
+        <!-- AÇÕES DO ALMOXARIFE -->
+        <div class="d-flex justify-content-end gap-2 border-top pt-3 d-print-none">
+            <form action="{{ url_for('atualizar_status_requisicao', id=ped.id) }}" method="POST" class="d-inline">
+                {% if ped.status == 'pendente' %}
+                    <input type="hidden" name="novo_status" value="em_separacao">
+                    <button type="submit" class="btn btn-sm btn-outline-info fw-bold">
+                        <i class="bi bi-box-arrow-in-down me-1"></i> Iniciar Separação
+                    </button>
+                {% elif ped.status == 'em_separacao' %}
+                    <input type="hidden" name="novo_status" value="entregue">
+                    <button type="submit" class="btn btn-sm btn-success fw-bold" onclick="return confirm('Deseja realmente confirmar a entrega e dar baixa no estoque dos itens?')">
+                        <i class="bi bi-check2-circle me-1"></i> Entregar e Baixar Estoque
+                    </button>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <div class="card border-0 shadow-sm rounded-4 p-5 text-center text-muted">
+        <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary"></i>
+        Nenhuma requisição na fila com o filtro selecionado.
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

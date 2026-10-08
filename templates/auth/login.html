@@ -3,53 +3,333 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Trivium ERP</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <title>Acesso ao Sistema - Trivium ERP</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logofav.png') }}">
+    
+    <!-- Google Fonts & Bootstrap -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .login-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 440px; padding: 2.5rem; }
-        .btn-brand { background-color: #1e3a8a; color: #fff; font-weight: 700; border-radius: 10px; padding: 12px; }
-        .btn-brand:hover { background-color: #2563eb; color: #fff; }
+        * { box-sizing: border-box; }
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow-x: hidden;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0b0f19;
+            color: #f8fafc;
+        }
+
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.25rem;
+        }
+
+        /* FUNDO DINÂMICO AURORA MESH */
+        .aurora-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.45;
+            animation: orbFloat 22s infinite alternate ease-in-out;
+        }
+
+        .orb-1 {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, #2563eb 0%, transparent 70%);
+            top: -100px;
+            left: -100px;
+        }
+
+        .orb-2 {
+            width: 550px;
+            height: 550px;
+            background: radial-gradient(circle, #059669 0%, transparent 70%);
+            bottom: -100px;
+            right: -100px;
+            animation-delay: -7s;
+            animation-duration: 26s;
+        }
+
+        .orb-3 {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, #6366f1 0%, transparent 70%);
+            top: 40%;
+            left: 35%;
+            animation-delay: -12s;
+            animation-duration: 18s;
+        }
+
+        @keyframes orbFloat {
+            0% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(60px, 40px) scale(1.1); }
+            100% { transform: translate(-40px, 70px) scale(0.95); }
+        }
+
+        /* CARD COM BORDA LED CORRENDO */
+        .glass-card-login {
+            position: relative;
+            max-width: 440px;
+            width: 100%;
+            padding: 2.25rem 2rem;
+            border-radius: 24px;
+            background: transparent;
+            overflow: hidden;
+            z-index: 10;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75);
+        }
+
+        /* 1. FEIXE DE LED AZUL GIRATÓRIO */
+        .glass-card-login::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: conic-gradient(
+                transparent,
+                transparent 65%,
+                rgba(37, 99, 235, 0.5) 80%,
+                #38bdf8 92%,
+                #ffffff 100%
+            );
+            animation: girarLed 4s linear infinite;
+            z-index: -2;
+        }
+
+        /* 2. CAMADA DE FUNDO ESCURO DO VIDRO (DEIXA APENAS 1.5PX DA BORDA APARECENDO) */
+        .glass-card-login::after {
+            content: '';
+            position: absolute;
+            inset: 1.5px; /* Espessura da trilha de LED */
+            background: rgba(17, 24, 39, 0.94);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border-radius: 22.5px;
+            z-index: -1;
+        }
+
+        /* 3. ANIMAÇÃO DE ROTAÇÃO CONTÍNUA DO LED */
+        @keyframes girarLed {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* TOAST FLUTUANTE DE ERRO (AUTO-DISMISS EM 5S) */
+        .toast-floating-container {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 1050;
+            max-width: 420px;
+        }
+
+        .toast-error-box {
+            background: #7f1d1d;
+            border: 1.5px solid #ef4444;
+            color: #ffffff;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border-radius: 14px;
+            padding: 0.85rem 1.15rem;
+            animation: slideInDown 0.3s ease forwards;
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+
+        @keyframes slideInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .glass-card-login > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .form-control-dark {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            color: #ffffff;
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            font-size: 0.92rem;
+        }
+        .form-control-dark:focus {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: #3b82f6;
+            color: #ffffff;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+        }
+
+        .btn-brand {
+            background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+            border: none;
+            color: #ffffff;
+            font-weight: 700;
+            border-radius: 12px;
+            padding: 0.8rem 1.6rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+        }
+        .btn-brand:hover {
+            filter: brightness(1.1);
+            color: #ffffff;
+        }
+
+        .badge-secure {
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #60a5fa;
+            font-weight: 700;
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.76rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
     </style>
 </head>
 <body>
-    <div class="login-card">
+
+    <!-- FUNDO DINÂMICO AURORA -->
+    <div class="aurora-bg">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <!-- MENSAGENS FLASH (AUTO-DISMISS EM 5S) -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="toast-floating-container" id="floatingAlerts">
+                {% for category, message in messages %}
+                    <div class="toast-error-box d-flex justify-content-between align-items-center mb-2">
+                        <div class="d-flex align-items-center gap-2 small">
+                            <i class="bi bi-exclamation-triangle-fill fs-5 text-warning"></i>
+                            <span>{{ message }}</span>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white btn-sm ms-2" onclick="closeToast(this.parentElement)"></button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <div class="glass-card-login">
+        <!-- HEADER -->
         <div class="text-center mb-4">
-            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Trivium ERP" style="height: 48px; width: auto; object-fit: contain;" class="mb-2" onerror="this.style.display='none'">
-            <h3 class="fw-bold text-primary mb-1">Trivium <span class="text-dark">ERP</span></h3>
-            <p class="text-muted small">Acesse seu painel corporativo</p>
+            <div class="d-inline-block mb-2">
+                <span class="badge-secure">
+                    <i class="bi bi-shield-lock-fill"></i> Conexão Segura
+                </span>
+            </div>
+            <h3 class="fw-bold text-white mb-1">
+                Trivium <span class="text-primary">ERP</span>
+            </h3>
+            <small class="text-white-50">Gestão Modular e Operações Integradas</small>
         </div>
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} small py-2">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        <form method="POST">
+        <!-- FORMULÁRIO DE LOGIN -->
+        <form method="POST" action="{{ url_for('auth.login') }}">
             <div class="mb-3">
-                <label class="form-label small fw-bold">E-mail ou CPF/CNPJ</label>
-                <input type="text" name="email" class="form-control" placeholder="Seu e-mail ou documento" required autofocus>
-                <small class="text-muted" style="font-size: 0.72rem;">Você pode entrar digitando seu e-mail de acesso ou o documento da empresa.</small>
-            </div>
-            <div class="mb-2">
-                <div class="d-flex justify-content-between align-items-center">
-                    <label class="form-label small fw-bold mb-0">Senha de Acesso</label>
-                    <a href="{{ url_for('auth.esqueci_senha') }}" class="small text-decoration-none text-primary fw-semibold">Esqueceu a senha?</a>
+                <label class="form-label small fw-bold text-white-50 mb-1">E-mail ou CPF/CNPJ</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-transparent border-end-0 border-secondary border-opacity-25 text-white-50">
+                        <i class="bi bi-person"></i>
+                    </span>
+                    <input type="text" name="email" class="form-control form-control-dark border-start-0 ps-0" placeholder="Digite seu e-mail ou documento" required autofocus>
                 </div>
-                <input type="password" name="senha" class="form-control mt-1" placeholder="••••••••" required>
             </div>
-            
-            <button type="submit" class="btn btn-brand w-100 mt-4 mb-3">Entrar no Sistema</button>
+
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="form-label small fw-bold text-white-50 mb-0">Palavra-passe</label>
+                    <a href="{{ url_for('auth.esqueci_senha') }}" class="text-primary text-decoration-none small" style="font-size: 0.76rem;">
+                        Esqueceu a senha?
+                    </a>
+                </div>
+                <div class="input-group">
+                    <span class="input-group-text bg-transparent border-end-0 border-secondary border-opacity-25 text-white-50">
+                        <i class="bi bi-lock"></i>
+                    </span>
+                    <input type="password" name="senha" id="inputSenhaLogin" class="form-control form-control-dark border-start-0 border-end-0 ps-0" placeholder="••••••••" required>
+                    <button class="btn btn-outline-secondary border-start-0 border-secondary border-opacity-25 text-white-50" type="button" onclick="toggleSenha()">
+                        <i class="bi bi-eye" id="iconeOlho"></i>
+                    </button>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-brand w-100 py-2 fs-6 fw-bold mt-2">
+                Acessar Painel <i class="bi bi-arrow-right ms-1"></i>
+            </button>
         </form>
 
-        <div class="text-center border-top pt-3 mt-3">
-            <small class="text-muted">Ainda não tem conta? <a href="{{ url_for('auth.registro') }}" class="fw-bold text-decoration-none text-success">Criar Nova Conta (7 Dias Grátis)</a></small>
+        <div class="text-center mt-4 pt-3 border-top border-white border-opacity-10">
+            <small class="text-white-50">
+                Ainda não possui conta? 
+                <a href="{{ url_for('auth.registro') }}" class="text-primary text-decoration-none fw-bold ms-1">
+                    Criar conta grátis
+                </a>
+            </small>
         </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto-dismiss de alertas flutuantes após 5 segundos
+            const floatingContainer = document.getElementById('floatingAlerts');
+            if (floatingContainer) {
+                setTimeout(() => {
+                    floatingContainer.style.opacity = '0';
+                    floatingContainer.style.transform = 'translateY(-20px)';
+                    setTimeout(() => floatingContainer.remove(), 500);
+                }, 5000);
+            }
+        });
+
+        function closeToast(el) {
+            el.style.opacity = '0';
+            setTimeout(() => el.remove(), 300);
+        }
+
+        function toggleSenha() {
+            const input = document.getElementById('inputSenhaLogin');
+            const icone = document.getElementById('iconeOlho');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icone.classList.remove('bi-eye');
+                icone.classList.add('bi-eye-slash');
+            } else {
+                input.type = 'password';
+                icone.classList.remove('bi-eye-slash');
+                icone.classList.add('bi-eye');
+            }
+        }
+    </script>
 </body>
 </html>

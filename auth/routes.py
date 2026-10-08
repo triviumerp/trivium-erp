@@ -107,93 +107,97 @@ def registro():
     afiliado_id_url = request.args.get('afiliado', type=int)
 
     if request.method == 'POST':
-        tipo_pessoa = request.form.get('tipo_pessoa', 'PJ')
-        razao_social = (request.form.get('razao_social') or '').strip()
-        cnpj_raw = request.form.get('cnpj', '')
-        cpf_raw = request.form.get('cpf', '')
-        doc_identificacao = re.sub(r'\D', '', cnpj_raw if tipo_pessoa == 'PJ' else cpf_raw)
-        telefone = re.sub(r'\D', '', request.form.get('telefone', ''))
         nome_usuario = (request.form.get('nome_usuario') or '').strip()
+        is_pessoa_fisica = request.form.get('is_pessoa_fisica') in ['1', 'true', 'on']
+        razao_social = (request.form.get('razao_social') or '').strip()
+        
         email = (request.form.get('email') or '').strip().lower()
         confirma_email = (request.form.get('confirma_email') or '').strip().lower()
         senha = request.form.get('senha', '')
         confirma_senha = request.form.get('confirma_senha', '')
         
+        # Respostas da Triagem
+        perfil_operacao = request.form.get('perfil_operacao', 'servicos_campo')
+        equipe_porte = request.form.get('equipe_porte', '1')
+        usar_financeiro = request.form.get('usar_financeiro') in ['1', 'true', 'on']
+        
         cupom_indicacao = (request.form.get('cupom_indicacao') or cupom_url).strip().upper()
-        afiliado_form_id = request.form.get('afiliado_id', type=int) or afiliado_id_url
 
-        # Validação de E-mail duplicado/confirmação
+        # Validações com flag para abrir direto no Step 3
         if email != confirma_email:
-            flash('O e-mail e a confirmação de e-mail não conferem.', 'warning')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
+            flash('O e-mail e a confirmação de e-mail não coincidem.', 'danger')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, abrir_step3=True, perfil_operacao=perfil_operacao, equipe_porte=equipe_porte, usar_financeiro=usar_financeiro)
 
-        # Validação de CPF
-        if tipo_pessoa == 'PF' and not is_cpf_valido(doc_identificacao):
-            flash('O CPF informado é inválido. Por favor, revise os dígitos.', 'danger')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
-
-        # Identificação e Validação Antifraude do Parceiro
-        cupom_obj = None
-        parceiro_obj = None
-
-        if cupom_indicacao:
-            cupom_obj = CupomDesconto.query.filter_by(codigo=cupom_indicacao).first()
-            if cupom_obj and cupom_obj.is_valido:
-                parceiro_obj = cupom_obj.parceiro
-            else:
-                flash('O cupom informado é inválido ou está expirado.', 'warning')
-                cupom_indicacao = None
-
-        if not parceiro_obj and afiliado_form_id:
-            parceiro_obj = Usuario.query.filter_by(id=afiliado_form_id, nivel_acesso='afiliado').first()
-
-        if parceiro_obj:
-            doc_afiliado = re.sub(r'\D', '', parceiro_obj.cpf_cnpj or '')
-            if parceiro_obj.email.lower() == email or (doc_identificacao and doc_identificacao == doc_afiliado):
-                flash('Não é permitido utilizar seu próprio vínculo ou cupom de afiliado.', 'danger')
-                return render_template('auth/registro.html', cupom_ref='', afiliado_id=None)
-
-        # Validação de Senha Forte
         senha_valida, msg_erro = validar_senha_forte(senha)
         if not senha_valida:
-            flash(msg_erro, 'warning')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
+            flash(msg_erro, 'danger')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, abrir_step3=True, perfil_operacao=perfil_operacao, equipe_porte=equipe_porte, usar_financeiro=usar_financeiro)
 
         if senha != confirma_senha:
-            flash('A senha e a confirmação de senha não conferem.', 'warning')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
+            flash('A palavra-passe e a confirmação não coincidem.', 'danger')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, abrir_step3=True, perfil_operacao=perfil_operacao, equipe_porte=equipe_porte, usar_financeiro=usar_financeiro)
 
         if Usuario.query.filter_by(email=email).first():
-            flash('Este e-mail já está cadastrado no sistema. Faça login.', 'warning')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
+            flash('Este e-mail já está registado no sistema. Por favor, inicie sessão.', 'danger')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, abrir_step3=True, email_duplicado=True, perfil_operacao=perfil_operacao, equipe_porte=equipe_porte, usar_financeiro=usar_financeiro)
 
-        if doc_identificacao and Empresa.query.filter_by(cnpj=doc_identificacao).first():
-            flash('Este CNPJ/CPF já possui uma conta cadastrada.', 'warning')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
+        # Regra de Razão Social / Nome Fantasia para PF vs PJ
+        if is_pessoa_fisica or not razao_social:
+            nome_empresa_final = nome_usuario
+            fantasia_final = "Profissional Autônomo"
+        else:
+            nome_empresa_final = razao_social
+            fantasia_final = None
+
+        # Definição dinâmica dos módulos com base na Triagem
+        modulo_servicos = False
+        modulo_atend = False
+        modulo_est = False
+        modulo_vendas = False
+        modulo_tecnicos = False
+
+        if perfil_operacao == 'saude':
+            modulo_atend = True
+        elif perfil_operacao == 'servicos_campo':
+            modulo_servicos = True
+            modulo_tecnicos = (equipe_porte != '1')
+        elif perfil_operacao == 'distribuidora':
+            modulo_est = True
+            modulo_vendas = True
+        elif perfil_operacao == 'estoque_interno':
+            modulo_est = True
+        elif perfil_operacao == 'documentos':
+            pass
+
+        limite_users = 2
+        if equipe_porte == '2_5':
+            limite_users = 5
+        elif equipe_porte == 'mais_5':
+            limite_users = 10
 
         try:
-            comissao_pct = cupom_obj.percentual_comissao if cupom_obj else 20.0
-            meses_limite = getattr(cupom_obj, 'meses_comissao_limite', 3) if cupom_obj else 3
+            cupom_obj = None
+            if cupom_indicacao:
+                cupom_obj = CupomDesconto.query.filter_by(codigo=cupom_indicacao).first()
 
             nova_empresa = Empresa(
-                razao_social=razao_social if razao_social else (nome_usuario if tipo_pessoa == 'PF' else 'Minha Empresa'),
-                nome_fantasia="Profissional Autônomo" if tipo_pessoa == 'PF' else None,
-                cnpj=doc_identificacao if doc_identificacao else None,
-                telefone=telefone,
+                razao_social=nome_empresa_final,
+                nome_fantasia=fantasia_final,
                 email=email,
-                plano="Período de Testes (Trial)",
+                plano=f"Trial ({perfil_operacao.capitalize()})",
                 status_assinatura="trial",
                 valor_mensalidade=0.0,
                 data_vencimento=date.today() + relativedelta(days=14),
-                cupom_utilizado=cupom_obj.codigo if cupom_obj else None,
-                afiliado_id=cupom_obj.id if cupom_obj else None
+                cupom_utilizado=cupom_obj.codigo if cupom_obj and cupom_obj.is_valido else None,
+                afiliado_id=cupom_obj.id if cupom_obj and cupom_obj.is_valido else None,
+                limite_usuarios=limite_users,
+                modulo_servicos_campo=modulo_servicos,
+                modulo_atendimentos=modulo_atend,
+                modulo_gestao_tecnicos=modulo_tecnicos,
+                modulo_estoque=modulo_est,
+                modulo_vendas_externas=modulo_vendas
             )
-            
-            if hasattr(nova_empresa, 'percentual_comissao_parceiro'):
-                nova_empresa.percentual_comissao_parceiro = comissao_pct
-            if hasattr(nova_empresa, 'meses_comissao_limite'):
-                nova_empresa.meses_comissao_limite = meses_limite
-
+            nova_empresa.gerar_token_requisicao_se_necessario()
             db.session.add(nova_empresa)
             db.session.flush()
 
@@ -201,29 +205,38 @@ def registro():
                 empresa_id=nova_empresa.id,
                 nome=nome_usuario,
                 email=email,
-                cargo="Administrador",
+                cargo="Profissional / Administrador",
                 nivel_acesso="admin",
                 ativo=True,
+                perm_clientes=True,
+                perm_propostas=True,
+                perm_servicos=modulo_servicos or modulo_atend,
+                perm_financeiro=usar_financeiro,
+                perm_estoque=modulo_est,
+                perm_expedicao=modulo_vendas,
+                perm_configuracoes=True,
                 aceitou_termos_beta=True,
                 data_aceite_termos=datetime.utcnow()
             )
             novo_usuario.set_senha(senha)
             db.session.add(novo_usuario)
 
-            if cupom_obj:
+            if cupom_obj and cupom_obj.is_valido:
                 cupom_obj.usos_atuais = (cupom_obj.usos_atuais or 0) + 1
 
             db.session.commit()
 
-            flash('Cadastro realizado com sucesso! Faça login para começar a usar.', 'success')
-            return redirect(url_for('auth.login'))
+            session.permanent = True
+            login_user(novo_usuario, remember=True)
+            flash('Ambiente configurado com sucesso! Bem-vindo aos seus 14 dias de teste.', 'success')
+            return redirect(url_for('index'))
 
         except Exception as e:
             db.session.rollback()
-            flash(f'Erro ao processar o cadastro: {str(e)}', 'danger')
-            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, afiliado_id=afiliado_form_id)
+            flash(f'Erro ao processar o registo: {str(e)}', 'danger')
+            return render_template('auth/registro.html', cupom_ref=cupom_indicacao, abrir_step3=True)
 
-    return render_template('auth/registro.html', cupom_ref=cupom_url, afiliado_id=afiliado_id_url)
+    return render_template('auth/registro.html', cupom_ref=cupom_url, abrir_step3=False)
 
 
 @auth_bp.route('/esqueci-senha', methods=['GET', 'POST'])

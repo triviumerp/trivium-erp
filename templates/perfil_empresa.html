@@ -41,7 +41,7 @@
             <!-- ABA 1: DADOS CADASTRAIS & LOGOTIPO -->
             <div class="tab-pane fade show active" id="tab-dados" role="tabpanel">
                 <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
-                    <form method="POST" enctype="multipart/form-data">
+                    <form method="POST" action="{{ url_for('perfil_empresa') }}" enctype="multipart/form-data">
                         <input type="hidden" name="form_type" value="dados_empresa">
 
                         <!-- TIPO DE PESSOA: PJ OU PF -->
@@ -139,11 +139,11 @@
                                 <label class="form-label small fw-bold">Logradouro</label>
                                 <input type="text" name="logradouro" id="logradouroEmpresa" class="form-control form-control-sm" value="{{ perfil.logradouro or '' }}">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label class="form-label small fw-bold">Número</label>
                                 <input type="text" name="numero" id="numeroEmpresa" class="form-control form-control-sm" value="{{ perfil.numero or '' }}">
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-2">
                                 <label class="form-label small fw-bold">Complemento</label>
                                 <input type="text" name="complemento" class="form-control form-control-sm" value="{{ perfil.complemento or '' }}">
                             </div>
@@ -151,11 +151,11 @@
                                 <label class="form-label small fw-bold">Bairro</label>
                                 <input type="text" name="bairro" id="bairroEmpresa" class="form-control form-control-sm" value="{{ perfil.bairro or '' }}">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-5">
                                 <label class="form-label small fw-bold">Cidade</label>
                                 <input type="text" name="cidade" id="cidadeEmpresa" class="form-control form-control-sm" value="{{ perfil.cidade or '' }}">
                             </div>
-                            <div class="col-md-1">
+                            <div class="col-md-3">
                                 <label class="form-label small fw-bold">UF</label>
                                 <input type="text" name="estado" id="estadoEmpresa" class="form-control form-control-sm text-uppercase" maxlength="2" value="{{ perfil.estado or '' }}">
                             </div>
@@ -175,122 +175,126 @@
                 <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
                     <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
                         <div>
-                            <h5 class="fw-bold text-dark mb-1"><i class="bi bi-shield-check text-primary me-2"></i>Gestão de Planos & Assinatura</h5>
-                            <p class="text-muted small mb-0">Escolha o ciclo ideal para a sua empresa. Sem burocracia e ativação imediata.</p>
+                            <h5 class="fw-bold text-dark mb-1"><i class="bi bi-sliders text-primary me-2"></i>Personalização do Plano & Módulos</h5>
+                            <p class="text-muted small mb-0">Base Essencial de R$ 14,90 (5 acessos inclusos) com expansão modular sob demanda.</p>
                         </div>
-                        <div>
+                        <div class="text-end">
                             <span class="badge {{ 'bg-success' if perfil.status_assinatura == 'ativo' else ('bg-warning text-dark' if perfil.status_assinatura == 'trial' else 'bg-danger') }} px-3 py-2 fs-6">
                                 Status: {{ perfil.status_assinatura|upper }}
                             </span>
                         </div>
                     </div>
 
-                    <div class="row g-3 mb-4">
-                        <div class="col-md-4">
-                            <div class="p-3 border rounded-3 bg-light">
-                                <span class="small text-muted fw-bold d-block mb-1">PLANO ATUAL</span>
-                                <h5 class="fw-bold text-primary mb-1">{{ perfil.plano or 'Plano Flex Mensal' }}</h5>
-                                <small class="text-muted">Acesso completo liberado</small>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="p-3 border rounded-3 bg-light">
-                                <span class="small text-muted fw-bold d-block mb-1">VALOR ATUAL</span>
-                                <h5 class="fw-bold text-dark mb-1">
-                                    {% if perfil.valor_mensalidade and perfil.valor_mensalidade > 0 %}
-                                        R$ {{ "%.2f"|format(perfil.valor_mensalidade) }} <small class="text-muted fw-normal" style="font-size: 0.8rem;">/mês</small>
-                                    {% else %}
-                                        R$ 0,00 <small class="text-muted fw-normal" style="font-size: 0.8rem;">(Período de Testes)</small>
-                                    {% endif %}
-                                </h5>
-                                <small class="text-muted">Cobrança Mercado Pago</small>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="p-3 border rounded-3 bg-light">
-                                <span class="small text-muted fw-bold d-block mb-1">PRÓXIMO VENCIMENTO</span>
-                                <h5 class="fw-bold {% if perfil.dias_restantes_trial and perfil.dias_restantes_trial < 3 %}text-danger{% else %}text-dark{% endif %} mb-1">
-                                    {{ perfil.data_vencimento.strftime('%d/%m/%Y') if perfil.data_vencimento else '--' }}
-                                </h5>
-                                {% if perfil.status_assinatura == 'trial' %}
-                                    <small class="text-primary fw-bold">{{ perfil.dias_restantes_trial }} dia(s) restantes de avaliação</small>
-                                {% else %}
-                                    <small class="text-muted">Renovação programada</small>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
+                    <!-- FORMULÁRIO MODULAR -->
+                    <form method="POST" action="{{ url_for('perfil_empresa') }}" class="mb-4">
+                        <input type="hidden" name="form_type" value="config_assinatura_modular">
+                        <input type="hidden" name="modulo_servicos_campo" value="1">
 
-                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-arrow-left-right text-primary me-2"></i>Alterar Ciclo / Mudar de Plano</h6>
-
-                    <div class="row g-3 mb-4">
-                        <!-- MENSAL -->
-                        <div class="col-md-4">
-                            <div class="card h-100 border rounded-4 p-3 shadow-none {% if 'MENSAL' in (perfil.plano or '')|upper %}border-primary bg-primary bg-opacity-10{% endif %}">
-                                <span class="badge bg-light text-secondary border px-2 py-1 fw-bold w-auto align-self-start mb-2">Flexibilidade</span>
-                                <h5 class="fw-bold text-dark mb-1">Mensal</h5>
-                                <div class="my-2">
-                                    <span class="fs-4 fw-bold text-dark">R$ 39,90</span>
-                                    <small class="text-muted">/mês</small>
+                        <!-- BASE ESSENCIAL -->
+                        <div class="d-flex justify-content-between align-items-center bg-light p-3 rounded-3 border mb-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <i class="bi bi-check-circle-fill text-primary fs-3"></i>
+                                <div>
+                                    <strong class="d-block text-dark">Pacote Base Essencial (Incluso)</strong>
+                                    <small class="text-muted">Painel, Gestão de Clientes, Catálogo, Propostas em PDF, Ordens de Serviço Básicas e <strong>5 Utilizadores Inclusos</strong>.</small>
                                 </div>
-                                <p class="small text-muted mb-3">Sem fidelidade, cancele quando quiser.</p>
-                                <ul class="list-unstyled small text-muted mb-3 flex-grow-1">
-                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Todos os módulos inclusos</li>
-                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Até 4 membros na equipe</li>
-                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>PDFs timbrados ilimitados</li>
-                                </ul>
-                                <button type="button" class="btn btn-outline-primary btn-sm fw-bold w-100 py-2 rounded-3" onclick="abrirCheckoutModalPerfil('MENSAL', 39.90, 1, 'R$ 39,90/mês')">
-                                    Assinar Mensal
+                            </div>
+                            <span class="fw-bold text-dark fs-6">R$ 14,90 / mês</span>
+                        </div>
+
+                        <h6 class="fw-bold text-dark mb-3 mt-4">Módulos Opcionais Ativos</h6>
+
+                        <!-- MÓDULO 1: ATENDIMENTOS CLÍNICOS -->
+                        <div class="card border p-3 rounded-3 mb-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input mod-switch" type="checkbox" name="modulo_atendimentos" id="modAtend" value="1" data-valor="15.00" 
+                                           {% if perfil.modulo_atendimentos %}checked{% endif %} onchange="recalcularTotalAssinaturaPerfil()">
+                                    <label class="form-check-label fw-bold text-dark" for="modAtend">
+                                        <i class="bi bi-person-heart text-danger me-1"></i> Fichas de Atendimento Clínico & Prontuários
+                                    </label>
+                                    <small class="text-muted d-block">Prontuários eletrônicos, fichas de pacientes, histórico de sessões, anamnese e condutas clínicas.</small>
+                                </div>
+                                <span class="badge bg-light text-dark border">+ R$ 15,00/mês</span>
+                            </div>
+                        </div>
+
+                        <!-- MÓDULO 2: GESTÃO DE TÉCNICOS & OPERADORES -->
+                        <div class="card border p-3 rounded-3 mb-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input mod-switch" type="checkbox" name="modulo_gestao_tecnicos" id="modTec" value="1" data-valor="15.00" 
+                                           {% if perfil.modulo_gestao_tecnicos %}checked{% endif %} onchange="recalcularTotalAssinaturaPerfil()">
+                                    <label class="form-check-label fw-bold text-dark" for="modTec">
+                                        <i class="bi bi-people-fill text-primary me-1"></i> Gestão de Equipe & Técnicos de Campo
+                                    </label>
+                                    <small class="text-muted d-block">Escala de operadores, cronograma Gantt de etapas e link mobile externo de execução sem login.</small>
+                                </div>
+                                <span class="badge bg-light text-dark border">+ R$ 15,00/mês</span>
+                            </div>
+                        </div>
+
+                        <!-- MÓDULO 3: ESTOQUE & ALMOXARIFADO -->
+                        <div class="card border p-3 rounded-3 mb-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input mod-switch" type="checkbox" name="modulo_estoque" id="modEst" value="1" data-valor="20.00" 
+                                           {% if perfil.modulo_estoque %}checked{% endif %} onchange="recalcularTotalAssinaturaPerfil()">
+                                    <label class="form-check-label fw-bold text-dark" for="modEst">
+                                        <i class="bi bi-boxes text-success me-1"></i> Controle de Estoque & Almoxarifado Inteligente
+                                    </label>
+                                    <small class="text-muted d-block">Controle de saldos, alerta de estoque mínimo, Kardex, importação/exportação Excel e requisições públicas.</small>
+                                </div>
+                                <span class="badge bg-light text-dark border">+ R$ 20,00/mês</span>
+                            </div>
+                        </div>
+
+                        <!-- MÓDULO 4: VENDAS, FROTAS & EXPEDIÇÃO -->
+                        <div class="card border p-3 rounded-3 mb-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input mod-switch" type="checkbox" name="modulo_vendas_externas" id="modVend" value="1" data-valor="20.00" 
+                                           {% if perfil.modulo_vendas_externas %}checked{% endif %} onchange="recalcularTotalAssinaturaPerfil()">
+                                    <label class="form-check-label fw-bold text-dark" for="modVend">
+                                        <i class="bi bi-truck text-info me-1"></i> Vendas, Frotas & Expedição
+                                    </label>
+                                    <small class="text-muted d-block">Portal B2B de compras do cliente, fila de separação, roteirização com motoristas e comprovante digital com assinatura.</small>
+                                </div>
+                                <span class="badge bg-light text-dark border">+ R$ 20,00/mês</span>
+                            </div>
+                        </div>
+
+                        <!-- LIMITE DE USUÁRIOS -->
+                        <div class="card border p-3 rounded-3 mb-4 bg-light">
+                            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+                                <div>
+                                    <strong class="d-block text-dark">Limite de Usuários da Equipe</strong>
+                                    <small class="text-muted"><strong>5 acessos gratuitos inclusos</strong>. Cada acesso adicional soma apenas <strong>+ R$ 4,00/mês</strong>.</small>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <label class="small fw-bold text-muted">Acessos:</label>
+                                    <input type="number" id="inputLimiteUsuariosPerfil" name="limite_usuarios" class="form-control text-center fw-bold" 
+                                           style="width: 80px;" min="5" max="50" value="{{ perfil.limite_usuarios or 5 }}" onchange="recalcularTotalAssinaturaPerfil()">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TOTAL E BOTÕES -->
+                        <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 border-top pt-3">
+                            <div>
+                                <span class="text-muted small d-block">Mensalidade Calculada:</span>
+                                <h4 class="fw-extrabold text-primary mb-0" id="displayValorFinalPerfil">R$ {{ "%.2f"|format(perfil.valor_mensalidade or 14.90) }}</h4>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-toggle="modal" data-bs-target="#modalOrcamentoPersonalizado">
+                                    <i class="bi bi-chat-quote me-1"></i> Orçamento Personalizado
+                                </button>
+                                <button type="submit" class="btn btn-primary fw-bold px-4 py-2">
+                                    <i class="bi bi-credit-card-2-front me-1"></i> Atualizar Minha Assinatura
                                 </button>
                             </div>
                         </div>
-
-                        <!-- SEMESTRAL -->
-                        <div class="col-md-4">
-                            <div class="card h-100 border rounded-4 p-3 shadow-none {% if 'SEMESTRAL' in (perfil.plano or '')|upper %}border-primary bg-primary bg-opacity-10{% endif %}">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle px-2 py-1 fw-bold">Semestral</span>
-                                    <span class="badge bg-success-subtle text-success small fw-bold">12% OFF</span>
-                                </div>
-                                <h5 class="fw-bold text-dark mb-1">Semestral</h5>
-                                <div class="my-2">
-                                    <span class="fs-4 fw-bold text-dark">R$ 209,40</span>
-                                    <small class="text-muted">por semestre</small>
-                                </div>
-                                <small class="text-success fw-bold d-block mb-2">média: R$ 34,90</small>
-                                <ul class="list-unstyled small text-muted mb-3 flex-grow-1">
-                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Economia de 12%</li>  
-                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Suporte técnico ágil</li>
-                                </ul>
-                                <button type="button" class="btn btn-outline-primary btn-sm fw-bold w-100 py-2 rounded-3" onclick="abrirCheckoutModalPerfil('SEMESTRAL', 209.40, 6, '6x de R$ 34,90')">
-                                    Assinar Semestral
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- ANUAL -->
-                        <div class="col-md-4">
-                            <div class="card h-100 border border-primary rounded-4 p-3 shadow-sm bg-white position-relative">
-                                <span class="position-absolute top-0 end-0 translate-middle-y me-3 badge bg-primary px-2 py-1 small fw-bold">
-                                    25% OFF • Mais Escolhido
-                                </span>
-                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 fw-bold w-auto align-self-start mb-2">Anual</span>
-                                <h5 class="fw-bold text-primary mb-1">Anual</h5>
-                                <div class="my-2">
-                                    <span class="fs-4 fw-bold text-primary">R$ 358,80</span>
-                                    <small class="text-muted">por ano</small>
-                                </div>
-                                <small class="text-primary fw-bold d-block mb-2">Média: R$ 29,90 por mês</small>
-                                <ul class="list-unstyled small text-muted mb-3 flex-grow-1">
-                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Preço travado por 1 ano</li>
-                                    <li class="mb-1"><i class="bi bi-check2 text-success me-1"></i>Economia de 25%</li>
-                                </ul>
-                                <button type="button" class="btn btn-primary btn-sm fw-bold w-100 py-2 rounded-3 shadow-sm" onclick="abrirCheckoutModalPerfil('ANUAL', 358.80, 12, '12x de R$ 29,90')">
-                                    <i class="bi bi-lightning-charge-fill me-1"></i> Assinar Anual
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                    </form>
                 </div>
             </div>
 
@@ -300,10 +304,9 @@
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
                             <h6 class="fw-bold text-dark mb-0">Colaboradores da Empresa</h6>
-                            <small class="text-muted">Limite de até 4 colaboradores na equipe.</small>
+                            <small class="text-muted">Seu plano permite até <strong>{{ perfil.limite_usuarios or 5 }} colaborador(es)</strong> na equipe.</small>
                         </div>
-                        {% if current_user.nivel_acesso in ['admin', 'master'] and usuarios_equipe|length < 4 %}
-                        <!-- BOTÃO CORRIGIDO COM data-bs-target EXATO E DISPARADOR -->
+                        {% if current_user.nivel_acesso in ['admin', 'master'] and usuarios_equipe|length < (perfil.limite_usuarios or 5) %}
                         <button class="btn btn-sm btn-primary fw-bold btn-abrir-modal-perfil" 
                                 type="button" 
                                 data-bs-toggle="modal" 
@@ -314,7 +317,6 @@
                         {% endif %}
                     </div>
 
-                    <!-- TABELA LIMPA -->
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0 small">
                             <thead class="table-light">
@@ -340,7 +342,6 @@
                                     <td class="text-end pe-2">
                                         {% if current_user.nivel_acesso in ['admin', 'master'] %}
                                         <div class="btn-group btn-group-sm">
-                                            <!-- BOTÃO EDITAR ACESSOS -->
                                             <button type="button" 
                                                     class="btn btn-outline-secondary btn-abrir-modal-perfil" 
                                                     data-bs-toggle="modal" 
@@ -349,7 +350,6 @@
                                                     title="Editar Acessos">
                                                 <i class="bi bi-pencil-square pointer-events-none"></i>
                                             </button>
-                                            <!-- BOTÃO REDEFINIR SENHA -->
                                             <button type="button" 
                                                     class="btn btn-outline-warning text-dark btn-abrir-modal-perfil" 
                                                     data-bs-toggle="modal" 
@@ -358,7 +358,6 @@
                                                     title="Redefinir Senha">
                                                 <i class="bi bi-key pointer-events-none"></i>
                                             </button>
-                                            <!-- BOTÃO EXCLUIR -->
                                             {% if u.id != current_user.id %}
                                             <form action="{{ url_for('excluir_usuario_equipe', id=u.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Remover acesso deste colaborador?')">
                                                 <button type="submit" class="btn btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
@@ -381,7 +380,7 @@
             <div class="tab-pane fade" id="tab-minhaconta" role="tabpanel">
                 <div class="card border-0 shadow-sm rounded-4 p-4 bg-white" style="max-width: 650px;">
                     <h6 class="fw-bold text-dark mb-3"><i class="bi bi-person-circle text-primary me-2"></i>Meus Dados de Login</h6>
-                    <form method="POST">
+                    <form method="POST" action="{{ url_for('perfil_empresa') }}">
                         <input type="hidden" name="form_type" value="dados_usuario">
                         <div class="mb-3">
                             <label class="form-label small fw-bold">Meu Nome</label>
@@ -396,14 +395,12 @@
                         <h6 class="fw-bold text-dark mb-1">Alterar Minha Senha</h6>
                         <p class="small text-muted mb-3">Preencha os campos abaixo apenas se desejar substituir sua senha atual.</p>
 
-                        <!-- REGRAS DE SENHA VISÍVEIS -->
                         <div class="alert alert-light border small text-muted p-3 rounded-3 mb-3">
                             <strong class="d-block text-dark mb-1"><i class="bi bi-shield-check text-primary me-1"></i>Requisitos para Senha Forte:</strong>
                             <ul class="mb-0 ps-3" style="font-size: 0.82rem;">
                                 <li>No mínimo <strong>8 caracteres</strong></li>
-                                <li>Pelo menos uma <strong>letra maiúscula</strong> (A-Z) e uma <strong>minúscula</strong> (a-z)</li>
-                                <li>Pelo menos um <strong>número</strong> (0-9)</li>
-                                <li>Pelo menos um <strong>caractere especial</strong> (ex: <code>@</code>, <code>#</code>, <code>$</code>, <code>!</code>, <code>%</code>, <code>*</code>)</li>
+                                <li>Pelo menos uma <strong>letra maiúscula</strong> e uma <strong>minúscula</strong></li>
+                                <li>Pelo menos um <strong>número</strong> e um <strong>caractere especial</strong> (ex: <code>@</code>, <code>#</code>, <code>$</code>, <code>!</code>)</li>
                             </ul>
                         </div>
 
@@ -435,18 +432,100 @@
 </div>
 
 <!-- ================================================================= -->
+<!-- MODAL DE CHECKOUT: RESUMO DA CONTRATAÇÃO & MERCADO PAGO          -->
+<!-- ================================================================= -->
+<div class="modal fade" id="modalCheckoutMercadoPago" tabindex="-1" aria-labelledby="lblModalMP" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-light border-0 py-3">
+                <h5 class="modal-title fw-bold text-dark" id="lblModalMP">
+                    <i class="bi bi-shield-check text-primary me-2"></i>Revisão da Assinatura & Pagamento
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            
+            <div class="modal-body p-4">
+                <!-- 1. SELEÇÃO DE CICLO COM DESCONTOS -->
+                <h6 class="fw-bold text-dark mb-2">1. Selecione o Ciclo de Cobrança:</h6>
+                <div class="row g-2 mb-4">
+                    <div class="col-md-4">
+                        <div class="card p-3 border rounded-3 text-center h-100 cursor-pointer ciclo-card border-primary bg-primary-subtle" onclick="selecionarCiclo('mensal', this)">
+                            <small class="text-muted fw-bold d-block">MENSAL</small>
+                            <h5 class="fw-bold text-dark mb-1" id="labelTotalMensal">R$ 0,00</h5>
+                            <span class="badge bg-secondary-subtle text-secondary small">Preço Padrão</span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card p-3 border rounded-3 text-center h-100 cursor-pointer ciclo-card" onclick="selecionarCiclo('semestral', this)">
+                            <small class="text-muted fw-bold d-block">SEMESTRAL</small>
+                            <h5 class="fw-bold text-dark mb-1" id="labelTotalSemestral">R$ 0,00</h5>
+                            <span class="badge bg-success small"><i class="bi bi-tag-fill me-1"></i>12% OFF à vista</span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card p-3 border rounded-3 text-center h-100 cursor-pointer ciclo-card" onclick="selecionarCiclo('anual', this)">
+                            <small class="text-muted fw-bold d-block">ANUAL</small>
+                            <h5 class="fw-bold text-dark mb-1" id="labelTotalAnual">R$ 0,00</h5>
+                            <span class="badge bg-success small"><i class="bi bi-star-fill me-1"></i>25% OFF à vista</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. RESUMO DETALHADO DO QUE ESTÁ SENDO CONTRATADO -->
+                <h6 class="fw-bold text-dark mb-2">2. Resumo da Sua Aquisição:</h6>
+                <div class="table-responsive border rounded-3 mb-4 bg-white">
+                    <table class="table table-sm align-middle mb-0 small">
+                        <thead class="table-light text-muted">
+                            <tr>
+                                <th>Item / Módulo Incluído</th>
+                                <th>Detalhe</th>
+                                <th class="text-end">Custo Base / Mês</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listaItensAquisicao">
+                            <!-- Preenchido dinamicamente via JavaScript -->
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <td colspan="2" class="fw-bold text-dark" id="footCicloDescricao">Total do Período (Mensal):</td>
+                                <td class="text-end fw-bold text-primary fs-6" id="footValorTotalCobrado">R$ 0,00</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- 3. REDIRECIONAMENTO MERCADO PAGO -->
+                <div class="p-3 bg-light rounded-3 border text-center">
+                    <div class="d-flex align-items-center justify-content-center gap-2 mb-2">
+                        <i class="bi bi-lock-fill text-success fs-5"></i>
+                        <span class="small text-muted">Ambiente Seguro Mercado Pago: Cartão de Crédito em até 12x, PIX e Boleto.</span>
+                    </div>
+                    
+                    <button type="button" id="btnIrMercadoPago" class="btn btn-primary btn-lg fw-bold px-5 py-3 shadow-sm w-100" onclick="redirecionarMercadoPago()">
+                        <i class="bi bi-box-arrow-up-right me-2"></i> Pagar com Mercado Pago
+                    </button>
+                    <small class="text-muted d-block mt-2">Ao concluir o pagamento, o retorno é processado automaticamente e sua conta é ativada.</small>
+                </div>
+            </div>
+
+            <div class="modal-footer bg-light border-0 py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================= -->
 <!-- MODAIS DA EQUIPE DECLARADOS FORA DA TABELA                       -->
 <!-- ================================================================= -->
 
-<!-- 1. MODAL: NOVO USUÁRIO DA EQUIPE COM REGRAS DE SENHA E LAYOUT DE SELEÇÃO -->
+<!-- 1. MODAL: NOVO USUÁRIO DA EQUIPE -->
 <div class="modal fade text-start" id="modalNovoUsuarioEquipe" tabindex="-1" aria-labelledby="lblNovoUsuario" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg rounded-4">
             <form action="{{ url_for('criar_usuario_equipe') }}" method="POST" autocomplete="off">
                 <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold text-dark" id="lblNovoUsuario">
-                        <i class="bi bi-person-plus text-primary me-2"></i>Novo Membro da Equipe
-                    </h5>
+                    <h5 class="modal-title fw-bold text-dark" id="lblNovoUsuario">Novo Membro da Equipe</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
                 </div>
                 <div class="modal-body p-4">
@@ -459,52 +538,60 @@
                         <input type="email" name="email" class="form-control form-control-sm" required placeholder="lucas@suaempresa.com" autocomplete="off">
                     </div>
                     
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Cargo / Função</label>
-                        <input type="text" name="cargo" class="form-control form-control-sm" placeholder="Ex: Técnico de Campo, Vistoriador">
+                    <div class="row g-2 mb-3">
+                        <div class="col-7">
+                            <label class="form-label small fw-bold">Cargo / Função</label>
+                            <input type="text" name="cargo" class="form-control form-control-sm" placeholder="Ex: Técnico de Campo">
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label small fw-bold">Perfil Predefinido</label>
+                            <select name="perfil_predefinido" class="form-select form-select-sm">
+                                <option value="personalizado">Personalizado</option>
+                                <option value="admin">Administrador</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Senha Inicial de Acesso *</label>
                         <input type="password" name="senha_padrao" class="form-control form-control-sm font-monospace" required placeholder="Ex: Equipe#2026" autocomplete="new-password">
                         
-                        <!-- REGRAS DE SENHA VISÍVEIS -->
                         <div class="p-2 mt-2 bg-light border rounded-3 small text-muted">
                             <strong class="d-block text-dark mb-1" style="font-size: 0.78rem;">
-                                <i class="bi bi-shield-lock text-primary me-1"></i>Regras para criação da senha:
+                                <i class="bi bi-shield-lock text-primary me-1"></i>Regras obrigatórias da senha:
                             </strong>
                             <ul class="mb-0 ps-3" style="font-size: 0.76rem;">
-                                <li>Mínimo <strong>8 caracteres</strong></li>
+                                <li>Mínimo de <strong>8 caracteres</strong></li>
                                 <li>Pelo menos 1 maiúscula, 1 minúscula e 1 número</li>
                                 <li>Pelo menos 1 caractere especial (ex: <code>@</code>, <code>#</code>, <code>$</code>, <code>!</code>)</li>
                             </ul>
                         </div>
                     </div>
 
-                    <!-- LAYOUT DE SELEÇÃO DE PERMISSÕES MODULARES -->
+                    <!-- PERMISSÕES MODULARES -->
                     <div class="p-3 bg-light rounded-3 border mt-3">
                         <label class="form-label small fw-bold text-dark d-block mb-2">
                             <i class="bi bi-shield-check text-primary me-1"></i>Permissões de Acesso aos Módulos
                         </label>
                         <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_clientes" id="novo_perm_cli" checked>
+                            <input class="form-check-input" type="checkbox" name="perm_clientes" id="novo_perm_cli" value="1" checked>
                             <label class="form-check-label small" for="novo_perm_cli"><b>Clientes:</b> Cadastro, histórico e upload de laudos</label>
                         </div>
                         <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_propostas" id="novo_perm_prop" checked>
-                            <label class="form-check-label small" for="novo_perm_prop"><b>Propostas & Catálogo:</b> Emissão e criação de orçamentos</label>
+                            <input class="form-check-input" type="checkbox" name="perm_propostas" id="novo_perm_prop" value="1" checked>
+                            <label class="form-check-label small" for="novo_perm_prop"><b>Propostas & Catálogo:</b> Emissão e orçamentos</label>
                         </div>
                         <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_servicos" id="novo_perm_serv" checked>
-                            <label class="form-check-label small" for="novo_perm_serv"><b>Serviços / OS:</b> Agenda técnica, responsáveis e fotos</label>
+                            <input class="form-check-input" type="checkbox" name="perm_servicos" id="novo_perm_serv" value="1" checked>
+                            <label class="form-check-label small" for="novo_perm_serv"><b>Serviços / OS:</b> Agenda técnica, operadores e fotos</label>
                         </div>
                         <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="perm_financeiro" id="novo_perm_fin">
+                            <input class="form-check-input" type="checkbox" name="perm_financeiro" id="novo_perm_fin" value="1">
                             <label class="form-check-label small" for="novo_perm_fin"><b>Financeiro:</b> Faturamento, parcelas e baixas</label>
                         </div>
                         <hr class="my-2 text-muted">
                         <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" name="perm_configuracoes" id="novo_perm_conf">
+                            <input class="form-check-input" type="checkbox" name="perm_configuracoes" id="novo_perm_conf" value="1">
                             <label class="form-check-label small text-danger fw-bold" for="novo_perm_conf">
                                 Permissão Admin (Configurações da Empresa e Equipe)
                             </label>
@@ -546,36 +633,34 @@
                         <input type="text" name="cargo" class="form-control form-control-sm" value="{{ u.cargo or '' }}" placeholder="Ex: Técnico de Campo">
                     </div>
 
-                    <!-- LAYOUT DE SELEÇÃO DE PERMISSÕES NO EDITAR -->
                     <div class="p-3 bg-light rounded-3 border mt-3">
                         <label class="form-label small fw-bold text-dark d-block mb-2">
                             <i class="bi bi-shield-lock text-primary me-1"></i>Permissões de Acesso aos Módulos
                         </label>
-
                         {% if u.id == current_user.id %}
                             <div class="alert alert-info py-2 px-3 small mb-0">
                                 <i class="bi bi-info-circle me-1"></i>Você é o titular administrador e possui acesso irrestrito a todos os módulos.
                             </div>
                         {% else %}
                             <div class="form-check form-switch mb-2">
-                                <input class="form-check-input" type="checkbox" name="perm_clientes" id="perm_cli_{{ u.id }}" {% if u.perm_clientes %}checked{% endif %}>
+                                <input class="form-check-input" type="checkbox" name="perm_clientes" id="perm_cli_{{ u.id }}" value="1" {% if u.perm_clientes %}checked{% endif %}>
                                 <label class="form-check-label small" for="perm_cli_{{ u.id }}"><b>Clientes:</b> Cadastro, histórico e upload de laudos</label>
                             </div>
                             <div class="form-check form-switch mb-2">
-                                <input class="form-check-input" type="checkbox" name="perm_propostas" id="perm_prop_{{ u.id }}" {% if u.perm_propostas %}checked{% endif %}>
-                                <label class="form-check-label small" for="perm_prop_{{ u.id }}"><b>Propostas & Catálogo:</b> Emissão e criação de orçamentos</label>
+                                <input class="form-check-input" type="checkbox" name="perm_propostas" id="perm_prop_{{ u.id }}" value="1" {% if u.perm_propostas %}checked{% endif %}>
+                                <label class="form-check-label small" for="perm_prop_{{ u.id }}"><b>Propostas & Catálogo:</b> Emissão e orçamentos</label>
                             </div>
                             <div class="form-check form-switch mb-2">
-                                <input class="form-check-input" type="checkbox" name="perm_servicos" id="perm_serv_{{ u.id }}" {% if u.perm_servicos %}checked{% endif %}>
-                                <label class="form-check-label small" for="perm_serv_{{ u.id }}"><b>Serviços / OS:</b> Agenda técnica, responsáveis e fotos</label>
+                                <input class="form-check-input" type="checkbox" name="perm_servicos" id="perm_serv_{{ u.id }}" value="1" {% if u.perm_servicos %}checked{% endif %}>
+                                <label class="form-check-label small" for="perm_serv_{{ u.id }}"><b>Serviços / OS:</b> Agenda técnica, operadores e fotos</label>
                             </div>
                             <div class="form-check form-switch mb-2">
-                                <input class="form-check-input" type="checkbox" name="perm_financeiro" id="perm_fin_{{ u.id }}" {% if u.perm_financeiro %}checked{% endif %}>
+                                <input class="form-check-input" type="checkbox" name="perm_financeiro" id="perm_fin_{{ u.id }}" value="1" {% if u.perm_financeiro %}checked{% endif %}>
                                 <label class="form-check-label small" for="perm_fin_{{ u.id }}"><b>Financeiro:</b> Faturamento, parcelas e baixas</label>
                             </div>
                             <hr class="my-2 text-muted">
                             <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" name="perm_configuracoes" id="perm_conf_{{ u.id }}" {% if u.perm_configuracoes %}checked{% endif %}>
+                                <input class="form-check-input" type="checkbox" name="perm_configuracoes" id="perm_conf_{{ u.id }}" value="1" {% if u.perm_configuracoes %}checked{% endif %}>
                                 <label class="form-check-label small text-danger fw-bold" for="perm_conf_{{ u.id }}">
                                     Permissão Admin (Configurações Gerais da Empresa)
                                 </label>
@@ -592,7 +677,7 @@
     </div>
 </div>
 
-<!-- 3. MODAL REDEFINIR SENHA DO COLABORADOR COM REGRAS VISÍVEIS -->
+<!-- 3. MODAL REDEFINIR SENHA DO COLABORADOR -->
 <div class="modal fade text-start" id="modalResetarSenha{{ u.id }}" tabindex="-1" aria-labelledby="lblSenha{{ u.id }}" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content border-0 shadow rounded-4">
@@ -605,17 +690,7 @@
                 </div>
                 <div class="modal-body p-3">
                     <p class="small text-muted mb-2">Digite a nova senha para este usuário:</p>
-                    <input type="password" name="nova_senha" class="form-control form-control-sm font-monospace mb-2" placeholder="Nova senha" required>
-
-                    <!-- REGRAS DE SENHA VISÍVEIS -->
-                    <div class="p-2 bg-light border rounded-3 small text-muted">
-                        <strong class="d-block text-dark mb-1" style="font-size: 0.76rem;">Requisitos da Senha:</strong>
-                        <ul class="mb-0 ps-3" style="font-size: 0.74rem;">
-                            <li>Mínimo <strong>8 caracteres</strong></li>
-                            <li>1 maiúscula, 1 minúscula e 1 número</li>
-                            <li>1 caractere especial (<code>@</code>, <code>#</code>, etc.)</li>
-                        </ul>
-                    </div>
+                    <input type="password" name="nova_senha" class="form-control form-control-sm font-monospace mb-2" placeholder="Nova senha forte" required>
                 </div>
                 <div class="modal-footer bg-light py-2">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
@@ -627,7 +702,51 @@
 </div>
 {% endfor %}
 
-<!-- MODAL DE PRÉ-VISUALIZAÇÃO DO PAPEL TIMBRADO -->
+<!-- 4. MODAL ORÇAMENTO PERSONALIZADO -->
+<div class="modal fade text-start" id="modalOrcamentoPersonalizado" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form action="{{ url_for('novo_chamado') }}" method="POST">
+                <input type="hidden" name="categoria" value="Comercial">
+                <input type="hidden" name="prioridade" value="Alta">
+                <input type="hidden" name="assunto" value="Solicitação de Proposta Comercial / Plano Enterprise">
+
+                <div class="modal-header bg-light border-0 py-3">
+                    <h6 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-building-gear text-primary me-2"></i>Orçamento Personalizado Enterprise
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="text-muted small mb-3">
+                        Precisa de um pacote ampliado de usuários, integrações via API ou condições personalizadas? Envie sua solicitação diretamente para a equipe comercial.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-dark">Estimativa de Acessos / Usuários</label>
+                        <select class="form-select form-select-sm" name="estimativa_porte">
+                            <option value="10-25">10 a 25 utilizadores</option>
+                            <option value="25-50">25 a 50 utilizadores</option>
+                            <option value="mais_50">Mais de 50 utilizadores</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-dark">Descreva as Necessidades da Sua Empresa *</label>
+                        <textarea class="form-control form-control-sm" name="mensagem" rows="4" required 
+                                  placeholder="Ex: Precisamos de limite para 30 motoristas externos, suporte dedicado e treinamento presencial..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0 py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">
+                        <i class="bi bi-send-fill me-1"></i> Enviar Solicitação
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL PREVIEW TIMBRADO -->
 <div class="modal fade" id="modalPreviewTimbrado" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg rounded-4">
@@ -653,92 +772,6 @@
                         </div>
                     </div>
                     <div id="previewLinhaMarca" class="mt-2" style="height: 3px; background-color: {{ perfil.cor_primaria or '#1e3a8a' }};"></div>
-                    <div class="py-5 text-center text-muted">
-                        <small>Corpo da Carta-Proposta Comercial / Ordem de Serviço em PDF</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- MODAL DE CHECKOUT HÍBRIDO -->
-<div class="modal fade" id="modalCheckoutPerfil" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content rounded-4 border-0 shadow">
-            <div class="modal-header border-0 pb-0">
-                <h5 class="modal-title fw-bold" id="tituloModalPlanoPerfil">Finalizar Assinatura</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4">
-
-                <div class="mb-3 p-3 bg-light rounded-3 border text-start">
-                    <label class="small text-muted fw-bold d-block">Cupom Promocional de Desconto</label>
-                    <div class="input-group input-group-sm mt-1">
-                        <input type="text" id="cupomCheckoutInputPerfil" class="form-control font-monospace fw-bold text-uppercase" 
-                               value="{{ perfil.cupom_utilizado or '' }}" placeholder="EX: PROMO10">
-                        <button class="btn btn-outline-primary fw-bold" type="button" onclick="validarCupomAoVivoPerfil()">Validar</button>
-                    </div>
-                    <small id="statusCupomCheckoutPerfil" class="text-muted d-block mt-1">
-                        {% if perfil.cupom_utilizado %}
-                            <span class="text-success"><i class="bi bi-check-circle me-1"></i>Cupom vinculado à empresa</span>
-                        {% else %}
-                            Possui um código promocional? Digite acima.
-                        {% endif %}
-                    </small>
-                </div>
-
-                <ul class="nav nav-pills nav-fill mb-3" id="pills-tab" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active fw-bold" id="tab-cartao-perfil" data-bs-toggle="pill" data-bs-target="#conteudo-cartao-perfil" type="button" role="tab">
-                            <i class="bi bi-credit-card me-1"></i> Cartão
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link fw-bold" id="tab-pix-perfil" data-bs-toggle="pill" data-bs-target="#conteudo-pix-perfil" type="button" role="tab">
-                            <i class="bi bi-qr-code me-1"></i> PIX
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link fw-bold" id="tab-boleto-perfil" data-bs-toggle="pill" data-bs-target="#conteudo-boleto-perfil" type="button" role="tab">
-                            <i class="bi bi-upc-scan me-1"></i> Boleto
-                        </button>
-                    </li>
-                </ul>
-
-                <div class="tab-content pt-2">
-                    <!-- CARTÃO DE CRÉDITO -->
-                    <div class="tab-pane fade show active text-center py-3" id="conteudo-cartao-perfil" role="tabpanel">
-                        <div class="p-3 bg-light rounded-3 border mb-3 text-start">
-                            <i class="bi bi-shield-lock-fill text-success me-1"></i> <strong>Checkout Oficial Mercado Pago</strong>
-                            <p class="small text-muted mb-0 mt-1">Você será redirecionado para o ambiente seguro do Mercado Pago para preencher os dados do seu cartão com total segurança e parcelamento flexível.</p>
-                        </div>
-                        <button type="button" class="btn btn-primary fw-bold w-100 py-3 shadow-sm" onclick="processarPagamentoPerfil('CREDIT_CARD')">
-                            <i class="bi bi-box-arrow-up-right me-1"></i> Ir para Pagamento com Cartão
-                        </button>
-                    </div>
-
-                    <!-- PIX -->
-                    <div class="tab-pane fade text-center" id="conteudo-pix-perfil" role="tabpanel">
-                        <p class="text-muted small mb-3">Liberação instantânea após confirmação.</p>
-                        <button type="button" class="btn btn-success fw-bold w-100 py-2 shadow-sm" onclick="processarPagamentoPerfil('PIX')">
-                            <i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX
-                        </button>
-                        <div id="resultadoPixPerfil" class="mt-3 d-none">
-                            <div class="alert alert-info small" id="msgPixPerfil">Carregando dados...</div>
-                        </div>
-                    </div>
-
-                    <!-- BOLETO -->
-                    <div class="tab-pane fade text-center" id="conteudo-boleto-perfil" role="tabpanel">
-                        <div class="alert alert-light border small text-muted text-start mb-3">
-                            <i class="bi bi-info-circle text-primary me-1"></i> Vencimento para 3 dias úteis.
-                        </div>
-                        <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2 shadow-sm" onclick="processarPagamentoPerfil('BOLETO')">
-                            <i class="bi bi-file-earmark-pdf me-1"></i> Gerar Boleto Bancário
-                        </button>
-                        <div id="resultadoBoletoPerfil" class="mt-3 d-none"></div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -746,9 +779,11 @@
 </div>
 
 <script>
+let cicloSelecionado = 'mensal';
+
 function alternarTipoPessoaPerfil(tipo) {
     const labelRazao = document.getElementById('labelRazaoSocial');
-    const boxFantasia = document.getElementById('boxFantasia');
+    const boxFantasia = document.getElementById('boxNomeFantasia');
     const labelDoc = document.getElementById('labelDocEmpresa');
     const inputDoc = document.getElementById('inputDocEmpresa');
 
@@ -802,176 +837,167 @@ function atualizarCorPreview(cor) {
     if (razao) razao.style.color = cor;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    const radioPF = document.getElementById('tipoPF');
-    if (radioPF && radioPF.checked) {
-        alternarTipoPessoaPerfil('PF');
+function recalcularTotalAssinaturaPerfil() {
+    let base = 14.90;
+    let itens = [
+        { nome: 'Pacote Base Essencial (OS, Propostas, Clientes)', detalhe: '5 usuários inclusos', valor: 14.90 }
+    ];
+
+    // Checagem dos módulos selecionados
+    const modAtend = document.getElementById('modAtend');
+    if (modAtend && modAtend.checked) {
+        base += 15.00;
+        itens.push({ nome: 'Módulo: Atendimentos Clínicos & Prontuários', detalhe: 'Fichas, SOAP e evolução', valor: 15.00 });
     }
 
-    const corInicial = document.getElementById('corPrimariaInput')?.value || '#1e3a8a';
-    atualizarCorPreview(corInicial);
-
-    // RESTAURAÇÃO EXATA DA ABA ATIVA
-    const hashAtual = window.location.hash;
-    const abaSalva = localStorage.getItem('trivium_perfil_active_tab');
-    let alvoAba = '#tab-dados';
-
-    if (hashAtual && hashAtual.startsWith('#tab-')) {
-        alvoAba = hashAtual;
-    } else if (abaSalva && abaSalva.startsWith('#tab-')) {
-        alvoAba = abaSalva;
+    const modTec = document.getElementById('modTec');
+    if (modTec && modTec.checked) {
+        base += 15.00;
+        itens.push({ nome: 'Módulo: Gestão de Equipe & Técnicos', detalhe: 'Gantt e mobile sem login', valor: 15.00 });
     }
 
-    if (alvoAba && alvoAba !== '#tab-dados') {
-        const botaoAba = document.querySelector(`#perfilTabs button[data-bs-target="${alvoAba}"]`);
-        if (botaoAba) {
-            document.querySelectorAll('#perfilTabs button').forEach(b => {
-                b.classList.remove('active');
-                b.setAttribute('aria-selected', 'false');
-            });
-            document.querySelectorAll('#perfilTabsContent .tab-pane').forEach(p => {
-                p.classList.remove('active', 'show');
-            });
+    const modEst = document.getElementById('modEst');
+    if (modEst && modEst.checked) {
+        base += 20.00;
+        itens.push({ nome: 'Módulo: Estoque & Almoxarifado', detalhe: 'Excel, Kardex e requisições', valor: 20.00 });
+    }
 
-            botaoAba.classList.add('active');
-            botaoAba.setAttribute('aria-selected', 'true');
-            const painelAlvo = document.querySelector(alvoAba);
-            if (painelAlvo) {
-                painelAlvo.classList.add('active', 'show');
-            }
+    const modVend = document.getElementById('modVend');
+    if (modVend && modVend.checked) {
+        base += 20.00;
+        itens.push({ nome: 'Módulo: Vendas, Frotas & Expedição', detalhe: 'Portal B2B e motoristas', valor: 20.00 });
+    }
+
+    // Usuários adicionais
+    const inputUsers = document.getElementById('inputLimiteUsuariosPerfil');
+    const totalUsers = parseInt(inputUsers ? inputUsers.value : 5) || 5;
+    const extras = Math.max(0, totalUsers - 5);
+    if (extras > 0) {
+        const custoExtras = extras * 4.00;
+        base += custoExtras;
+        itens.push({ nome: `Usuários Adicionais (${extras} extra${extras > 1 ? 's' : ''})`, detalhe: `Total de ${totalUsers} colaboradores`, valor: custoExtras });
+    }
+
+    // Atualiza mostrador do formulário principal
+    const displayPerfil = document.getElementById('displayValorFinalPerfil');
+    if (displayPerfil) displayPerfil.innerText = `R$ ${base.toFixed(2).replace('.', ',')}`;
+
+    // Atualiza cards de ciclo no modal com descontos
+    const semestralTotal = (base * 6) * (1 - 0.12);
+    const anualTotal = (base * 12) * (1 - 0.25);
+
+    document.getElementById('labelTotalMensal').innerText = `R$ ${base.toFixed(2).replace('.', ',')}`;
+    document.getElementById('labelTotalSemestral').innerText = `R$ ${semestralTotal.toFixed(2).replace('.', ',')}`;
+    document.getElementById('labelTotalAnual').innerText = `R$ ${anualTotal.toFixed(2).replace('.', ',')}`;
+
+    // Monta a tabela de revisão do que o cliente está adquirindo
+    const tbody = document.getElementById('listaItensAquisicao');
+    if (tbody) {
+        tbody.innerHTML = '';
+        itens.forEach(it => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${it.nome}</strong></td>
+                <td class="text-muted">${it.detalhe}</td>
+                <td class="text-end fw-semibold">R$ ${it.valor.toFixed(2).replace('.', ',')}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // Rodapé do resumo com a regra do ciclo selecionado
+        let valorFinalCobrado = base;
+        let descCiclo = 'Total Mensal:';
+
+        if (cicloSelecionado === 'semestral') {
+            valorFinalCobrado = semestralTotal;
+            descCiclo = 'Total Semestral à vista (6 meses com 12% OFF):';
+        } else if (cicloSelecionado === 'anual') {
+            valorFinalCobrado = anualTotal;
+            descCiclo = 'Total Anual à vista (12 meses com 25% OFF):';
         }
+
+        document.getElementById('footCicloDescricao').innerText = descCiclo;
+        document.getElementById('footValorTotalCobrado').innerText = `R$ ${valorFinalCobrado.toFixed(2).replace('.', ',')}`;
     }
-
-    // Monitora a troca manual de abas
-    const botoesAbas = document.querySelectorAll('#perfilTabs button[data-bs-toggle="pill"]');
-    botoesAbas.forEach(btn => {
-        btn.addEventListener('shown.bs.tab', (event) => {
-            const idAlvo = event.target.getAttribute('data-bs-target');
-            if (idAlvo) {
-                localStorage.setItem('trivium_perfil_active_tab', idAlvo);
-                history.replaceState(null, null, idAlvo);
-            }
-        });
-    });
-
-    // DISPARADOR UNIVERSAL DE MODAIS (CRIAR, EDITAR E SENHA)
-    const botoesModal = document.querySelectorAll('.btn-abrir-modal-perfil');
-    botoesModal.forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            const modalId = this.getAttribute('data-modal-id');
-            const el = document.getElementById(modalId);
-            if (el && typeof bootstrap !== 'undefined') {
-                const modalInstance = bootstrap.Modal.getOrCreateInstance(el);
-                modalInstance.show();
-            }
-        });
-    });
-});
-
-let planoPerfilEscolhido = 'MENSAL';
-let valorTotalPerfil = 39.90;
-let parcelasPerfil = 1;
-
-function abrirCheckoutModalPerfil(plano, valorTotal, parcelas, rotulo) {
-    planoPerfilEscolhido = plano;
-    valorTotalPerfil = valorTotal;
-    parcelasPerfil = parcelas;
-    
-    const tituloEl = document.getElementById('tituloModalPlanoPerfil');
-    if (tituloEl) tituloEl.innerText = `Finalizar Assinatura: Plano ${plano} (${rotulo})`;
-    
-    const areaPix = document.getElementById('resultadoPixPerfil');
-    if (areaPix) { areaPix.classList.add('d-none'); }
-
-    const areaBoleto = document.getElementById('resultadoBoletoPerfil');
-    if (areaBoleto) { areaBoleto.classList.add('d-none'); }
-
-    const modalEl = document.getElementById('modalCheckoutPerfil');
-    if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
 }
 
-function validarCupomAoVivoPerfil() {
-    const codigo = document.getElementById('cupomCheckoutInputPerfil')?.value.trim();
-    const statusEl = document.getElementById('statusCupomCheckoutPerfil');
-
-    if (!codigo) { return; }
-
-    fetch('/api/cupom/validar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codigo: codigo, plano: planoPerfilEscolhido })
-    })
-    .then(r => r.json())
-    .then(res => {
-        if (res.valido) {
-            valorTotalPerfil = res.valor_final;
-            if (statusEl) statusEl.innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle me-1"></i>${res.mensagem} R$ ${res.valor_final.toFixed(2)}</span>`;
-        } else {
-            if (statusEl) statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${res.mensagem}</span>`;
-        }
+function selecionarCiclo(ciclo, elemento) {
+    cicloSelecionado = ciclo;
+    document.querySelectorAll('.ciclo-card').forEach(c => {
+        c.classList.remove('border-primary', 'bg-primary-subtle');
     });
+    elemento.classList.add('border-primary', 'bg-primary-subtle');
+    recalcularTotalAssinaturaPerfil();
 }
 
-function processarPagamentoPerfil(tipo) {
-    const cupomDigitado = document.getElementById('cupomCheckoutInputPerfil')?.value || '';
-    const payload = {
-        plano: planoPerfilEscolhido,
-        valor_total: valorTotalPerfil,
-        parcelas: parcelasPerfil,
-        forma_pagamento: tipo,
-        cupom: cupomDigitado
-    };
+// Redirecionamento direto ao checkout oficial do Mercado Pago
+function redirecionarMercadoPago() {
+    const btn = document.getElementById('btnIrMercadoPago');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gerando Pagamento Seguro...';
 
-    const endpoint = (tipo === 'CREDIT_CARD') ? '/api/assinatura/checkout-preferencia' : '/api/assinatura/checkout-transparente';
-
-    fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+    fetch("{{ url_for('api_checkout_preferencia') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ciclo: cicloSelecionado })
     })
     .then(r => r.json())
-    .then(res => {
-        if (res.status === 'success') {
-            if (tipo === 'CREDIT_CARD') {
-                const linkCheckout = res.init_point || res.sandbox_init_point;
-                if (linkCheckout) {
-                    window.location.href = linkCheckout;
-                } else {
-                    alert('Erro: Link externo de pagamento não gerado.');
-                }
-            } else if (tipo === 'PIX') {
-                const areaPix = document.getElementById('resultadoPixPerfil');
-                areaPix.classList.remove('d-none');
-                const copiaCola = res.pix?.payload || '';
-                const encodedImg = res.pix?.encodedImage || '';
-                let imgTag = encodedImg ? `<img src="data:image/png;base64,${encodedImg}" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 180px; width: 180px;">` : '';
-                areaPix.innerHTML = `
-                    <div class="card p-3 border-success text-center shadow-sm mt-3">
-                        <h6 class="fw-bold text-success mb-2">QR Code Pix Gerado</h6>
-                        <div class="my-2">${imgTag}</div>
-                        <input type="text" id="pixInputPerfil" class="form-control form-control-sm font-monospace mb-2" value="${copiaCola}" readonly>
-                        <button class="btn btn-outline-primary btn-sm fw-bold w-100" onclick="navigator.clipboard.writeText(document.getElementById('pixInputPerfil').value); alert('Copiado!');">Copiar Código Pix</button>
-                    </div>
-                `;
-            } else if (tipo === 'BOLETO') {
-                const areaBoleto = document.getElementById('resultadoBoletoPerfil');
-                areaBoleto.classList.remove('d-none');
-                const linkBoleto = res.bankSlipUrl || res.invoiceUrl || '';
-                areaBoleto.innerHTML = `
-                    <div class="card p-3 border-primary text-center shadow-sm mt-3">
-                        <h6 class="fw-bold text-primary mb-2">Boleto Gerado</h6>
-                        <a href="${linkBoleto}" target="_blank" class="btn btn-primary fw-bold py-2">Visualizar Boleto</a>
-                    </div>
-                `;
-            }
+    .then(data => {
+        if (data.status === 'success' && (data.init_point || data.sandbox_init_point)) {
+            window.location.href = data.init_point || data.sandbox_init_point;
         } else {
-            alert('Atenção: ' + res.mensagem);
+            alert(data.mensagem || "Não foi possível gerar a preferência no Mercado Pago.");
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-box-arrow-up-right me-2"></i> Pagar com Mercado Pago';
         }
     })
     .catch(() => {
-        alert('Erro de comunicação com o servidor.');
+        alert("Erro de comunicação com o servidor.");
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-box-arrow-up-right me-2"></i> Pagar com Mercado Pago';
     });
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    recalcularTotalAssinaturaPerfil();
+
+    // RESTAURAÇÃO DE ABAS
+    const hashAtual = window.location.hash;
+    const abaSalva = localStorage.getItem('trivium_perfil_active_tab');
+    let alvoAba = (hashAtual && hashAtual.startsWith('#tab-')) ? hashAtual : (abaSalva || '#tab-dados');
+
+    const botaoAba = document.querySelector(`#perfilTabs button[data-bs-target="${alvoAba}"]`);
+    if (botaoAba) {
+        document.querySelectorAll('#perfilTabs button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('#perfilTabsContent .tab-pane').forEach(p => p.classList.remove('active', 'show'));
+        botaoAba.classList.add('active');
+        const painel = document.querySelector(alvoAba);
+        if (painel) painel.classList.add('active', 'show');
+    }
+
+    document.querySelectorAll('#perfilTabs button[data-bs-toggle="pill"]').forEach(btn => {
+        btn.addEventListener('shown.bs.tab', (e) => {
+            const id = e.target.getAttribute('data-bs-target');
+            if (id) {
+                localStorage.setItem('trivium_perfil_active_tab', id);
+                history.replaceState(null, null, id);
+            }
+        });
+    });
+
+    document.querySelectorAll('.btn-abrir-modal-perfil').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const el = document.getElementById(this.getAttribute('data-modal-id'));
+            if (el) bootstrap.Modal.getOrCreateInstance(el).show();
+        });
+    });
+
+    // Se o backend indicou para abrir o checkout após salvar a mensalidade
+    {% if abrir_modal_pagamento %}
+    const modalMP = document.getElementById('modalCheckoutMercadoPago');
+    if (modalMP) bootstrap.Modal.getOrCreateInstance(modalMP).show();
+    {% endif %}
+});
 </script>
 {% endblock %}

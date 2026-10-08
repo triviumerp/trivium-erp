@@ -110,7 +110,7 @@
         </div>
     </div>
 
-    <!-- ABA 2: ESCALA E MONITORAMENTO (UNIFICADA COM GANTT E VISUALIZAR) -->
+    <!-- ABA 2: ESCALA E MONITORAMENTO (UNIFICADA: OS GERAIS + FASES DO GANTT) -->
     <div class="tab-pane fade" id="conteudo-agenda" role="tabpanel">
         <div class="card border-0 shadow-sm rounded-4 p-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -129,10 +129,10 @@
                             <th>CLIENTE / LOCAL</th>
                             <th>ATIVIDADE / ESCOPO</th>
                             <th>STATUS</th>
-                            <th class="text-end pe-2">FICHA TÉCNICA</th>
+                            <th class="text-end pe-2">AÇÕES & FICHA</th>
                         </tr>
                     </thead>
-                   <tbody>
+                    <tbody>
                         {% for item in ordens_agendadas %}
                         <tr>
                             <td>
@@ -175,7 +175,7 @@
                             </td>
                             <td class="text-end pe-2">
                                 <div class="d-inline-flex gap-1 align-items-center">
-                                    <!-- LINK MOBILE PARA O TÉCNICO PREENCHER E COLETAR ASSINATURA -->
+                                    <!-- LINK EXTERNO PARA COLETA DE ASSINATURA -->
                                     {% if item.is_etapa and item.token_externo %}
                                         {% set url_link = url_for('etapa_formulario_externo', token=item.token_externo, _external=True) %}
                                         <button type="button" class="btn btn-sm btn-outline-success" onclick="navigator.clipboard.writeText('{{ url_link }}'); alert('Link da fase copiado!');" title="Copiar Link para o Técnico">
@@ -186,10 +186,21 @@
                                             <i class="bi bi-whatsapp"></i>
                                         </a>
                                         {% endif %}
+                                    {% elif not item.is_etapa and item.token_externo %}
+                                        {% set url_link_os = url_for('os_formulario_externo', token=item.token_externo, _external=True) %}
+                                        <button type="button" class="btn btn-sm btn-outline-success" onclick="navigator.clipboard.writeText('{{ url_link_os }}'); alert('Link da OS copiado!');" title="Copiar Link da OS">
+                                            <i class="bi bi-share"></i>
+                                        </button>
+                                        {% if item.operador_telefone %}
+                                        <a href="https://wa.me/55{{ item.operador_telefone }}?text=Ol%C3%A1,%20aqui%20est%C3%A1%20o%20link%20para%20a%20sua%20OS:%20{{ url_link_os|urlencode }}" target="_blank" class="btn btn-sm btn-success" title="Enviar OS no WhatsApp">
+                                            <i class="bi bi-whatsapp"></i>
+                                        </a>
+                                        {% endif %}
                                     {% endif %}
 
-                                    <a href="{{ url_for('visualizar_ficha_servico', id=item.servico_id) }}" target="_blank" class="btn btn-sm btn-outline-primary fw-bold" title="Abrir Ficha de Atendimento">
-                                        <i class="bi bi-eye"></i> Visualizar
+                                    <!-- BOTÃO DE VISUALIZAÇÃO PARA O GESTOR -->
+                                    <a href="{{ url_for('visualizar_ficha_servico', id=item.servico_id) }}" target="_blank" class="btn btn-sm btn-outline-primary fw-bold" title="Abrir Ficha de Atendimento da OS">
+                                        <i class="bi bi-eye me-1"></i> Visualizar
                                     </a>
                                 </div>
                             </td>

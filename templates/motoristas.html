@@ -1,0 +1,763 @@
+{% extends 'base.html' %}
+
+{% block title %}Motoristas & Frotas - Trivium ERP{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-truck text-primary me-2"></i>Motoristas, Entregas & Frotas
+        </h2>
+        <p class="text-muted mb-0">Gestão de condutores, auditoria de rotas e pesquisa rápida de comprovativos</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{{ url_for('painel_expedicao') }}" class="btn btn-outline-primary fw-bold shadow-sm">
+            <i class="bi bi-box-seam me-1"></i> Fila de Expedição
+        </a>
+        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoMotorista">
+            <i class="bi bi-plus-circle me-1"></i> + Novo Motorista
+        </button>
+    </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- 0. FILTRO RÁPIDO DE AUDITORIA: BUSCAR COMPROVANTE POR CLIENTE/DOC-->
+<!-- ============================================================== -->
+<div class="card border-0 shadow-sm rounded-4 mb-4 bg-white">
+    <div class="card-body p-3">
+        <form method="GET" action="{{ url_for('gestao_motoristas') }}" class="row g-2 align-items-center">
+            <div class="col-md-9 col-12">
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-end-0 text-muted">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" name="busca_entrega" class="form-control border-start-0" 
+                           placeholder="Pesquisar comprovativo por Nome do Cliente, CPF/CNPJ ou Nº do Pedido (Ex: PED-2026-0004)..." 
+                           value="{{ termo_busca or '' }}">
+                </div>
+            </div>
+            <div class="col-md-3 col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary fw-bold w-100 shadow-sm">
+                    <i class="bi bi-search me-1"></i> Localizar Entrega
+                </button>
+                {% if termo_busca %}
+                <a href="{{ url_for('gestao_motoristas') }}" class="btn btn-outline-secondary" title="Limpar pesquisa">
+                    <i class="bi bi-x-lg"></i>
+                </a>
+                {% endif %}
+            </div>
+        </form>
+
+        <!-- SE HOUVER BUSCA ATIVA, MOSTRA O PAINEL DE RESULTADOS -->
+        {% if termo_busca %}
+        <div class="mt-3 pt-3 border-top">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold text-dark mb-0">
+                    <i class="bi bi-patch-check-fill text-success me-1"></i>
+                    Resultados para: <span class="text-primary">"{{ termo_busca }}"</span> ({{ entregas_busca|length }} localizada{{ 's' if entregas_busca|length != 1 else '' }})
+                </h6>
+            </div>
+
+            {% if entregas_busca %}
+            <div class="table-responsive border rounded-3">
+                <table class="table table-hover align-middle mb-0 small">
+                    <thead class="table-light text-muted">
+                        <tr>
+                            <th>PEDIDO</th>
+                            <th>CLIENTE / DESTINATÁRIO</th>
+                            <th>MOTORISTA</th>
+                            <th>DATA ENTREGA</th>
+                            <th>RECEBIDO POR</th>
+                            <th>COMPROVATIVO</th>
+                            <th class="text-end pe-3">AÇÃO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in entregas_busca %}
+                        <tr>
+                            <td><strong>{{ p.numero_pedido }}</strong></td>
+                            <td>
+                                <strong class="text-dark d-block">{{ p.nome_solicitante }}</strong>
+                                <small class="text-muted">{{ p.setor_obra_destino or 'Endereço Comercial' }}</small>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border">
+                                    <i class="bi bi-person me-1"></i>{{ p.motorista_responsavel.nome if p.motorista_responsavel else 'Não alocado' }}
+                                </span>
+                            </td>
+                            <td>
+                                {{ p.data_entrega_realizada.strftime('%d/%m/%Y %H:%M') if p.data_entrega_realizada else (p.data_agendada_entrega.strftime('%d/%m/%Y') if p.data_agendada_entrega else '--') }}
+                            </td>
+                            <td>
+                                {{ p.recebido_por_nome or '--' }}
+                                {% if p.recebido_por_documento %}
+                                <small class="text-muted d-block">Doc: {{ p.recebido_por_documento }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if p.status in ['entregue', 'concluido'] %}
+                                    {% if p.assinatura_entrega_base64 %}
+                                        <span class="badge bg-success-subtle text-success border"><i class="bi bi-pen-fill me-1"></i>Assinado</span>
+                                    {% elif p.foto_comprovante_entrega %}
+                                        <span class="badge bg-info-subtle text-info border"><i class="bi bi-image me-1"></i>Com Foto</span>
+                                    {% else %}
+                                        <span class="badge bg-success">Entregue</span>
+                                    {% endif %}
+                                {% elif p.status == 'em_rota' %}
+                                    <span class="badge bg-primary">Em Rota</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Separação</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end pe-3">
+                                {% if p.status in ['entregue', 'concluido'] %}
+                                <button type="button" class="btn btn-sm btn-success fw-bold py-1 px-2" data-bs-toggle="modal" data-bs-target="#modalComprovanteBusca{{ p.id }}">
+                                    <i class="bi bi-file-earmark-check-fill me-1"></i> Comprovativo
+                                </button>
+                                {% else %}
+                                <a href="{{ url_for('listar_vendas') }}" class="btn btn-sm btn-outline-primary py-1 px-2">
+                                    <i class="bi bi-eye"></i> Ver Pedido
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- MODAIS DE CADA RESULTADO DA BUSCA -->
+            {% for p in entregas_busca %}
+            {% if p.status in ['entregue', 'concluido'] %}
+            <div class="modal fade" id="modalComprovanteBusca{{ p.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content border-0 shadow-lg rounded-4">
+                        <div class="modal-header bg-light py-3 border-0">
+                            <div>
+                                <h5 class="modal-title fw-bold text-dark mb-0">
+                                    <i class="bi bi-patch-check-fill text-success me-2"></i>Comprovativo de Entrega • Pedido #{{ p.numero_pedido }}
+                                </h5>
+                                <small class="text-muted">Auditoria de recebimento realizada em campo pelo motorista</small>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+
+                        <div class="modal-body p-4 text-start" id="corpoModalBusca{{ p.id }}">
+                            <div class="row g-3 p-3 bg-light rounded-3 mb-4 border">
+                                <div class="col-md-6">
+                                    <small class="text-muted d-block">Cliente / Destinatário:</small>
+                                    <strong class="text-dark fs-6">{{ p.nome_solicitante }}</strong>
+                                    <span class="text-muted small d-block">{{ p.setor_obra_destino or 'Endereço Comercial' }}</span>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted d-block">Data & Hora do Envio:</small>
+                                    <strong class="text-dark">{{ p.data_entrega_realizada.strftime('%d/%m/%Y %H:%M') if p.data_entrega_realizada else '--' }}</strong>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted d-block">Motorista Responsável:</small>
+                                    <strong class="text-primary">{{ p.motorista_responsavel.nome if p.motorista_responsavel else '--' }}</strong>
+                                    <small class="text-muted d-block">{{ p.motorista_responsavel.veiculo_placa or '' }}</small>
+                                </div>
+                            </div>
+
+                            <div class="row g-4 mb-3">
+                                <div class="col-md-6 border-end">
+                                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-person-check text-primary me-2"></i>Quem Recebeu a Carga</h6>
+                                    <div class="mb-2">
+                                        <span class="text-muted small d-block">Nome do Recebedor:</span>
+                                        <strong class="text-dark">{{ p.recebido_por_nome or 'Não informado' }}</strong>
+                                    </div>
+                                    <div class="mb-3">
+                                        <span class="text-muted small d-block">Documento / Matrícula / RG:</span>
+                                        <code class="text-dark fs-6">{{ p.recebido_por_documento or 'Não informado' }}</code>
+                                    </div>
+                                    {% if p.foto_comprovante_entrega %}
+                                    <div class="mt-3">
+                                        <span class="text-muted small d-block mb-1">Registo Fotográfico do Local:</span>
+                                        <a href="{{ url_for('download_file', filename=p.foto_comprovante_entrega) }}" target="_blank">
+                                            <img src="{{ url_for('download_file', filename=p.foto_comprovante_entrega) }}" 
+                                                 alt="Foto da Entrega" class="img-fluid rounded-3 border shadow-sm" style="max-height: 180px; object-fit: cover;">
+                                        </a>
+                                    </div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="col-md-6">
+                                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-pen-fill text-primary me-2"></i>Assinatura Digital no Smartphone</h6>
+                                    {% if p.assinatura_entrega_base64 %}
+                                    <div class="p-2 border rounded-3 bg-white text-center shadow-sm">
+                                        <img src="{{ p.assinatura_entrega_base64 }}" alt="Assinatura do Recebedor" class="img-fluid" style="max-height: 160px;">
+                                    </div>
+                                    <small class="text-muted text-center d-block mt-2">
+                                        <i class="bi bi-shield-check text-success me-1"></i>Assinatura digital colhida no ato da entrega
+                                    </small>
+                                    {% else %}
+                                    <div class="p-4 border rounded-3 bg-light text-center text-muted">
+                                        <i class="bi bi-slash-circle fs-3 d-block mb-1"></i>
+                                        Assinatura em tela não registada para este envio.
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="mt-4 pt-3 border-top">
+                                <h6 class="fw-bold text-dark mb-2"><i class="bi bi-boxes text-secondary me-2"></i>Itens Conferidos e Entregues</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered align-middle mb-0 small">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Item / Mercadoria</th>
+                                                <th class="text-center">Quantidade</th>
+                                                <th class="text-end">Subtotal</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for item in p.itens %}
+                                            <tr>
+                                                <td>{{ item.produto.nome if item.produto else 'Item' }}</td>
+                                                <td class="text-center font-monospace">{{ item.quantidade_atendida or item.quantidade_solicitada }} {{ item.produto.unidade_medida if item.produto else 'un' }}</td>
+                                                <td class="text-end fw-bold">R$ {{ "%.2f"|format(item.valor_total) }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-footer bg-light py-2 border-0 d-flex justify-content-between">
+                            <button type="button" class="btn btn-outline-dark btn-sm fw-bold" onclick="imprimirComprovativo('corpoModalBusca{{ p.id }}')">
+                                <i class="bi bi-printer-fill me-1"></i> Imprimir Esta Página
+                            </button>
+                            <div class="d-flex gap-2">
+                                <a href="{{ url_for('gerar_pdf_comprovativo_entrega', id=p.id) }}" target="_blank" class="btn btn-success btn-sm fw-bold">
+                                    <i class="bi bi-file-earmark-pdf-fill me-1"></i> Descarregar PDF / Enviar ao Cliente
+                                </a>
+                                <button type="button" class="btn btn-secondary btn-sm fw-bold px-3" data-bs-dismiss="modal">Fechar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+
+            {% else %}
+            <div class="alert alert-light border text-center py-4 mb-0">
+                <i class="bi bi-info-circle text-muted fs-3 d-block mb-2"></i>
+                Nenhuma entrega localizada com o termo pesquisado. Verifique a grafia do nome, documento ou número do pedido.
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- 1. MONITORIZAÇÃO EM DIRETO (APENAS ENTREGAS DO DIA POR CONDUTOR)-->
+<!-- ============================================================== -->
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="fw-bold text-dark mb-0">
+                <i class="bi bi-broadcast text-danger me-2 animate-pulse"></i>Monitorização em Direto (Hoje - {{ hoje.strftime('%d/%m/%Y') }})
+            </h5>
+            <small class="text-muted">Apenas motoristas com entregas agendadas ou em curso hoje</small>
+        </div>
+        <span class="badge bg-primary-subtle text-primary fw-bold border px-3 py-2">
+            {{ monitoramento_motoristas.keys()|length }} Motorista(s) em Rota
+        </span>
+    </div>
+
+    <div class="card-body p-3">
+        {% if monitoramento_motoristas %}
+            <div class="row g-3">
+                {% for m_id, dados in monitoramento_motoristas.items() %}
+                <div class="col-12 col-lg-6">
+                    <div class="card border border-light-subtle rounded-4 shadow-sm p-3 h-100 bg-white">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="rounded-circle bg-primary bg-opacity-10 text-primary p-2 d-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                                    <i class="bi bi-person-fill fs-5"></i>
+                                </div>
+                                <div>
+                                    <strong class="d-block text-dark fs-6">{{ dados.motorista.nome }}</strong>
+                                    <small class="text-muted">
+                                        <i class="bi bi-truck me-1"></i>{{ dados.motorista.veiculo_placa or 'Sem veículo' }} • 
+                                        <i class="bi bi-whatsapp me-1"></i>{{ dados.motorista.telefone }}
+                                    </small>
+                                </div>
+                            </div>
+                            <span class="badge {% if dados.percentual == 100 %}bg-success{% else %}bg-primary{% endif %} rounded-pill px-3 py-2">
+                                {{ dados.concluidos }} / {{ dados.total }} Entregues ({{ dados.percentual }}%)
+                            </span>
+                        </div>
+
+                        <div class="progress mb-3" style="height: 6px;">
+                            <div class="progress-bar {% if dados.percentual == 100 %}bg-success{% else %}bg-primary progress-bar-striped progress-bar-animated{% endif %}" 
+                                 role="progressbar" style="width: {{ dados.percentual }}%;"></div>
+                        </div>
+
+                        <button class="btn btn-sm btn-light border w-100 fw-bold d-flex justify-content-between align-items-center" 
+                                type="button" data-bs-toggle="collapse" data-bs-target="#rotasHoje{{ m_id }}">
+                            <span><i class="bi bi-list-check me-1 text-primary"></i> Ver entregas em curso deste motorista</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </button>
+
+                        <div class="collapse mt-2" id="rotasHoje{{ m_id }}">
+                            <div class="table-responsive border rounded-3 mt-1">
+                                <table class="table table-hover align-middle mb-0 small">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>ORDEM</th>
+                                            <th>PEDIDO</th>
+                                            <th>CLIENTE / DESTINO</th>
+                                            <th>ESTADO</th>
+                                            <th class="text-end">AÇÃO</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for ped in dados.pedidos %}
+                                        <tr>
+                                            <td><span class="badge bg-secondary rounded-pill">#{{ ped.ordem_entrega or loop.index }}</span></td>
+                                            <td><strong>{{ ped.numero_pedido }}</strong></td>
+                                            <td>
+                                                <strong class="d-block text-dark">{{ ped.nome_solicitante }}</strong>
+                                                <small class="text-muted text-truncate d-inline-block" style="max-width: 200px;">
+                                                    {{ ped.setor_obra_destino or 'Balcão' }}
+                                                </small>
+                                            </td>
+                                            <td>
+                                                {% if ped.status in ['entregue', 'concluido'] %}
+                                                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Entregue</span>
+                                                {% elif ped.status == 'em_rota' %}
+                                                    <span class="badge bg-primary"><i class="bi bi-truck me-1"></i>Em Rota</span>
+                                                {% else %}
+                                                    <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Separação</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-end">
+                                                <a href="{{ url_for('listar_vendas') }}" class="btn btn-xs btn-outline-primary py-1 px-2" title="Abrir no Painel de Vendas">
+                                                    <i class="bi bi-eye"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="text-center py-4 text-muted">
+                <i class="bi bi-truck fs-1 d-block mb-2 text-secondary opacity-50"></i>
+                Não existem entregas atribuídas a motoristas agendadas para o dia de hoje.
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- 2. EQUIPA DE MOTORISTAS CADASTRADA + HISTÓRICO POR DIAS        -->
+<!-- ============================================================== -->
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="fw-bold text-dark mb-0"><i class="bi bi-people-fill text-primary me-2"></i>Equipa de Motoristas Cadastrada</h5>
+            <small class="text-muted">Gestão cadastral e auditoria detalhada de entregas passadas por data</small>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 small">
+            <thead class="table-light text-muted">
+                <tr>
+                    <th>MOTORISTA / CONDUTOR</th>
+                    <th>VEÍCULO / MATRÍCULA</th>
+                    <th>DOCUMENTO</th>
+                    <th>LINK MOBILE (ROTA)</th>
+                    <th>ESTADO</th>
+                    <th class="text-end pe-3">AÇÕES</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in motoristas %}
+                <tr>
+                    <td>
+                        <strong class="text-dark d-block fs-6">{{ m.nome }}</strong>
+                        <span class="text-muted"><i class="bi bi-whatsapp text-success me-1"></i>{{ m.telefone }}</span>
+                        {% if m.email %}<small class="text-muted d-block">{{ m.email }}</small>{% endif %}
+                    </td>
+                    <td>
+                        {% if m.veiculo_placa %}
+                            <span class="badge bg-light text-dark border px-2 py-1"><i class="bi bi-car-front-fill me-1"></i>{{ m.veiculo_placa }}</span>
+                        {% else %}
+                            <span class="text-muted">--</span>
+                        {% endif %}
+                    </td>
+                    <td><code>{{ m.documento_registro or '--' }}</code></td>
+                    <td>
+                        {% set link_motorista = url_for('painel_mobile_motorista', token=m.token_acesso, _external=True) %}
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-success py-1" onclick="navigator.clipboard.writeText('{{ link_motorista }}'); alert('Link de rota móvel copiado!');" title="Copiar Link para WhatsApp">
+                                <i class="bi bi-whatsapp"></i> Copiar
+                            </button>
+                            <a href="{{ link_motorista }}" target="_blank" class="btn btn-sm btn-outline-secondary py-1" title="Abrir App de Entrega">
+                                <i class="bi bi-box-arrow-up-right"></i>
+                            </a>
+                        </div>
+                    </td>
+                    <td>
+                        <form action="{{ url_for('alternar_status_motorista', id=m.id) }}" method="POST" class="d-inline">
+                            <button type="submit" class="btn btn-sm border-0 p-0">
+                                {% if m.ativo %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Ativo</span>
+                                {% else %}
+                                    <span class="badge bg-secondary-subtle text-secondary border">Inativo</span>
+                                {% endif %}
+                            </button>
+                        </form>
+                    </td>
+                    <td class="text-end pe-3">
+                        <div class="d-inline-flex gap-1">
+                            <button class="btn btn-sm btn-outline-primary fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#historicoMotorista{{ m.id }}" title="Ver histórico de entregas por dia">
+                                <i class="bi bi-clock-history me-1"></i> Histórico
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary fw-bold" data-bs-toggle="modal" data-bs-target="#modalEditarMotorista{{ m.id }}" title="Editar Cadastro">
+                                <i class="bi bi-pencil-square"></i>
+                            </button>
+                            <form action="{{ url_for('excluir_motorista', id=m.id) }}" method="POST" onsubmit="return confirm('Tem a certeza de que deseja remover este motorista da equipa?');" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Remover">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+
+                <!-- HISTÓRICO AGRUPADO POR DIAS (DAQUELE MOTORISTA) -->
+                <tr class="collapse bg-light" id="historicoMotorista{{ m.id }}">
+                    <td colspan="6" class="p-4">
+                        <div class="card border rounded-3 p-3 bg-white">
+                            <h6 class="fw-bold text-dark mb-3">
+                                <i class="bi bi-calendar3 text-primary me-2"></i>Histórico de Entregas por Data • {{ m.nome }}
+                            </h6>
+
+                            {% set dias_entregas = historico_por_dia[m.id] %}
+                            {% if dias_entregas %}
+                                <div class="accordion" id="accordionDias{{ m.id }}">
+                                    {% for data_str, pedidos_dia in dias_entregas.items() %}
+                                    {% set dia_index = loop.index %}
+                                    <div class="accordion-item border rounded-3 mb-2 overflow-hidden">
+                                        <h2 class="accordion-header" id="heading{{ m.id }}_{{ dia_index }}">
+                                            <button class="accordion-button collapsed py-2 px-3 fw-bold bg-light text-dark" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ m.id }}_{{ dia_index }}">
+                                                <div class="d-flex justify-content-between align-items-center w-100 pe-3">
+                                                    <span><i class="bi bi-calendar-check text-success me-2"></i>Data: {{ data_str }}</span>
+                                                    <span class="badge bg-success rounded-pill">{{ pedidos_dia|length }} entrega(s) concluída(s)</span>
+                                                </div>
+                                            </button>
+                                        </h2>
+                                        <div id="collapse{{ m.id }}_{{ dia_index }}" class="accordion-collapse collapse" data-bs-parent="#accordionDias{{ m.id }}">
+                                            <div class="accordion-body p-0">
+                                                <div class="table-responsive">
+                                                    <table class="table table-hover align-middle mb-0 small">
+                                                        <thead class="table-light text-muted">
+                                                            <tr>
+                                                                <th>PEDIDO</th>
+                                                                <th>CLIENTE / DESTINATÁRIO</th>
+                                                                <th>RECEBIDO POR</th>
+                                                                <th>DATA/HORA ENTREGA</th>
+                                                                <th>COMPROVATIVO</th>
+                                                                <th class="text-end pe-3">AÇÃO</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {% for p in pedidos_dia %}
+                                                            <tr>
+                                                                <td><strong>{{ p.numero_pedido }}</strong></td>
+                                                                <td>
+                                                                    <strong class="text-dark d-block">{{ p.nome_solicitante }}</strong>
+                                                                    <small class="text-muted">{{ p.setor_obra_destino or 'Endereço Comercial' }}</small>
+                                                                </td>
+                                                                <td>
+                                                                    {{ p.recebido_por_nome or '--' }}
+                                                                    {% if p.recebido_por_documento %}<small class="text-muted d-block">Doc: {{ p.recebido_por_documento }}</small>{% endif %}
+                                                                </td>
+                                                                <td>
+                                                                    {{ p.data_entrega_realizada.strftime('%d/%m/%Y %H:%M') if p.data_entrega_realizada else '--' }}
+                                                                </td>
+                                                                <td>
+                                                                    {% if p.foto_comprovante_entrega %}
+                                                                        <a href="{{ url_for('download_file', filename=p.foto_comprovante_entrega) }}" target="_blank" class="badge bg-info text-decoration-none py-1 px-2">
+                                                                            <i class="bi bi-image me-1"></i>Ver Foto
+                                                                        </a>
+                                                                    {% elif p.assinatura_entrega_base64 %}
+                                                                        <span class="badge bg-success-subtle text-success border">Assinatura Digital</span>
+                                                                    {% else %}
+                                                                        <span class="text-muted small">Sem anexo</span>
+                                                                    {% endif %}
+                                                                </td>
+                                                                <td class="text-end pe-3">
+                                                                    <button type="button" class="btn btn-sm btn-outline-primary fw-bold py-1 px-2" data-bs-toggle="modal" data-bs-target="#modalComprovanteHist{{ p.id }}" title="Ver protocolo com assinatura">
+                                                                        <i class="bi bi-file-earmark-check-fill me-1"></i> Comprovativo
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- MODAIS DE CADA COMPROVATIVO DO HISTÓRICO -->
+                                    {% for p in pedidos_dia %}
+                                    <div class="modal fade" id="modalComprovanteHist{{ p.id }}" tabindex="-1" aria-hidden="true">
+                                        <div class="modal-dialog modal-lg modal-dialog-centered">
+                                            <div class="modal-content border-0 shadow-lg rounded-4">
+                                                <div class="modal-header bg-light py-3 border-0">
+                                                    <div>
+                                                        <h5 class="modal-title fw-bold text-dark mb-0">
+                                                            <i class="bi bi-patch-check-fill text-success me-2"></i>Comprovativo de Entrega • Pedido #{{ p.numero_pedido }}
+                                                        </h5>
+                                                        <small class="text-muted">Auditoria de recebimento realizada em campo pelo motorista</small>
+                                                    </div>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                </div>
+
+                                                <div class="modal-body p-4 text-start" id="corpoModalHist{{ p.id }}">
+                                                    <div class="row g-3 p-3 bg-light rounded-3 mb-4 border">
+                                                        <div class="col-md-6">
+                                                            <small class="text-muted d-block">Cliente / Destinatário:</small>
+                                                            <strong class="text-dark fs-6">{{ p.nome_solicitante }}</strong>
+                                                            <span class="text-muted small d-block">{{ p.setor_obra_destino or 'Endereço Comercial' }}</span>
+                                                        </div>
+                                                        <div class="col-md-3">
+                                                            <small class="text-muted d-block">Data & Hora do Envio:</small>
+                                                            <strong class="text-dark">{{ p.data_entrega_realizada.strftime('%d/%m/%Y %H:%M') if p.data_entrega_realizada else '--' }}</strong>
+                                                        </div>
+                                                        <div class="col-md-3">
+                                                            <small class="text-muted d-block">Motorista Responsável:</small>
+                                                            <strong class="text-primary">{{ p.motorista_responsavel.nome if p.motorista_responsavel else '--' }}</strong>
+                                                            <small class="text-muted d-block">{{ p.motorista_responsavel.veiculo_placa or '' }}</small>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="row g-4 mb-3">
+                                                        <div class="col-md-6 border-end">
+                                                            <h6 class="fw-bold text-dark mb-3"><i class="bi bi-person-check text-primary me-2"></i>Quem Recebeu a Carga</h6>
+                                                            <div class="mb-2">
+                                                                <span class="text-muted small d-block">Nome do Recebedor:</span>
+                                                                <strong class="text-dark">{{ p.recebido_por_nome or 'Não informado' }}</strong>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <span class="text-muted small d-block">Documento / Matrícula / RG:</span>
+                                                                <code class="text-dark fs-6">{{ p.recebido_por_documento or 'Não informado' }}</code>
+                                                            </div>
+                                                            {% if p.foto_comprovante_entrega %}
+                                                            <div class="mt-3">
+                                                                <span class="text-muted small d-block mb-1">Registo Fotográfico do Local:</span>
+                                                                <a href="{{ url_for('download_file', filename=p.foto_comprovante_entrega) }}" target="_blank">
+                                                                    <img src="{{ url_for('download_file', filename=p.foto_comprovante_entrega) }}" 
+                                                                         alt="Foto da Entrega" class="img-fluid rounded-3 border shadow-sm" style="max-height: 180px; object-fit: cover;">
+                                                                </a>
+                                                            </div>
+                                                            {% endif %}
+                                                        </div>
+
+                                                        <div class="col-md-6">
+                                                            <h6 class="fw-bold text-dark mb-3"><i class="bi bi-pen-fill text-primary me-2"></i>Assinatura Digital no Smartphone</h6>
+                                                            {% if p.assinatura_entrega_base64 %}
+                                                            <div class="p-2 border rounded-3 bg-white text-center shadow-sm">
+                                                                <img src="{{ p.assinatura_entrega_base64 }}" alt="Assinatura do Recebedor" class="img-fluid" style="max-height: 160px;">
+                                                            </div>
+                                                            <small class="text-muted text-center d-block mt-2">
+                                                                <i class="bi bi-shield-check text-success me-1"></i>Assinatura digital colhida no ato da entrega
+                                                            </small>
+                                                            {% else %}
+                                                            <div class="p-4 border rounded-3 bg-light text-center text-muted">
+                                                                <i class="bi bi-slash-circle fs-3 d-block mb-1"></i>
+                                                                Assinatura em tela não registada para este envio.
+                                                            </div>
+                                                            {% endif %}
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="mt-4 pt-3 border-top">
+                                                        <h6 class="fw-bold text-dark mb-2"><i class="bi bi-boxes text-secondary me-2"></i>Itens Conferidos e Entregues</h6>
+                                                        <div class="table-responsive">
+                                                            <table class="table table-sm table-bordered align-middle mb-0 small">
+                                                                <thead class="table-light">
+                                                                    <tr>
+                                                                        <th>Item / Mercadoria</th>
+                                                                        <th class="text-center">Quantidade</th>
+                                                                        <th class="text-end">Subtotal</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {% for item in p.itens %}
+                                                                    <tr>
+                                                                        <td>{{ item.produto.nome if item.produto else 'Item' }}</td>
+                                                                        <td class="text-center font-monospace">{{ item.quantidade_atendida or item.quantidade_solicitada }} {{ item.produto.unidade_medida if item.produto else 'un' }}</td>
+                                                                        <td class="text-end fw-bold">R$ {{ "%.2f"|format(item.valor_total) }}</td>
+                                                                    </tr>
+                                                                    {% endfor %}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="modal-footer bg-light py-2 border-0 d-flex justify-content-between">
+                                                    <button type="button" class="btn btn-outline-dark btn-sm fw-bold" onclick="imprimirComprovativo('corpoModalHist{{ p.id }}')">
+                                                        <i class="bi bi-printer-fill me-1"></i> Imprimir Esta Página
+                                                    </button>
+                                                    <div class="d-flex gap-2">
+                                                        <a href="{{ url_for('gerar_pdf_comprovativo_entrega', id=p.id) }}" target="_blank" class="btn btn-success btn-sm fw-bold">
+                                                            <i class="bi bi-file-earmark-pdf-fill me-1"></i> Descarregar PDF / Enviar ao Cliente
+                                                        </a>
+                                                        <button type="button" class="btn btn-secondary btn-sm fw-bold px-3" data-bs-dismiss="modal">Fechar</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="text-center py-3 text-muted small">
+                                    <i class="bi bi-info-circle me-1"></i> Este motorista ainda não possui histórico de entregas finalizadas registadas.
+                                </div>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+
+                <!-- MODAL DE EDIÇÃO DO MOTORISTA -->
+                <div class="modal fade" id="modalEditarMotorista{{ m.id }}" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content border-0 shadow rounded-4">
+                            <form action="{{ url_for('editar_motorista', id=m.id) }}" method="POST">
+                                <div class="modal-header bg-light">
+                                    <h5 class="modal-title fw-bold text-dark">
+                                        <i class="bi bi-pencil-square text-primary me-2"></i>Editar Motorista: {{ m.nome }}
+                                    </h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body p-4">
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-bold">Nome Completo *</label>
+                                        <input type="text" name="nome" class="form-control" value="{{ m.nome }}" required>
+                                    </div>
+                                    <div class="row g-2 mb-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-bold">WhatsApp / Contacto *</label>
+                                            <input type="text" name="telefone" class="form-control" value="{{ m.telefone }}" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-bold">Matrícula / Veículo</label>
+                                            <input type="text" name="veiculo_placa" class="form-control text-uppercase" value="{{ m.veiculo_placa or '' }}" placeholder="Ex: ABC-1234">
+                                        </div>
+                                    </div>
+                                    <div class="row g-2">
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-bold">Carta de Condução / Doc.</label>
+                                            <input type="text" name="documento_registro" class="form-control" value="{{ m.documento_registro or '' }}">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-bold">E-mail (Opcional)</label>
+                                            <input type="email" name="email" class="form-control" value="{{ m.email or '' }}">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer bg-light">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                    <button type="submit" class="btn btn-primary fw-bold px-4">Guardar Alterações</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center py-5 text-muted">
+                        <i class="bi bi-truck fs-1 d-block mb-2 text-secondary opacity-50"></i>
+                        Nenhum motorista registado. Clique em "+ Novo Motorista" para iniciar.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL DE CADASTRO DE NOVO MOTORISTA -->
+<div class="modal fade" id="modalNovoMotorista" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('gestao_motoristas') }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-person-plus-fill text-primary me-2"></i>Registar Novo Motorista / Condutor
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nome Completo do Motorista *</label>
+                        <input type="text" name="nome" class="form-control" placeholder="Ex: João Carlos da Silva" required>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">WhatsApp / Telefone *</label>
+                            <input type="text" name="telefone" class="form-control" placeholder="Ex: 11987654321" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Matrícula do Veículo</label>
+                            <input type="text" name="veiculo_placa" class="form-control text-uppercase" placeholder="Ex: BRA2E19">
+                        </div>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Carta de Condução / Documento</label>
+                            <input type="text" name="documento_registro" class="form-control" placeholder="Ex: CNH 01234567890">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">E-mail (Opcional)</label>
+                            <input type="email" name="email" class="form-control" placeholder="motorista@empresa.com">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4">Registar Motorista</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function imprimirComprovativo(elementId) {
+    const elemento = document.getElementById(elementId);
+    if (!elemento) return;
+    const conteudo = elemento.innerHTML;
+    const janela = window.open('', '', 'height=750,width=900');
+    janela.document.write('<html><head><title>Comprovativo de Entrega - Trivium ERP</title>');
+    janela.document.write('<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">');
+    janela.document.write('<style>body{padding:25px;font-family:sans-serif;} img{max-width:100%;} @media print {.no-print{display:none;}}</style>');
+    janela.document.write('</head><body><div class="container">' + conteudo + '</div></body></html>');
+    janela.document.close();
+    janela.focus();
+    setTimeout(() => {
+        janela.print();
+        janela.close();
+    }, 400);
+}
+</script>
+{% endblock %}

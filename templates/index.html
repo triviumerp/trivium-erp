@@ -3,160 +3,384 @@
 {% block title %}Dashboard - Trivium ERP{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h2 class="fw-bold mb-0 text-dark">Dashboard Executivo</h2>
-        <p class="text-muted mb-0 small">Painel de operações, previsões financeiras e agenda técnica</p>
-    </div>
-    <div class="d-flex gap-2">
-        <a href="{{ url_for('novo_cliente') }}" class="btn-cta-blue">
-            <i class="bi bi-person-plus-fill me-1"></i> Cadastrar Cliente
-        </a>
-    </div>
-</div>
+<div class="container-fluid px-0">
 
-<!-- 4 CARDS SUPERIORES DE MÉTRICAS -->
-<div class="row g-3 mb-4">
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="card border-0 shadow-sm p-3 bg-primary text-white rounded-3">
-            <div class="d-flex align-items-center justify-content-between mb-2">
-                <span class="small text-white-50">Clientes Ativos</span>
-                <i class="bi bi-people fs-4"></i>
+    <!-- ============================================================== -->
+    <!-- 1. BANNER CARROSSEL INTERATIVO DE AVISOS & NOVIDADES           -->
+    <!-- ============================================================== -->
+    <div id="carouselAvisosDashboard" class="carousel slide mb-4 rounded-4 shadow-sm overflow-hidden" data-bs-ride="carousel" data-bs-interval="6000">
+        <div class="carousel-indicators mb-2">
+            <button type="button" data-bs-target="#carouselAvisosDashboard" data-bs-slide-to="0" class="active"></button>
+            <button type="button" data-bs-target="#carouselAvisosDashboard" data-bs-slide-to="1"></button>
+            <button type="button" data-bs-target="#carouselAvisosDashboard" data-bs-slide-to="2"></button>
+        </div>
+        <div class="carousel-inner">
+            <div class="carousel-item active" style="background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); min-height: 135px;">
+                <div class="p-4 text-white d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                    <div>
+                        <span class="badge bg-white bg-opacity-25 text-white mb-2"><i class="bi bi-shield-check me-1"></i>Ambiente Seguro & Otimizado</span>
+                        <h4 class="fw-bold mb-1">Olá, {{ current_user.nome }}! Bem-vindo ao seu Trivium ERP</h4>
+                        <p class="mb-0 text-white-50 small">Sua empresa <strong>{{ perfil_empresa.razao_social }}</strong> está operando em alta velocidade.</p>
+                    </div>
+                    <div class="text-md-end flex-shrink-0">
+                        <span class="badge bg-success px-3 py-2 fw-bold fs-6">
+                            {% if perfil_empresa.status_assinatura == 'trial' %}
+                                Período de Avaliação (14 Dias)
+                            {% else %}
+                                Plano Ativo
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
             </div>
-            <h3 class="fw-bold mb-0">{{ total_clientes }}</h3>
-            <small class="text-white-50">Base cadastrada</small>
+
+            <div class="carousel-item" style="background: linear-gradient(135deg, #0f172a 0%, #334155 100%); min-height: 135px;">
+                <div class="p-4 text-white d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                    <div>
+                        <span class="badge bg-info bg-opacity-25 text-info mb-2"><i class="bi bi-journal-check me-1"></i>Conformidade Contábil</span>
+                        <h4 class="fw-bold mb-1">Fechamento do Mês Facilitado</h4>
+                        <p class="mb-0 text-white-50 small">Exporte seu extrato contábil em CSV ou baixe o pacote ZIP com todas as notas fiscais renomeadas.</p>
+                    </div>
+                    <div>
+                        <a href="{{ url_for('relatorio_contabil') }}" class="btn btn-sm btn-light fw-bold text-dark px-3 py-2">
+                            Acessar Relatório Contábil <i class="bi bi-arrow-right ms-1"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="carousel-item" style="background: linear-gradient(135deg, #065f46 0%, #059669 100%); min-height: 135px;">
+                <div class="p-4 text-white d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                    <div>
+                        <span class="badge bg-white bg-opacity-25 text-white mb-2"><i class="bi bi-gear-fill me-1"></i>Flexibilidade SaaS</span>
+                        <h4 class="fw-bold mb-1">Módulos Sob Demanda</h4>
+                        <p class="mb-0 text-white-50 small">Ative ou pause módulos de estoque, gestão de técnicos e atendimentos clínicos a qualquer momento.</p>
+                    </div>
+                    <div>
+                        <a href="{{ url_for('perfil_empresa') }}#tab-planos" class="btn btn-sm btn-light fw-bold text-success px-3 py-2">
+                            Gerenciar Módulos <i class="bi bi-sliders ms-1"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="card border-0 shadow-sm p-3 bg-warning text-dark rounded-3">
-            <div class="d-flex align-items-center justify-content-between mb-2">
-                <span class="small text-dark-50">Propostas Abertas</span>
-                <i class="bi bi-hourglass-split fs-4"></i>
+    <!-- ============================================================== -->
+    <!-- 2. CARDS RESUMO DO SISTEMA (PRIMEIRA DOBRA)                    -->
+    <!-- ============================================================== -->
+    <div class="row g-3 mb-4">
+        <!-- BASE DE CLIENTES -->
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="card card-custom p-3 h-100 border-0 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted small fw-bold text-uppercase">
+                        {% if perfil_empresa.modulo_atendimentos %}Pacientes Registados{% else %}Base de Clientes{% endif %}
+                    </span>
+                    <span class="badge bg-primary bg-opacity-10 text-primary p-2 rounded-3"><i class="bi bi-people-fill fs-5"></i></span>
+                </div>
+                <h3 class="fw-bold mb-0 text-dark">{{ total_clientes }}</h3>
+                <small class="text-muted">Cadastros ativos</small>
             </div>
-            <h3 class="fw-bold mb-0">{{ qtd_propostas_negociacao }}</h3>
-            <small class="text-dark-50">R$ {{ "%.2f"|format(valor_propostas_abertas) }} em negociação</small>
         </div>
+
+        <!-- ORDENS EM EXECUÇÃO -->
+        {% if perfil_empresa.modulo_servicos_campo %}
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="card card-custom p-3 h-100 border-0 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted small fw-bold text-uppercase">Ordens em Execução</span>
+                    <span class="badge bg-info bg-opacity-10 text-info p-2 rounded-3"><i class="bi bi-tools fs-5"></i></span>
+                </div>
+                <h3 class="fw-bold mb-0 text-info">{{ qtd_servicos_execucao }}</h3>
+                <small class="text-muted">Atividades ativas em campo</small>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- CONSULTAS AGENDADAS -->
+        {% if perfil_empresa.modulo_atendimentos %}
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="card card-custom p-3 h-100 border-0 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted small fw-bold text-uppercase">Consultas Agendadas</span>
+                    <span class="badge bg-success bg-opacity-10 text-success p-2 rounded-3"><i class="bi bi-heart-pulse-fill fs-5"></i></span>
+                </div>
+                <h3 class="fw-bold mb-0 text-success">{{ qtd_atendimentos_pendentes }}</h3>
+                <small class="text-muted">Sessões a realizar</small>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- ESTOQUE -->
+        {% if perfil_empresa.modulo_estoque %}
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="card card-custom p-3 h-100 border-0 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted small fw-bold text-uppercase">Itens em Estoque</span>
+                    <span class="badge bg-warning bg-opacity-10 text-warning p-2 rounded-3"><i class="bi bi-boxes fs-5"></i></span>
+                </div>
+                <h3 class="fw-bold mb-0 text-dark">{{ total_itens_estoque }}</h3>
+                <small class="text-muted">
+                    {% if itens_alerta_baixo > 0 %}
+                        <span class="text-danger fw-bold"><i class="bi bi-exclamation-triangle"></i> {{ itens_alerta_baixo }} em nível baixo</span>
+                    {% else %}
+                        Saldos em nível normal
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- FINANCEIRO -->
+        {% if current_user.perm_financeiro or current_user.nivel_acesso in ['admin', 'master'] %}
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="card card-custom p-3 h-100 border-0 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted small fw-bold text-uppercase">Recebido no Mês</span>
+                    <span class="badge bg-success bg-opacity-10 text-success p-2 rounded-3"><i class="bi bi-cash-stack fs-5"></i></span>
+                </div>
+                <h3 class="fw-bold mb-0 text-success">R$ {{ "%.2f"|format(total_recebido_mes) }}</h3>
+                <small class="text-muted">Títulos quitados</small>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="card border-0 shadow-sm p-3 bg-dark text-white rounded-3">
-            <div class="d-flex align-items-center justify-content-between mb-2">
-                <span class="small text-white-50">Atividades em Curso</span>
-                <i class="bi bi-briefcase fs-4"></i>
-            </div>
-            <h3 class="fw-bold mb-0">{{ qtd_servicos_execucao }}</h3>
-            <small class="text-white-50">Em execução na agenda</small>
-        </div>
-    </div>
-
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="card border-0 shadow-sm p-3 bg-success text-white rounded-3">
-            <div class="d-flex align-items-center justify-content-between mb-2">
-                <span class="small text-white-50">Faturamento do Mês</span>
-                <i class="bi bi-cash-coin fs-4"></i>
-            </div>
-            <h3 class="fw-bold mb-0">R$ {{ "%.2f"|format(total_recebido_mes) }}</h3>
-            <small class="text-white-50">Recebido em caixa</small>
-        </div>
-    </div>
-</div>
-
-<div class="row g-4 mb-4">
-    <!-- COLUNA ESQUERDA: CRONOGRAMA & ATIVIDADES PRÓXIMAS (AGENDA DA SEMANA) -->
-    <div class="col-lg-7">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white border-0 pt-3 d-flex justify-content-between align-items-center">
-                <h6 class="fw-bold text-dark mb-0"><i class="bi bi-calendar-week text-primary me-2"></i>Cronograma & Próximas Entregas</h6>
-                <a href="{{ url_for('consultar_servicos') }}" class="btn btn-sm btn-outline-primary fw-bold">Ver Agenda Completa</a>
-            </div>
-            <div class="card-body p-0">
+    <!-- ============================================================== -->
+    <!-- 3. TABELAS DE EXECUÇÃO IMEDIATA (FILA DO DIA)                  -->
+    <!-- ============================================================== -->
+    <div class="row g-3 mb-4">
+        {% if perfil_empresa.modulo_servicos_campo %}
+        <div class="col-12 col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold text-dark mb-0"><i class="bi bi-calendar-event text-primary me-2"></i>Próximas Ordens de Serviço</h6>
+                    <a href="{{ url_for('consultar_servicos') }}" class="btn btn-sm btn-link text-primary text-decoration-none fw-bold p-0">Ver todas</a>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0 small">
-                        <thead class="table-light">
+                        <thead class="table-light text-muted">
                             <tr>
-                                <th>DATA PREVISTA</th>
-                                <th>CLIENTE / OBRA</th>
-                                <th>SERVIÇO</th>
+                                <th>OS</th>
+                                <th>CLIENTE</th>
+                                <th>DATA</th>
                                 <th>STATUS</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for s in proximos_servicos %}
-                            {% set atrasado = s.data_previsao and s.data_previsao < hoje and s.status not in ['Concluido', 'Cancelado', 'Bloqueado'] %}
-                            <tr class="{% if atrasado %}table-danger{% elif s.status == 'Bloqueado' %}table-warning bg-opacity-25{% endif %}">
-                                <td>
-                                    {% if s.data_previsao %}
-                                        <span class="fw-bold {% if atrasado %}text-danger{% else %}text-dark{% endif %}">
-                                            {{ s.data_previsao.strftime('%d/%m/%Y') }}
-                                        </span>
-                                    {% else %}
-                                        <span class="text-muted">A Agendar</span>
-                                    {% endif %}
-                                </td>
-                                <td class="fw-semibold text-dark">{{ s.cliente.nome }}</td>
-                                <td><span class="badge bg-secondary">{{ s.tipo_servico.nome }}</span></td>
-                                <td>
-                                    {% if s.status == 'Bloqueado' %}
-                                        <span class="badge bg-danger"><i class="bi bi-lock-fill me-1"></i>Sinal Pendente</span>
-                                    {% elif s.status == 'Em Andamento' %}
-                                        <span class="badge bg-primary">Em Andamento</span>
-                                    {% else %}
-                                        <span class="badge bg-warning text-dark">Pendente</span>
-                                    {% endif %}
-                                </td>
+                            {% for os in proximos_servicos %}
+                            <tr>
+                                <td><strong>#{{ os.numero_sequencial_empresa }}</strong></td>
+                                <td>{{ os.cliente.nome }}</td>
+                                <td>{{ os.data_previsao.strftime('%d/%m/%Y') if os.data_previsao else '--' }}</td>
+                                <td><span class="badge {% if os.status == 'Em Andamento' %}bg-primary{% elif os.status == 'Bloqueado' %}bg-danger{% else %}bg-secondary{% endif %}">{{ os.status }}</span></td>
                             </tr>
                             {% else %}
-                            <tr>
-                                <td colspan="4" class="text-center py-4 text-muted">Nenhuma atividade agendada para os próximos dias.</td>
-                            </tr>
+                            <tr><td colspan="4" class="text-center py-3 text-muted">Nenhuma ordem de serviço pendente.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
+        {% endif %}
+
+        {% if perfil_empresa.modulo_atendimentos %}
+        <div class="col-12 col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold text-dark mb-0"><i class="bi bi-person-lines-fill text-success me-2"></i>Consultas & Sessões Agendadas</h6>
+                    <a href="{{ url_for('listar_atendimentos') }}" class="btn btn-sm btn-link text-success text-decoration-none fw-bold p-0">Ver agenda</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 small">
+                        <thead class="table-light text-muted">
+                            <tr>
+                                <th>SESSÃO</th>
+                                <th>PACIENTE</th>
+                                <th>DATA</th>
+                                <th>PROFISSIONAL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for at in proximos_atendimentos %}
+                            <tr>
+                                <td><strong class="text-success">#{{ at.numero_sessao or 1 }}</strong></td>
+                                <td>{{ at.cliente.nome }}</td>
+                                <td>{{ at.data_previsao.strftime('%d/%m/%Y') if at.data_previsao else '--' }}</td>
+                                <td>{{ at.responsavel_tecnico or 'Especialista' }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center py-3 text-muted">Nenhuma sessão pendente na agenda.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if current_user.perm_financeiro or current_user.nivel_acesso in ['admin', 'master'] %}
+        <div class="col-12 col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold text-dark mb-0"><i class="bi bi-clock-history text-warning me-2"></i>Títulos a Receber (Próximos 7 Dias)</h6>
+                    <a href="{{ url_for('financeiro') }}" class="btn btn-sm btn-link text-warning text-decoration-none fw-bold p-0">Abrir Financeiro</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 small">
+                        <thead class="table-light text-muted">
+                            <tr>
+                                <th>VENCIMENTO</th>
+                                <th>CLIENTE</th>
+                                <th>PARCELA</th>
+                                <th class="text-end">VALOR</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in titulos_proximos %}
+                            <tr>
+                                <td><strong>{{ t.data_vencimento.strftime('%d/%m/%Y') }}</strong></td>
+                                <td>{{ t.fatura.cliente.nome if t.fatura.cliente else 'Cliente' }}</td>
+                                <td>{{ t.descricao_parcela }}</td>
+                                <td class="text-end fw-bold text-dark">R$ {{ "%.2f"|format(t.valor) }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center py-3 text-muted">Sem títulos vencendo nos próximos dias.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
-    <!-- COLUNA DIREITA: ALERTAS FINANCEIROS & FATURAS A RECEBER -->
-    <div class="col-lg-5">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white border-0 pt-3 d-flex justify-content-between align-items-center">
-                <h6 class="fw-bold text-dark mb-0"><i class="bi bi-wallet2 text-success me-2"></i>Fluxo de Recebimentos Imediatos</h6>
-                <a href="{{ url_for('financeiro') }}" class="btn btn-sm btn-outline-success fw-bold">Financeiro</a>
-            </div>
-            <div class="card-body p-3">
-                <!-- Card de Boletos Atrasados (se houver) -->
-                {% if qtd_titulos_atrasados > 0 %}
-                <div class="alert alert-danger d-flex align-items-center gap-2 p-3 mb-3" role="alert">
-                    <i class="bi bi-exclamation-triangle-fill fs-4"></i>
-                    <div>
-                        <strong class="d-block">{{ qtd_titulos_atrasados }} título(s) em atraso!</strong>
-                        <small>Total de R$ {{ "%.2f"|format(valor_titulos_atrasados) }} vencido precisando de cobrança.</small>
-                    </div>
-                </div>
-                {% endif %}
+    <!-- ============================================================== -->
+    <!-- DIVISOR VISUAL COM CHAMADA PARA O SCROLL                       -->
+    <!-- ============================================================== -->
+    <div class="d-flex align-items-center justify-content-center my-4 py-2 text-muted small">
+        <hr class="flex-grow-1 opacity-25">
+        <span class="px-3 fw-bold text-uppercase" style="letter-spacing: 0.8px; font-size: 0.75rem;">
+            <i class="bi bi-arrow-down-circle text-primary me-1"></i> Painel de Desempenho & Insights Operacionais
+        </span>
+        <hr class="flex-grow-1 opacity-25">
+    </div>
 
-                <!-- Títulos que vencem nos próximos dias -->
-                <h6 class="small fw-bold text-muted mb-2">Próximos Vencimentos de Clientes:</h6>
-                <ul class="list-group list-group-flush border rounded-3 small">
-                    {% for p in titulos_proximos %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center py-2">
-                        <div>
-                            <span class="fw-bold text-dark d-block">{{ p.fatura.cliente.nome }}</span>
-                            <small class="text-muted">{{ p.descricao_parcela }} ({{ p.forma_pagamento }})</small>
-                        </div>
-                        <div class="text-end">
-                            <span class="fw-bold text-success d-block">R$ {{ "%.2f"|format(p.valor) }}</span>
-                            <small class="text-muted">{{ p.data_vencimento.strftime('%d/%m') }}</small>
-                        </div>
-                    </li>
+    <!-- ============================================================== -->
+    <!-- 4. SEGUNDA DOBRA: INSIGHTS AVANÇADOS & MÉTRICAS DE PERFORMANCE -->
+    <!-- ============================================================== -->
+    <div class="row g-3 mb-4">
+        <!-- INSIGHT 1: TAXA DE CONVERSÃO COMERCIAL -->
+        <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small fw-bold text-muted">EFICIÊNCIA COMERCIAL</span>
+                    <span class="badge bg-primary bg-opacity-10 text-primary"><i class="bi bi-graph-up-arrow"></i></span>
+                </div>
+                <div class="d-flex align-items-baseline gap-2 mb-1">
+                    <h3 class="fw-bold mb-0 text-dark">{{ taxa_conversao_propostas }}%</h3>
+                    <small class="text-muted">taxa de aprovação</small>
+                </div>
+                <p class="small text-muted mb-0">
+                    Você possui <strong>{{ qtd_propostas_negociacao }}</strong> proposta(s) em aberto totalizando <strong>R$ {{ "%.2f"|format(valor_propostas_abertas) }}</strong> em negociação ativa.
+                </p>
+            </div>
+        </div>
+
+        <!-- INSIGHT 2: AUDITORIA OPERACIONAL / CONCLUSÃO -->
+        <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small fw-bold text-muted">HISTÓRICO DE PRODUÇÃO</span>
+                    <span class="badge bg-success bg-opacity-10 text-success"><i class="bi bi-check2-all"></i></span>
+                </div>
+                <div class="d-flex align-items-baseline gap-2 mb-1">
+                    <h3 class="fw-bold mb-0 text-success">
+                        {% if perfil_empresa.modulo_atendimentos %}
+                            {{ total_consultas_realizadas }}
+                        {% else %}
+                            {{ total_servicos_concluidos }}
+                        {% endif %}
+                    </h3>
+                    <small class="text-muted">entregas finalizadas</small>
+                </div>
+                <p class="small text-muted mb-0">
+                    {% if perfil_empresa.modulo_atendimentos %}
+                        Atendimentos com prontuário clínico consolidado no sistema.
                     {% else %}
-                    <li class="list-group-item text-center text-muted py-3">Nenhum título vencendo nos próximos dias.</li>
-                    {% endfor %}
-                </ul>
+                        Ordens de serviço assinadas e encerradas com sucesso em campo.
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+
+        <!-- INSIGHT 3: SAÚDE DO CAIXA / INADIMPLÊNCIA -->
+        <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small fw-bold text-muted">CONTROLE DE INADIMPLÊNCIA</span>
+                    <span class="badge {% if qtd_titulos_atrasados > 0 %}bg-danger bg-opacity-10 text-danger{% else %}bg-success bg-opacity-10 text-success{% endif %}">
+                        <i class="bi bi-shield-shaded"></i>
+                    </span>
+                </div>
+                <div class="d-flex align-items-baseline gap-2 mb-1">
+                    <h3 class="fw-bold mb-0 {% if qtd_titulos_atrasados > 0 %}text-danger{% else %}text-success{% endif %}">
+                        R$ {{ "%.2f"|format(valor_titulos_atrasados) }}
+                    </h3>
+                    <small class="text-muted">em atraso</small>
+                </div>
+                <p class="small text-muted mb-0">
+                    {% if qtd_titulos_atrasados > 0 %}
+                        <span class="text-danger fw-semibold">{{ qtd_titulos_atrasados }} fatura(s) pendente(s) de cobrança.</span>
+                    {% else %}
+                        Todos os pagamentos da sua carteira estão em dia!
+                    {% endif %}
+                </p>
             </div>
         </div>
     </div>
+
+    <!-- ============================================================== -->
+    <!-- 5. ATALHOS RÁPIDOS DE PRODUTIVIDADE (QUICK ACTIONS)             -->
+    <!-- ============================================================== -->
+    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-white">
+        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-lightning-charge-fill text-warning me-2"></i>Ações Rápidas de Gestão</h6>
+        <div class="row g-2">
+            <div class="col-6 col-md-3">
+                <a href="{{ url_for('novo_cliente') }}" class="btn btn-outline-primary fw-bold w-100 py-2 d-flex align-items-center justify-content-center gap-2">
+                    <i class="bi bi-person-plus-fill"></i> Novo Cliente
+                </a>
+            </div>
+            {% if perfil_empresa.modulo_servicos_campo %}
+            <div class="col-6 col-md-3">
+                <a href="{{ url_for('listar_propostas') }}" class="btn btn-outline-primary fw-bold w-100 py-2 d-flex align-items-center justify-content-center gap-2">
+                    <i class="bi bi-file-earmark-plus-fill"></i> Nova Proposta
+                </a>
+            </div>
+            {% endif %}
+            {% if perfil_empresa.modulo_atendimentos %}
+            <div class="col-6 col-md-3">
+                <a href="{{ url_for('listar_atendimentos') }}" class="btn btn-outline-success fw-bold w-100 py-2 d-flex align-items-center justify-content-center gap-2">
+                    <i class="bi bi-clipboard2-pulse-fill"></i> Novo Atendimento
+                </a>
+            </div>
+            {% endif %}
+            {% if perfil_empresa.modulo_estoque %}
+            <div class="col-6 col-md-3">
+                <a href="{{ url_for('listar_estoque') }}" class="btn btn-outline-warning text-dark fw-bold w-100 py-2 d-flex align-items-center justify-content-center gap-2">
+                    <i class="bi bi-box-seam-fill"></i> Ajustar Estoque
+                </a>
+            </div>
+            {% endif %}
+            <div class="col-6 col-md-3">
+                <a href="{{ url_for('relatorio_contabil') }}" class="btn btn-outline-secondary fw-bold w-100 py-2 d-flex align-items-center justify-content-center gap-2">
+                    <i class="bi bi-file-earmark-spreadsheet-fill"></i> Fechamento Contábil
+                </a>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}

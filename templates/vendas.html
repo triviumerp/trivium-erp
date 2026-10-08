@@ -1,0 +1,393 @@
+{% extends 'base.html' %}
+
+{% block title %}Pedidos & Vendas de Produtos - Trivium ERP{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-cart-check-fill text-primary me-2"></i>Gestão de Pedidos & Vendas
+        </h2>
+        <p class="text-muted mb-0">Orçamentos, controle de sinal, aprovações comerciais e envio para a expedição</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{{ url_for('painel_expedicao') }}" class="btn btn-outline-primary fw-bold shadow-sm">
+            <i class="bi bi-truck me-1"></i> Ir para Expedição
+        </a>
+        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovaVenda">
+            <i class="bi bi-cart-plus-fill me-1"></i> + Novo Pedido / Venda
+        </button>
+    </div>
+</div>
+
+<!-- CARDS INDICADORES -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-white">
+            <small class="text-muted fw-bold d-block mb-1">EM ABERTO / ORÇAMENTOS</small>
+            <h3 class="fw-bold text-warning mb-0">R$ {{ "%.2f"|format(total_aberto) }}</h3>
+            <span class="text-muted small">Aguardando aprovação ou sinal</span>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-white">
+            <small class="text-muted fw-bold d-block mb-1">TOTAL EXPEDIDO</small>
+            <h3 class="fw-bold text-success mb-0">R$ {{ "%.2f"|format(total_vendas) }}</h3>
+            <span class="text-muted small">Vendas concluídas e baixadas</span>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-white">
+            <small class="text-muted fw-bold d-block mb-1">TOTAL DE REGISTROS</small>
+            <h3 class="fw-bold text-primary mb-0">{{ pedidos|length }}</h3>
+            <span class="text-muted small">Histórico geral de pedidos</span>
+        </div>
+    </div>
+</div>
+
+<!-- BANNER: PORTAL B2B DO CLIENTE (LINK PÚBLICO) -->
+<div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white border-start border-4 border-primary">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <div class="rounded-circle bg-primary bg-opacity-10 p-2 text-primary d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                <i class="bi bi-link-45deg fs-4"></i>
+            </div>
+            <div>
+                <strong class="d-block text-dark">Portal de Requisições do Cliente (B2B)</strong>
+                <small class="text-muted">Seus clientes cadastrados podem consultar o estoque com imagens e submeter ordens de compra diretamente pelo link.</small>
+            </div>
+        </div>
+        <div class="d-flex gap-2 w-100 w-md-auto">
+            <button class="btn btn-sm btn-outline-success fw-bold text-nowrap" onclick="navigator.clipboard.writeText('{{ link_loja }}'); alert('Link copiado com sucesso!');">
+                <i class="bi bi-clipboard-check me-1"></i> Copiar Link
+            </button>
+            <a href="{{ link_loja }}" target="_blank" class="btn btn-sm btn-primary fw-bold text-nowrap">
+                <i class="bi bi-box-arrow-up-right me-1"></i> Abrir Portal
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- FILTROS -->
+<div class="d-flex flex-wrap gap-2 mb-3 align-items-center justify-content-between bg-white p-3 rounded-4 shadow-sm border">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{{ url_for('listar_vendas', status='todos') }}" class="btn btn-sm {% if filtro == 'todos' %}btn-primary fw-bold{% else %}btn-outline-secondary{% endif %}">
+            Todos os Pedidos
+        </a>
+        <a href="{{ url_for('listar_vendas', status='pendente') }}" class="btn btn-sm {% if filtro == 'pendente' %}btn-warning fw-bold{% else %}btn-outline-secondary{% endif %}">
+            Orçamentos / Pendentes
+        </a>
+        <a href="{{ url_for('listar_vendas', status='concluido') }}" class="btn btn-sm {% if filtro == 'concluido' %}btn-success fw-bold{% else %}btn-outline-secondary{% endif %}">
+            Entregues / Concluídos
+        </a>
+    </div>
+    <div class="text-muted small">
+        <i class="bi bi-info-circle me-1"></i> A coluna de anexos e protocolo de entrega fica restrita à Expedição.
+    </div>
+</div>
+
+<!-- TABELA DE VENDAS & ORÇAMENTOS -->
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 small">
+            <thead class="table-light text-muted">
+                <tr>
+                    <th>Nº PEDIDO</th>
+                    <th>CLIENTE / DESTINO</th>
+                    <th>CONDIÇÃO DE PAGAMENTO</th>
+                    <th>VALOR TOTAL</th>
+                    <th>ESTADO</th>
+                    <th class="text-end pe-3">AÇÕES COMERCIAIS</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in pedidos %}
+                <tr>
+                    <td>
+                        <strong class="text-dark d-block">#{{ p.numero_pedido }}</strong>
+                        <span class="badge bg-light text-muted border">
+                            {% if p.tipo_origem == 'venda_web' %}
+                                <i class="bi bi-globe me-1 text-primary"></i>Web B2B
+                            {% elif p.tipo_origem == 'venda_balcao' %}
+                                <i class="bi bi-shop me-1 text-secondary"></i>Balcão
+                            {% else %}
+                                <i class="bi bi-file-earmark-text me-1 text-warning"></i>Orçamento
+                            {% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        <strong class="text-dark d-block">{{ p.nome_solicitante }}</strong>
+                        <span class="text-muted d-block">{{ p.setor_obra_destino or 'Retirada no balcão' }}</span>
+                        <small class="text-muted">{{ p.data_solicitacao.strftime('%d/%m/%Y às %H:%M') if p.data_solicitacao else '--' }}</small>
+                    </td>
+                    <td>
+                        {% if p.exige_entrada and p.valor_entrada > 0 %}
+                            <span class="text-dark fw-bold">Sinal: R$ {{ "%.2f"|format(p.valor_entrada) }}</span>
+                            <small class="text-muted d-block">+ {{ p.qtd_parcelas }}x de saldo ({{ p.forma_pagamento_parcelas }})</small>
+                        {% else %}
+                            <span class="text-dark">Parcela Única / Faturado</span>
+                            <small class="text-muted d-block">{{ p.qtd_parcelas }}x via {{ p.forma_pagamento_parcelas or 'Boleto' }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <strong class="text-success fs-6">R$ {{ "%.2f"|format(p.valor_total) }}</strong>
+                        <small class="text-muted d-block">{{ p.itens|length }} item(ns)</small>
+                    </td>
+                    <td>
+                        {% if p.status == 'entregue' %}
+                            <span class="badge bg-success"><i class="bi bi-check2-all me-1"></i>Entregue</span>
+                        {% elif p.status == 'em_rota' %}
+                            <span class="badge bg-info text-dark"><i class="bi bi-truck me-1"></i>Em Rota</span>
+                        {% elif p.status == 'em_separacao' %}
+                            <span class="badge bg-primary"><i class="bi bi-box-seam me-1"></i>Na Expedição</span>
+                        {% elif p.status == 'bloqueado_pagamento' %}
+                            <span class="badge bg-danger"><i class="bi bi-lock me-1"></i>Aguardando Sinal</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Orçamento / Aberto</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end pe-3">
+                        <div class="d-inline-flex gap-1 align-items-center">
+                            <!-- Imprimir Orçamento Comercial -->
+                            <a href="{{ url_for('gerar_pdf_orcamento_venda', id=p.id) }}" target="_blank" class="btn btn-sm btn-outline-secondary" title="Imprimir Orçamento">
+                                <i class="bi bi-file-earmark-pdf me-1"></i> Orçamento
+                            </a>
+
+                            <!-- BOTÃO DE APROVAÇÃO E DESPACHO -->
+                            {% if p.status == 'pendente' %}
+                                <form action="{{ url_for('enviar_pedido_para_expedicao', id=p.id) }}" method="POST" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-success fw-bold" title="Aprovar e Enviar para Expedição" onclick="return confirm('Deseja aprovar este orçamento e enviá-lo para separação no estoque?')">
+                                        <i class="bi bi-check-lg me-1"></i> Aprovar
+                                    </button>
+                                </form>
+                                <form action="{{ url_for('excluir_pedido_venda', id=p.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir este orçamento?')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Orçamento">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center py-5 text-muted">
+                        <i class="bi bi-cart-x fs-2 d-block mb-2 text-secondary"></i>
+                        Nenhum pedido de venda ou orçamento localizado.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL: REGISTRAR NOVO PEDIDO / ORÇAMENTO -->
+<div class="modal fade" id="modalNovaVenda" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form action="{{ url_for('criar_venda_produto') }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-cart-plus text-primary me-2"></i>Novo Pedido / Orçamento de Mercadorias
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Cliente Cadastrado</label>
+                            <select name="cliente_id" id="selClienteModalVenda" class="form-select form-select-sm" onchange="preencherDadosClienteModal(this)">
+                                <option value="">Venda Rápida / Balcão (Sem vínculo cadastral)</option>
+                                {% for cli in clientes %}
+                                <option value="{{ cli.id }}" 
+                                        data-nome="{{ cli.nome }}" 
+                                        data-tel="{{ cli.telefone or '' }}" 
+                                        data-end="{{ cli.logradouro or '' }}, {{ cli.numero or 'S/N' }} - {{ cli.bairro or '' }}, {{ cli.cidade or '' }}">
+                                    {{ cli.nome }} ({{ cli.cnpj_cpf or '--' }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Nome do Comprador / Razão Social *</label>
+                            <input type="text" name="nome_solicitante" id="inputNomeCompradorModal" class="form-control form-control-sm" placeholder="Nome do cliente" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Telefone / WhatsApp</label>
+                            <input type="text" name="contato_solicitante" id="inputTelCompradorModal" class="form-control form-control-sm" placeholder="(11) 99999-9999">
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold">Endereço de Entrega / Destino</label>
+                            <input type="text" name="endereco_entrega" id="inputEndCompradorModal" class="form-control form-control-sm" placeholder="Rua, número, cidade ou 'Retirada no Balcão'">
+                        </div>
+                    </div>
+
+                    <!-- GRADE DE PRODUTOS DO ESTOQUE -->
+                    <div class="p-3 bg-light rounded-3 border mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <h6 class="fw-bold text-dark mb-0"><i class="bi bi-boxes me-1 text-primary"></i>Produtos do Estoque</h6>
+                                <small class="text-muted">Selecione os produtos disponíveis para montar o pedido.</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-primary fw-bold" onclick="adicionarLinhaVenda()">
+                                <i class="bi bi-plus-lg me-1"></i> Adicionar Item
+                            </button>
+                        </div>
+
+                        <div id="container-itens-venda" class="d-flex flex-column gap-2">
+                            <div class="row g-2 align-items-center bg-white p-2 rounded border linha-venda">
+                                <div class="col-md-6">
+                                    <select name="produto_id[]" class="form-select form-select-sm sel-prod-venda" onchange="atualizarPrecoVenda(this)" required>
+                                        <option value="">Selecione o produto do estoque...</option>
+                                        {% for prod in produtos %}
+                                        <option value="{{ prod.id }}" 
+                                                data-valor="{{ prod.preco_venda_sugerido or 0 }}" 
+                                                data-saldo="{{ prod.quantidade_atual or 0 }}" 
+                                                data-unidade="{{ prod.unidade_medida or 'un' }}">
+                                            {{ prod.nome }} (Disp: {{ prod.quantidade_atual }} {{ prod.unidade_medida }}) - R$ {{ "%.2f"|format(prod.preco_venda_sugerido or 0) }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <input type="number" step="0.01" min="0.01" name="quantidade[]" class="form-control form-control-sm v-qtd" value="1" placeholder="Qtd" oninput="calcularTotalVendaModal()" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <input type="number" step="0.01" name="valor_unitario[]" class="form-control form-control-sm v-val" placeholder="R$ Unitário" oninput="calcularTotalVendaModal()" required>
+                                </div>
+                                <div class="col-md-1 text-end">
+                                    <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="removerLinhaVenda(this)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-end pt-2">
+                            <strong class="text-muted">Total Previsto: </strong>
+                            <h4 class="fw-bold text-success d-inline-block mb-0 ms-2" id="displayTotalVenda">R$ 0,00</h4>
+                        </div>
+                    </div>
+
+                    <!-- CONDIÇÕES DE PAGAMENTO E ENTRADA -->
+                    <div class="p-3 bg-light rounded-3 border">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="checkFinanceiroVenda" name="gerar_financeiro" value="1" checked onchange="document.getElementById('blocoFinanceiroVenda').classList.toggle('d-none', !this.checked)">
+                            <label class="form-check-label fw-bold" for="checkFinanceiroVenda">Lançar Fatura no Módulo Financeiro?</label>
+                        </div>
+
+                        <div id="blocoFinanceiroVenda" class="pt-2 border-top">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="checkExigeEntradaVenda" name="exige_entrada" value="1" onchange="document.getElementById('blocoEntradaVenda').classList.toggle('d-none', !this.checked)">
+                                <label class="form-check-label fw-semibold text-dark" for="checkExigeEntradaVenda">Exigir Sinal / Entrada (Bloqueia expedição até a quitação)</label>
+                            </div>
+
+                            <div id="blocoEntradaVenda" class="row g-2 mb-3 d-none p-3 bg-white rounded-3 border">
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">Valor do Sinal de Entrada (R$)</label>
+                                    <input type="number" step="0.01" name="valor_entrada" class="form-control form-control-sm" placeholder="0.00">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">Forma de Pagamento da Entrada</label>
+                                    <select name="forma_pagamento_entrada" class="form-select form-select-sm">
+                                        <option value="PIX">PIX</option>
+                                        <option value="Dinheiro">Dinheiro</option>
+                                        <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row g-2">
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">Qtd de Parcelas (Saldo Restante)</label>
+                                    <input type="number" name="qtd_parcelas" class="form-control form-control-sm" value="1" min="1" max="12">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">Forma de Pagamento Parcelas</label>
+                                    <select name="forma_pagamento_parcelas" class="form-select form-select-sm">
+                                        <option value="Boleto Bancário">Boleto Bancário</option>
+                                        <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                        <option value="PIX">PIX</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">Intervalo entre Parcelas (Dias)</label>
+                                    <input type="number" name="intervalo_dias" class="form-control form-control-sm" value="30">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4">Salvar Pedido / Orçamento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function preencherDadosClienteModal(sel) {
+    const opt = sel.options[sel.selectedIndex];
+    if (sel.value) {
+        document.getElementById('inputNomeCompradorModal').value = opt.getAttribute('data-nome') || '';
+        document.getElementById('inputTelCompradorModal').value = opt.getAttribute('data-tel') || '';
+        document.getElementById('inputEndCompradorModal').value = opt.getAttribute('data-end') || '';
+    } else {
+        document.getElementById('inputNomeCompradorModal').value = '';
+        document.getElementById('inputTelCompradorModal').value = '';
+        document.getElementById('inputEndCompradorModal').value = '';
+    }
+}
+
+function atualizarPrecoVenda(sel) {
+    const row = sel.closest('.linha-venda');
+    const opt = sel.options[sel.selectedIndex];
+    const valor = opt.getAttribute('data-valor') || 0.0;
+    row.querySelector('.v-val').value = parseFloat(valor).toFixed(2);
+    calcularTotalVendaModal();
+}
+
+function adicionarLinhaVenda() {
+    const container = document.getElementById('container-itens-venda');
+    const primeiraLinha = container.querySelector('.linha-venda');
+    const novaLinha = primeiraLinha.cloneNode(true);
+
+    novaLinha.querySelector('.sel-prod-venda').selectedIndex = 0;
+    novaLinha.querySelector('.v-qtd').value = '1';
+    novaLinha.querySelector('.v-val').value = '';
+
+    container.appendChild(novaLinha);
+}
+
+function removerLinhaVenda(btn) {
+    const rows = document.querySelectorAll('.linha-venda');
+    if (rows.length > 1) {
+        btn.closest('.linha-venda').remove();
+        calcularTotalVendaModal();
+    } else {
+        alert('O pedido de venda precisa conter ao menos um item.');
+    }
+}
+
+function calcularTotalVendaModal() {
+    let total = 0.0;
+    const qtds = document.querySelectorAll('.v-qtd');
+    const vals = document.querySelectorAll('.v-val');
+
+    for (let i = 0; i < qtds.length; i++) {
+        const q = parseFloat(qtds[i].value) || 0.0;
+        const v = parseFloat(vals[i].value) || 0.0;
+        total += (q * v);
+    }
+    document.getElementById('displayTotalVenda').innerText = `R$ ${total.toFixed(2)}`;
+}
+</script>
+{% endblock %}
