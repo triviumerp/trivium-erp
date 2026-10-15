@@ -794,3 +794,29 @@ class ItemPedidoRequisicao(db.Model):
     valor_total = db.Column(db.Float, default=0.0)
 
     produto = db.relationship('ProdutoEstoque')
+
+class ItemAjudaFaq(db.Model):
+    __tablename__ = 'itens_ajuda_faq'
+    id = db.Column(db.Integer, primary_key=True)
+    categoria = db.Column(db.String(50), default='Geral')  # 'Novidades', 'Estoque', 'Vendas', 'Expedição', 'Financeiro', 'Geral'
+    titulo = db.Column(db.String(200), nullable=False)
+    conteudo = db.Column(db.Text, nullable=False)
+    imagem_url = db.Column(db.String(255), nullable=True)     # Nome do arquivo da imagem local
+    video_url = db.Column(db.String(255), nullable=True)      # Link de vídeo (YouTube, Vimeo ou MP4)
+    ordem = db.Column(db.Integer, default=1)
+    is_novidade = db.Column(db.Boolean, default=False)        # Destaque na aba de novidades/versões
+    ativo = db.Column(db.Boolean, default=True)
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @property
+    def youtube_embed_url(self):
+        """Converte links comuns do YouTube em URL pronta para iframe/embed."""
+        if not self.video_url:
+            return None
+        import re
+        padrao = r'(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})'
+        match = re.search(padrao, self.video_url)
+        if match:
+            return f"https://www.youtube.com/embed/{match.group(1)}"
+        return self.video_url

@@ -119,11 +119,13 @@ def registro():
         # Respostas da Triagem
         perfil_operacao = request.form.get('perfil_operacao', 'servicos_campo')
         equipe_porte = request.form.get('equipe_porte', '1')
-        usar_financeiro = request.form.get('usar_financeiro') in ['1', 'true', 'on']
+        
+        # Leitura estrita de rádio/booleano para o financeiro
+        usar_financeiro = request.form.get('usar_financeiro') in ['1', 'true', 'sim']
         
         cupom_indicacao = (request.form.get('cupom_indicacao') or cupom_url).strip().upper()
-
-        # Validações com flag para abrir direto no Step 3
+        
+             # Validações com flag para abrir direto no Step 3
         if email != confirma_email:
             flash('O e-mail e a confirmação de e-mail não coincidem.', 'danger')
             return render_template('auth/registro.html', cupom_ref=cupom_indicacao, abrir_step3=True, perfil_operacao=perfil_operacao, equipe_porte=equipe_porte, usar_financeiro=usar_financeiro)
@@ -169,11 +171,25 @@ def registro():
         elif perfil_operacao == 'documentos':
             pass
 
-        limite_users = 2
+        limite_users = 5
+        extras_usuarios = 0
         if equipe_porte == '2_5':
             limite_users = 5
         elif equipe_porte == 'mais_5':
             limite_users = 10
+            extras_usuarios = 5  # 5 adicionais além da base de 5
+
+        # CÁLCULO DA PRECIFICAÇÃO OFICIAL TRIVIUM ERP
+        valor_calculado = 14.90  # Base com 5 acessos
+        if modulo_atend:
+            valor_calculado += 15.00
+        if modulo_tecnicos:
+            valor_calculado += 15.00
+        if modulo_est:
+            valor_calculado += 20.00
+        if modulo_vendas:
+            valor_calculado += 20.00
+        valor_calculado += (extras_usuarios * 4.00)
 
         try:
             cupom_obj = None
@@ -184,9 +200,10 @@ def registro():
                 razao_social=nome_empresa_final,
                 nome_fantasia=fantasia_final,
                 email=email,
-                plano=f"Trial ({perfil_operacao.capitalize()})",
+                plano=f"Plano Customizado",
                 status_assinatura="trial",
-                valor_mensalidade=0.0,
+                valor_base_plano=14.90,
+                valor_mensalidade=round(valor_calculado, 2), # Valor levantado da triagem
                 data_vencimento=date.today() + relativedelta(days=14),
                 cupom_utilizado=cupom_obj.codigo if cupom_obj and cupom_obj.is_valido else None,
                 afiliado_id=cupom_obj.id if cupom_obj and cupom_obj.is_valido else None,

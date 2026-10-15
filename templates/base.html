@@ -199,6 +199,9 @@
             <a href="{{ url_for('admin_master_cupons') }}" class="nav-link-custom text-danger {% if request.endpoint == 'admin_master_cupons' %}active{% endif %}">
                 <i class="bi bi-tags-fill"></i><span>Cupões & Afiliados</span>
             </a>
+            <a href="{{ url_for('admin_master_faq') }}" class="nav-link-custom text-danger {% if request.endpoint == 'admin_master_faq' %}active{% endif %}">
+                <i class="bi bi-patch-question-fill"></i><span>Gestão do FAQ / Ajuda</span>
+            </a>
             <a href="{{ url_for('admin_master_chamados') }}" class="nav-link-custom text-danger {% if request.endpoint in ['admin_master_chamados', 'admin_atender_chamado'] %}active{% endif %}">
                 <i class="bi bi-headset"></i><span>Fila Global Tickets</span>
             </a>
@@ -425,5 +428,220 @@
             });
         });
     </script>
+<!-- ================================================================= -->
+<!-- RECURSOS DO TOUR GUIADO (DRIVER.JS) & ABA LATERAL RETRÁTIL        -->
+<!-- ================================================================= -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
+<script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.bind.iife.js"></script>
+
+<style>
+/* ABA LATERAL RETRÁTIL (NÃO FICA NA FRENTE DOS ELEMENTOS DA TELA) */
+#abaAjudaLateral {
+    position: fixed;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    z-index: 1040;
+    display: flex;
+    align-items: center;
+    background: #1e3a8a;
+    color: #ffffff;
+    border-radius: 24px 0 0 24px;
+    box-shadow: -3px 3px 12px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    cursor: pointer;
+    overflow: hidden;
+    padding: 6px 10px 6px 12px;
+}
+
+#abaAjudaLateral:hover {
+    background: #0f172a;
+    padding-right: 16px;
+    box-shadow: -4px 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+#abaAjudaLateral .texto-aba {
+    max-width: 0;
+    opacity: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    font-size: 0.82rem;
+    font-weight: 700;
+    margin-left: 0;
+}
+
+#abaAjudaLateral:hover .texto-aba {
+    max-width: 140px;
+    opacity: 1;
+    margin-left: 8px;
+}
+
+#abaAjudaLateral .btn-fechar-aba {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 1rem;
+    padding: 0 0 0 8px;
+    display: none;
+    line-height: 1;
+}
+
+#abaAjudaLateral:hover .btn-fechar-aba {
+    display: inline-block;
+}
+
+#abaAjudaLateral .btn-fechar-aba:hover {
+    color: #ffffff;
+}
+</style>
+
+<!-- ELEMENTO DA ABA LATERAL -->
+<div id="abaAjudaLateral" onclick="iniciarTourDaPagina()" title="Clique para iniciar o Tour Guiado desta tela">
+    <i class="bi bi-question-circle-fill fs-5"></i>
+    <span class="texto-aba">Ajuda desta Tela</span>
+    <button type="button" class="btn-fechar-aba" onclick="ocultarAbaAjuda(event)" title="Ocultar aba">×</button>
+</div>
+
+<script>
+function ocultarAbaAjuda(event) {
+    event.stopPropagation();
+    const aba = document.getElementById('abaAjudaLateral');
+    if (aba) {
+        aba.style.display = 'none';
+        sessionStorage.setItem('trivium_aba_ajuda_oculta', 'true');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (sessionStorage.getItem('trivium_aba_ajuda_oculta') === 'true') {
+        const aba = document.getElementById('abaAjudaLateral');
+        if (aba) aba.style.display = 'none';
+    }
+});
+
+function iniciarTourDaPagina() {
+    if (!window.driver || !window.driver.js) {
+        alert("O recurso de tour guiado ainda está a carregar. Tente novamente num instante.");
+        return;
+    }
+
+    const driver = window.driver.js.driver;
+    const path = window.location.pathname;
+
+    let etapas = [];
+
+    // 1. DASHBOARD INICIAL
+    if (path === '/' || path.includes('/index')) {
+        etapas = [
+            { element: '#sidebarMenu', popover: { title: 'Menu Lateral de Módulos', description: 'Navegue entre todos os setores contratados do ERP: Clientes, Propostas, Serviços, Estoque, Vendas e Financeiro.' } },
+            { element: '.row.g-3.mb-4', popover: { title: 'Cards de Indicadores', description: 'Visão em tempo real do faturamento do mês, propostas em negociação, ordens abertas e faturas atrasadas.' } },
+            { element: '.col-lg-7, .col-lg-8', popover: { title: 'Atividades Recentes', description: 'Listagem das próximas ordens e cronogramas técnicos agendados para os próximos dias.' } }
+        ];
+    }
+    // 2. CLIENTES
+    else if (path.includes('/clientes')) {
+        etapas = [
+            { element: 'input[name="busca"]', popover: { title: 'Busca Rápida de Clientes', description: 'Pesquise por nome, CPF/CNPJ ou cidade cadastrada.' } },
+            { element: 'a[href*="/cliente/novo"]', popover: { title: 'Botão + Novo Cliente', description: 'Clique aqui para cadastrar um novo cliente, selecionar se é PJ ou PF e preencher os dados de contacto e cobrança.' } },
+            { element: '.table-responsive', popover: { title: 'Lista de Cadastros', description: 'Aceda à ficha completa do cliente, visualize propostas emitidas, histórico financeiro e faça upload de laudos/documentos em PDF.' } }
+        ];
+    }
+    // 3. PROPOSTAS COMERCIAIS
+    else if (path.includes('/propostas')) {
+        etapas = [
+            { element: 'button[data-bs-target="#modalNovaProposta"]', popover: { title: 'Botão + Nova Proposta', description: 'Crie um orçamento selecionando o cliente, inserindo itens, descontos, condição de pagamento e sinal/entrada.' } },
+            { element: '.nav-pills', popover: { title: 'Filtros de Status', description: 'Alterne rapidamente entre propostas Em Aberto, Aprovadas ou Canceladas.' } },
+            { element: 'a[href*="/pdf"]', popover: { title: 'Gerar Carta Proposta em PDF', description: 'Emite o documento timbrado oficial com a logo da sua empresa pronto para envio ao cliente.' } },
+            { element: 'form[action*="/status"]', popover: { title: 'Aprovar Proposta', description: 'Ao marcar como "Aprovado", o sistema gera a fatura no Financeiro e as ordens técnicas na Agenda.' } }
+        ];
+    }
+    // 4. SERVIÇOS & ORDENS DE SERVIÇO
+    else if (path.includes('/servicos')) {
+        etapas = [
+            { element: 'button[data-bs-target="#modalNovoServicoAvulso"]', popover: { title: 'Botão + Nova OS Avulsa', description: 'Abra um chamado ou ordem de serviço imediata sem precisar gerar uma proposta prévia.' } },
+            { element: '.btn-group, .nav-pills', popover: { title: 'Filtros da Agenda', description: 'Filtre por Em Andamento, Pendentes, Concluídos ou Contratos Recorrentes.' } },
+            { element: 'button[data-bs-target*="modalEditarOperacao"]', popover: { title: 'Ajustar Operação & Técnicos', description: 'Aloque operadores, ajuste datas/horários, monte o cronograma Gantt e anexe fotos de comprovação.' } },
+            { element: 'a[href*="/pdf"]', popover: { title: 'Imprimir Ordem de Serviço', description: 'Gera a ficha de execução física em PDF com campos para assinatura e laudo técnico.' } }
+        ];
+    }
+    // 5. ATENDIMENTOS CLÍNICOS
+    else if (path.includes('/atendimentos')) {
+        etapas = [
+            { element: 'input[name="busca"]', popover: { title: 'Localizador de Pacientes', description: 'Busque prontuários por nome ou CPF do paciente.' } },
+            { element: '.table-responsive', popover: { title: 'Fichas Clínicas', description: 'Acompanhe a queixa principal, evolução da sessão, diagnóstico e condutas recomendadas.' } }
+        ];
+    }
+    // 6. ESTOQUE & ALMOXARIFADO
+    else if (path.includes('/estoque')) {
+        etapas = [
+            { element: 'button[data-bs-target="#modalNovoProduto"]', popover: { title: 'Botão + Novo Item', description: 'Cadastre materiais e produtos com código SKU, código de barras, estoque mínimo e preços de custo/venda.' } },
+            { element: 'button[data-bs-target="#modalImportarExcel"]', popover: { title: 'Botão Importar Planilha', description: 'Atualize centenas de itens ou saldos em lote enviando a sua folha de cálculo preenchida.' } },
+            { element: 'a[href*="exportar-excel"]', popover: { title: 'Botão Exportar Excel', description: 'Baixe toda a posição atual do seu inventário físico em formato .xlsx.' } },
+            { element: 'button[data-bs-target*="modalMovimentar"]', popover: { title: 'Entrada / Saída Rápida', description: 'Lançamento manual avulso de ajuste de saldo com registro imediato no Kardex.' } }
+        ];
+    }
+    // 7. VENDAS DE MERCADORIAS
+    else if (path.includes('/vendas')) {
+        etapas = [
+            { element: 'button[data-bs-target="#modalNovaVenda"]', popover: { title: 'Botão + Nova Venda Balcão', description: 'Lance vendas presenciais ou comerciais com escolha de cliente, controle de parcelas e regras de sinal.' } },
+            { element: 'button[onclick*="copiarLinkLoja"]', popover: { title: 'Copiar Link do Portal B2B', description: 'Copie e partilhe o catálogo online direto para os seus clientes fazerem encomendas sem login.' } },
+            { element: 'form[action*="enviar-expedicao"]', popover: { title: 'Enviar para Expedição', description: 'Despacha os pedidos aprovados diretamente para a esteira de separação e rota.' } }
+        ];
+    }
+    // 8. EXPEDIÇÃO & LOGÍSTICA
+    else if (path.includes('/expedicao')) {
+        etapas = [
+            { element: 'button[data-bs-target="#modalNovoMotorista"]', popover: { title: 'Botão + Novo Motorista', description: 'Cadastre entregadores e aceda aos links dedicados para telemóvel.' } },
+            { element: 'a[href*="pdf-separacao"]', popover: { title: 'Guia de Separação Cega', description: 'Imprime a lista de materiais sem valores para os separadores de almoxarifado conferirem os volumes.' } },
+            { element: 'button[data-bs-target*="modalAlocar"]', popover: { title: 'Escalar Motorista & Ordem', description: 'Selecione quem fará a entrega e a ordem sequencial das paragens.' } }
+        ];
+    }
+    // 9. GESTÃO DE MOTORISTAS & ROTAS
+    else if (path.includes('/motoristas')) {
+        etapas = [
+            { element: 'button[data-bs-target="#modalNovoMotorista"]', popover: { title: 'Cadastrar Entregador', description: 'Cadastre condutores com placa do veículo, WhatsApp e contacto.' } },
+            { element: '.btn-copiar-link-motorista, a[href*="/motorista/rota/"]', popover: { title: 'Link Mobile do Motorista', description: 'Envie este link para o WhatsApp do motorista: ele acede à rota, reordena paragens e recolhe a assinatura do recebedor.' } }
+        ];
+    }
+    // 10. FINANCEIRO
+    else if (path.includes('/financeiro')) {
+        etapas = [
+            { element: '.nav-pills', popover: { title: 'Filtros da Carteira', description: 'Acompanhe títulos A Faturar, Aguardando Pagamento, Em Atraso ou já Quitados.' } },
+            { element: 'form[action*="faturar-mes"]', popover: { title: 'Faturar Mês de Contratos', description: 'Gera em lote as faturas e ordens mensais de todos os clientes com contratos recorrentes ativos.' } },
+            { element: 'button[data-bs-target*="modalEditarParcela"], button[data-bs-target*="modalEditarFatura"]', popover: { title: 'Baixa & Anexos', description: 'Confirme o recebimento de valores, adicione ocorrências de cobrança e anexe comprovativos/NFs.' } }
+        ];
+    }
+    // 11. CONFIGURAÇÕES & PERFIL DA EMPRESA
+    else if (path.includes('/configuracoes/perfil')) {
+        etapas = [
+            { element: '#dados-tab', popover: { title: 'Aba Dados Cadastrais', description: 'Alterne entre PJ e PF, cadastre telefone, endereço e faça o upload do logotipo oficial da empresa.' } },
+            { element: '#planos-tab', popover: { title: 'Aba Planos & Módulos', description: 'Personalize os módulos ativos, utilizadores adicionais e realize o pagamento seguro via Mercado Pago.' } },
+            { element: '#equipe-tab', popover: { title: 'Aba Equipe & Acessos', description: 'Adicione funcionários e defina permissões setorizadas para cada membro.' } },
+            { element: '#minha-conta-tab', popover: { title: 'Aba Minha Conta', description: 'Atualize o seu nome, e-mail de login e redefina a sua senha mestra.' } }
+        ];
+    }
+    // FALLBACK
+    else {
+        etapas = [
+            { element: '#sidebarMenu', popover: { title: 'Navegação Geral', description: 'Selecione no menu lateral a área que deseja gerenciar.' } },
+            { element: 'a[href*="/faq"]', popover: { title: 'Central de Ajuda Completa', description: 'Consulte tutoriais com vídeos e imagens explicativas.' } }
+        ];
+    }
+
+    // Filtra apenas os elementos existentes no DOM da página atual
+    const etapasValidas = etapas.filter(e => !e.element || document.querySelector(e.element));
+
+    const driverObj = driver({
+        showProgress: true,
+        nextBtnText: 'Próximo &rarr;',
+        prevBtnText: '&larr; Anterior',
+        doneBtnText: 'Entendi!',
+        steps: etapasValidas.length > 0 ? etapasValidas : etapas
+    });
+
+    driverObj.drive();
+}
+</script>
 </body>
 </html>

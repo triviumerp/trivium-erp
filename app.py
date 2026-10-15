@@ -44,7 +44,7 @@ from models import (
     Fatura, ParcelaFatura, ChamadoSuporte, MensagemChamado, CupomDesconto, 
     ServicoCustoPadrao, ItemPropostaCusto, ContratoGerado, ServicoEtapaRastreio, 
     ComissaoAfiliado, RepasseAfiliado, EvidenciaServico, OperadorCampo,
-    ProdutoEstoque, MovimentacaoEstoque, PedidoRequisicao, ItemPedidoRequisicao
+    ProdutoEstoque, MovimentacaoEstoque, PedidoRequisicao, ItemPedidoRequisicao, ItemAjudaFaq
 )
 from auth.routes import auth_bp
 from auth.routes import validar_senha_forte
@@ -73,6 +73,30 @@ app = Flask(__name__)
 UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+PASTA_FAQ_LOCAL = os.path.join(app.root_path, 'static', 'img', 'faq')
+os.makedirs(PASTA_FAQ_LOCAL, exist_ok=True)
+
+def salvar_imagem_faq_local(arquivo_storage):
+    """Salva a imagem do FAQ diretamente no sistema de arquivos local."""
+    if not arquivo_storage or not arquivo_storage.filename:
+        return None
+    nome_seguro = secure_filename(arquivo_storage.filename)
+    nome_final = f"faq_{int(time.time())}_{nome_seguro}"
+    caminho_completo = os.path.join(PASTA_FAQ_LOCAL, nome_final)
+    arquivo_storage.save(caminho_completo)
+    return nome_final
+
+def excluir_imagem_faq_local(nome_arquivo):
+    """Remove a imagem local do FAQ caso seja excluída ou substituída."""
+    if not nome_arquivo:
+        return
+    caminho = os.path.join(PASTA_FAQ_LOCAL, nome_arquivo)
+    if os.path.exists(caminho):
+        try:
+            os.remove(caminho)
+        except Exception as e:
+            print(f"[AVISO REMOÇÃO FAQ LOCAL]: {e}")
 
 # Chave Secreta e Segurança de Sessão
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'trivium_erp_chave_secreta_producao_2026')
@@ -2876,15 +2900,26 @@ def perfil_empresa():
             def _so_numeros(valor):
                 return re.sub(r'\D', '', valor) if valor else ""
 
+            doc_informado = _so_numeros(request.form.get('cnpj'))
+
             if tipo_pessoa == 'PF':
-                nome_pf = request.form.get('nome_profissional') or request.form.get('razao_social')
+                if not is_cpf_valido(doc_informado):
+                    flash('O CPF informado é inválido. Por favor, verifique os dígitos.', 'danger')
+                    return redirect(url_for('perfil_empresa') + '#tab-dados')
+                
+                nome_pf = request.form.get('razao_social')
                 empresa.razao_social = nome_pf
                 empresa.nome_fantasia = "Profissional Autônomo"
-                empresa.cnpj = _so_numeros(request.form.get('cpf') or request.form.get('cnpj'))
+                empresa.cnpj = doc_informado
             else:
+                # Validação de tamanho básico de CNPJ (14 dígitos)
+                if len(doc_informado) != 14:
+                    flash('O CNPJ informado deve conter 14 dígitos.', 'danger')
+                    return redirect(url_for('perfil_empresa') + '#tab-dados')
+                
                 empresa.razao_social = request.form.get('razao_social')
                 empresa.nome_fantasia = request.form.get('nome_fantasia')
-                empresa.cnpj = _so_numeros(request.form.get('cnpj'))
+                empresa.cnpj = doc_informado
 
             empresa.telefone = _so_numeros(request.form.get('telefone'))
             empresa.email = request.form.get('email', '').strip()
@@ -3132,7 +3167,32 @@ def excluir_usuario_equipe(id):
 @app.route('/faq')
 @login_required
 def faq():
-    return render_template('faq.html')
+    categoria_filtro = request.args.get('categoria', 'todas')
+    busca = request.args.get('busca', '').strip()
+
+    query = ItemAjudaFaq.query.filter_by(ativo=True)
+
+    if busca:
+        query = query.filter(
+            (ItemAjudaFaq.titulo.ilike(f'%{busca}%')) |
+            (ItemAjudaFaq.conteudo.ilike(f'%{busca}%'))
+        )
+
+    if categoria_filtro == 'novidades':
+        query = query.filter_by(is_novidade=True)
+    elif categoria_filtro != 'todas':
+        query = query.filter_by(categoria=categoria_filtro)
+
+    itens = query.order_by(ItemAjudaFaq.ordem.asc(), ItemAjudaFaq.id.desc()).all()
+    novidades = ItemAjudaFaq.query.filter_by(ativo=True, is_novidade=True).order_by(ItemAjudaFaq.data_criacao.desc()).limit(5).all()
+
+    return render_template(
+        'faq.html',
+        itens=itens,
+        novidades=novidades,
+        categoria_filtro=categoria_filtro,
+        busca=busca
+    )
 
 @app.route('/suporte')
 @login_required
@@ -3751,6 +3811,85 @@ def admin_criar_cupom_parceiro(id):
         flash(f'Erro ao gravar cupom no banco de dados: {str(e)}', 'danger')
 
     return redirect(url_for('admin_auditoria_parceiro', id=parceiro.id))
+
+
+@app.route('/admin/master/faq', methods=['GET', 'POST'])
+@login_required
+def admin_master_faq():
+    # Trava estrita de segurança no backend
+    if not current_user.is_authenticated or current_user.nivel_acesso != 'master':
+        flash('Acesso restrito aos administradores Master da plataforma.', 'danger')
+        return redirect(url_for('faq'))
+
+    if request.method == 'POST':
+        titulo = request.form.get('titulo', '').strip()
+        categoria = request.form.get('categoria', 'Geral').strip()
+        conteudo = request.form.get('conteudo', '').strip()
+        video_url = request.form.get('video_url', '').strip()
+        ordem = int(request.form.get('ordem') or 1)
+        is_novidade = bool(request.form.get('is_novidade'))
+
+        imagem_arquivo = request.files.get('imagem')
+        imagem_nome = salvar_imagem_faq_local(imagem_arquivo)
+
+        novo_item = ItemAjudaFaq(
+            titulo=titulo,
+            categoria=categoria,
+            conteudo=conteudo,
+            video_url=video_url or None,
+            imagem_url=imagem_nome,
+            ordem=ordem,
+            is_novidade=is_novidade,
+            ativo=True
+        )
+        db.session.add(novo_item)
+        db.session.commit()
+        flash('Novo artigo publicado com sucesso na base de conhecimento!', 'success')
+        return redirect(url_for('admin_master_faq'))
+
+    itens = ItemAjudaFaq.query.order_by(ItemAjudaFaq.is_novidade.desc(), ItemAjudaFaq.ordem.asc(), ItemAjudaFaq.id.desc()).all()
+    return render_template('admin/master_faq.html', itens=itens)
+
+
+@app.route('/admin/master/faq/<int:id>/editar', methods=['POST'])
+@login_required
+def admin_master_faq_editar(id):
+    if not current_user.is_authenticated or current_user.nivel_acesso != 'master':
+        abort(403)
+
+    item = ItemAjudaFaq.query.get_or_404(id)
+    item.titulo = request.form.get('titulo', item.titulo).strip()
+    item.categoria = request.form.get('categoria', item.categoria).strip()
+    item.conteudo = request.form.get('conteudo', item.conteudo).strip()
+    item.video_url = request.form.get('video_url', '').strip() or None
+    item.ordem = int(request.form.get('ordem') or item.ordem)
+    item.is_novidade = bool(request.form.get('is_novidade'))
+    item.ativo = bool(request.form.get('ativo'))
+
+    imagem_arquivo = request.files.get('imagem')
+    if imagem_arquivo and imagem_arquivo.filename:
+        if item.imagem_url:
+            excluir_imagem_faq_local(item.imagem_url)
+        item.imagem_url = salvar_imagem_faq_local(imagem_arquivo)
+
+    db.session.commit()
+    flash(f'Artigo "{item.titulo}" atualizado com sucesso!', 'success')
+    return redirect(url_for('admin_master_faq'))
+
+
+@app.route('/admin/master/faq/<int:id>/excluir', methods=['POST'])
+@login_required
+def admin_master_faq_excluir(id):
+    if not current_user.is_authenticated or current_user.nivel_acesso != 'master':
+        abort(403)
+
+    item = ItemAjudaFaq.query.get_or_404(id)
+    if item.imagem_url:
+        excluir_imagem_faq_local(item.imagem_url)
+    db.session.delete(item)
+    db.session.commit()
+    flash('Artigo removido com sucesso.', 'info')
+    return redirect(url_for('admin_master_faq'))
 
 # -----------------------------------------------------------------------------
 # FASE 3: GERADOR DE MINUTAS & CONTRATOS PERSONALIZADOS

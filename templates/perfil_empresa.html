@@ -780,24 +780,51 @@
 
 <script>
 let cicloSelecionado = 'mensal';
+let tipoPessoaAtual = 'PJ';
 
 function alternarTipoPessoaPerfil(tipo) {
+    tipoPessoaAtual = tipo;
     const labelRazao = document.getElementById('labelRazaoSocial');
     const boxFantasia = document.getElementById('boxNomeFantasia');
     const labelDoc = document.getElementById('labelDocEmpresa');
     const inputDoc = document.getElementById('inputDocEmpresa');
+
+    // Remove qualquer máscara existente para reaplicar
+    let valorLimpo = inputDoc.value.replace(/\D/g, '');
 
     if (tipo === 'PF') {
         labelRazao.innerText = 'Nome do Profissional / Autônomo *';
         boxFantasia.style.display = 'none';
         labelDoc.innerText = 'CPF *';
         inputDoc.placeholder = '000.000.000-00';
+        inputDoc.maxLength = 14; // 000.000.000-00
+        inputDoc.value = aplicarMascaraCPF(valorLimpo);
     } else {
         labelRazao.innerText = 'Razão Social *';
         boxFantasia.style.display = 'block';
         labelDoc.innerText = 'CNPJ *';
         inputDoc.placeholder = '00.000.000/0000-00';
+        inputDoc.maxLength = 18; // 00.000.000/0000-00
+        inputDoc.value = aplicarMascaraCNPJ(valorLimpo);
     }
+}
+
+// Funções de formatação dinâmica
+function aplicarMascaraCPF(v) {
+    v = v.substring(0, 11);
+    v = v.replace(/(\d{3})(\d)/, '$1.$2');
+    v = v.replace(/(\d{3})(\d)/, '$1.$2');
+    v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    return v;
+}
+
+function aplicarMascaraCNPJ(v) {
+    v = v.substring(0, 14);
+    v = v.replace(/^(\d{2})(\d)/, '$1.$2');
+    v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+    v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
+    v = v.replace(/(\d{4})(\d)/, '$1-$2');
+    return v;
 }
 
 function consultarCepEmpresa() {
@@ -959,6 +986,27 @@ function redirecionarMercadoPago() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // 1. Configura a máscara em tempo real ao digitar e inicializa PF/PJ
+    const inputDoc = document.getElementById('inputDocEmpresa');
+    if (inputDoc) {
+        inputDoc.addEventListener('input', function(e) {
+            let num = this.value.replace(/\D/g, '');
+            if (tipoPessoaAtual === 'PF') {
+                this.value = aplicarMascaraCPF(num);
+            } else {
+                this.value = aplicarMascaraCNPJ(num);
+            }
+        });
+    }
+
+    const radioPF = document.getElementById('tipoPF');
+    if (radioPF && radioPF.checked) {
+        alternarTipoPessoaPerfil('PF');
+    } else {
+        alternarTipoPessoaPerfil('PJ');
+    }
+
+    // 2. Tudo o que você já tinha continua aqui normalmente:
     recalcularTotalAssinaturaPerfil();
 
     // RESTAURAÇÃO DE ABAS

@@ -1,0 +1,243 @@
+{% extends 'base.html' %}
+
+{% block title %}Gestão da Central de Ajuda & FAQ - Master Trivium{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-patch-question text-primary me-2"></i>Gestão da Central de Ajuda & Novidades
+        </h2>
+        <p class="text-muted mb-0">Publique artigos, tutoriais em vídeo, imagens e notas de atualização para os utilizadores</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('faq') }}" class="btn btn-outline-secondary fw-bold" target="_blank">
+            <i class="bi bi-eye me-1"></i> Ver Central de Ajuda
+        </a>
+        <button class="btn btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#modalNovoFaq">
+            <i class="bi bi-plus-circle me-1"></i> + Novo Artigo / Atualização
+        </button>
+    </div>
+</div>
+
+<!-- LISTA DE ITENS CADASTRADOS -->
+<div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 small">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 70px;">ORDEM</th>
+                    <th>TÍTULO DO ARTIGO</th>
+                    <th>CATEGORIA</th>
+                    <th>MÍDIAS</th>
+                    <th>TIPO</th>
+                    <th>ESTADO</th>
+                    <th class="text-end pe-3">AÇÕES</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in itens %}
+                <tr>
+                    <td class="fw-bold text-muted">#{{ item.ordem }}</td>
+                    <td>
+                        <strong class="text-dark d-block">{{ item.titulo }}</strong>
+                        <span class="text-muted text-truncate d-inline-block" style="max-width: 340px;">
+                            {{ item.conteudo[:80] }}{% if item.conteudo|length > 80 %}...{% endif %}
+                        </span>
+                    </td>
+                    <td><span class="badge bg-light text-dark border">{{ item.categoria }}</span></td>
+                    <td>
+                        {% if item.imagem_url %}
+                            <span class="badge bg-info-subtle text-info border me-1" title="{{ item.imagem_url }}">
+                                <i class="bi bi-image"></i> Foto Local
+                            </span>
+                        {% endif %}
+                        {% if item.video_url %}
+                            <span class="badge bg-danger-subtle text-danger border" title="{{ item.video_url }}">
+                                <i class="bi bi-play-btn"></i> Vídeo
+                            </span>
+                        {% endif %}
+                        {% if not item.imagem_url and not item.video_url %}
+                            <span class="text-muted small">Apenas texto</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.is_novidade %}
+                            <span class="badge bg-warning text-dark"><i class="bi bi-sparkles me-1"></i>Novidade</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Tutorial</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.ativo %}
+                            <span class="badge bg-success-subtle text-success">Ativo</span>
+                        {% else %}
+                            <span class="badge bg-danger-subtle text-danger">Inativo</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end pe-3">
+                        <button class="btn btn-sm btn-outline-secondary me-1" data-bs-toggle="modal" data-bs-target="#modalEditarFaq{{ item.id }}" title="Editar Artigo">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <form action="{{ url_for('admin_master_faq_excluir', id=item.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Tem certeza de que deseja remover este artigo?');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+
+                <!-- MODAL DE EDIÇÃO -->
+                <div class="modal fade" id="modalEditarFaq{{ item.id }}" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-centered">
+                        <div class="modal-content border-0 shadow rounded-4">
+                            <form action="{{ url_for('admin_master_faq_editar', id=item.id) }}" method="POST" enctype="multipart/form-data">
+                                <div class="modal-header bg-light">
+                                    <h6 class="modal-title fw-bold text-dark">
+                                        <i class="bi bi-pencil-square text-primary me-2"></i>Editar Artigo: {{ item.titulo }}
+                                    </h6>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                                </div>
+                                <div class="modal-body p-4 text-start">
+                                    <div class="row g-2 mb-3">
+                                        <div class="col-md-8">
+                                            <label class="form-label small fw-bold">Título *</label>
+                                            <input type="text" name="titulo" class="form-control form-control-sm" value="{{ item.titulo }}" required>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-bold">Categoria</label>
+                                            <select name="categoria" class="form-select form-select-sm">
+                                                <option value="Geral" {% if item.categoria == 'Geral' %}selected{% endif %}>Geral</option>
+                                                <option value="Estoque" {% if item.categoria == 'Estoque' %}selected{% endif %}>Estoque & Almoxarifado</option>
+                                                <option value="Vendas" {% if item.categoria == 'Vendas' %}selected{% endif %}>Vendas & Expedição</option>
+                                                <option value="Financeiro" {% if item.categoria == 'Financeiro' %}selected{% endif %}>Financeiro & Faturamento</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-bold">Link de Vídeo (YouTube, Vimeo ou MP4)</label>
+                                        <input type="url" name="video_url" class="form-control form-control-sm" value="{{ item.video_url or '' }}" placeholder="https://www.youtube.com/watch?v=...">
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-bold">Substituir Imagem Ilustrativa (Armazenada Localmente)</label>
+                                        <input type="file" name="imagem" class="form-control form-control-sm" accept="image/*">
+                                        {% if item.imagem_url %}
+                                        <div class="mt-2 p-2 bg-light rounded border d-inline-block">
+                                            <small class="text-muted d-block mb-1">Imagem atual cadastrada:</small>
+                                            <img src="{{ url_for('static', filename='img/faq/' ~ item.imagem_url) }}" alt="Preview" style="max-height: 80px;" class="rounded border">
+                                        </div>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-bold">Texto / Conteúdo do Passo a Passo *</label>
+                                        <textarea name="conteudo" class="form-control" rows="6" required>{{ item.conteudo }}</textarea>
+                                    </div>
+
+                                    <div class="row g-2 align-items-center">
+                                        <div class="col-md-3">
+                                            <label class="form-label small fw-bold">Ordem de Exibição</label>
+                                            <input type="number" name="ordem" class="form-control form-control-sm" value="{{ item.ordem }}">
+                                        </div>
+                                        <div class="col-md-5 pt-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" name="is_novidade" id="nov_{{ item.id }}" value="1" {% if item.is_novidade %}checked{% endif %}>
+                                                <label class="form-check-label small fw-bold" for="nov_{{ item.id }}">Destacar como Novidade / Versão</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 pt-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" name="ativo" id="atv_{{ item.id }}" value="1" {% if item.ativo %}checked{% endif %}>
+                                                <label class="form-check-label small fw-bold" for="atv_{{ item.id }}">Artigo Ativo</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer bg-light py-2">
+                                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Salvar Alterações</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-muted">
+                        <i class="bi bi-inbox fs-2 opacity-50 d-block mb-2"></i>
+                        Nenhum artigo ou atualização cadastrada ainda. Clique no botão acima para criar o primeiro!
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL NOVO FAQ -->
+<div class="modal fade" id="modalNovoFaq" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <form action="{{ url_for('admin_master_faq') }}" method="POST" enctype="multipart/form-data">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-plus-circle text-primary me-2"></i>Novo Artigo ou Atualização
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body p-4 text-start">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold">Título da Dúvida / Tutorial *</label>
+                            <input type="text" name="titulo" class="form-control form-control-sm" placeholder="Ex: Como dar saída em lote no estoque?" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Categoria</label>
+                            <select name="categoria" class="form-select form-select-sm">
+                                <option value="Geral">Geral</option>
+                                <option value="Estoque">Estoque & Almoxarifado</option>
+                                <option value="Vendas">Vendas & Expedição</option>
+                                <option value="Financeiro">Financeiro & Faturamento</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Link de Vídeo Explicativo (YouTube, Vimeo ou link MP4)</label>
+                        <input type="url" name="video_url" class="form-control form-control-sm" placeholder="https://www.youtube.com/watch?v=...">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Imagem / Print Ilustrativo (Salvo localmente no servidor)</label>
+                        <input type="file" name="imagem" class="form-control form-control-sm" accept="image/*">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Conteúdo Explicativo Passo a Passo *</label>
+                        <textarea name="conteudo" class="form-control" rows="6" placeholder="Descreva as orientações para o utilizador..." required></textarea>
+                    </div>
+
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Ordem</label>
+                            <input type="number" name="ordem" class="form-control form-control-sm" value="1">
+                        </div>
+                        <div class="col-md-8 pt-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="is_novidade" id="novo_is_novidade" value="1">
+                                <label class="form-check-label small fw-bold" for="novo_is_novidade">Destacar na aba "O Que Há de Novo" (Atualizações do Sistema)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">Publicar Artigo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

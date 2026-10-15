@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
     <style>
-    * { box-sizing: border-box; }
+        * { box-sizing: border-box; }
         html, body {
             height: 100%;
             margin: 0;
@@ -85,9 +85,7 @@
             100% { transform: translate(-40px, 70px) scale(0.95); }
         }
 
-        /* ============================================================== */
-        /* QUADRO PRINCIPAL COM O LED AZUL GIRANDO NA BORDA               */
-        /* ============================================================== */
+        /* QUADRO PRINCIPAL COM O LED AZUL GIRANDO NA BORDA */
         .glass-card-panoramic {
             position: relative;
             max-width: 1050px;
@@ -99,7 +97,6 @@
             box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 30px rgba(37, 99, 235, 0.2);
         }
 
-        /* 1. FEIXE DE LED AZUL CONTÍNUO */
         .glass-card-panoramic::before {
             content: '';
             position: absolute;
@@ -118,11 +115,10 @@
             z-index: -2;
         }
 
-        /* 2. CAMADA INTERNA DE VIDRO ESCURO */
         .glass-card-panoramic::after {
             content: '';
             position: absolute;
-            inset: 1.5px; /* Espessura da linha de LED */
+            inset: 1.5px;
             background: rgba(17, 24, 39, 0.94);
             backdrop-filter: blur(25px);
             -webkit-backdrop-filter: blur(25px);
@@ -140,9 +136,7 @@
             to { transform: rotate(360deg); }
         }
 
-        /* ============================================================== */
-        /* CARDS DE SELEÇÃO INTERNOS (LIMPOS, SEM LED GIRATÓRIO)          */
-        /* ============================================================== */
+        /* CARDS DE SELEÇÃO INTERNOS */
         .grid-cards-5 {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
@@ -155,9 +149,15 @@
             gap: 12px;
         }
 
+        .grid-cards-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
         @media (max-width: 991px) {
             .grid-cards-5 { grid-template-columns: repeat(2, 1fr); }
-            .grid-cards-3 { grid-template-columns: 1fr; }
+            .grid-cards-3, .grid-cards-2 { grid-template-columns: 1fr; }
             .glass-card-panoramic { padding: 1.5rem; }
         }
 
@@ -221,7 +221,7 @@
             color: rgba(255, 255, 255, 0.55);
         }
 
-        /* COMPONENTES COMPLEMENTARES */
+        /* TOAST E PROGRESS */
         .toast-floating-container {
             position: fixed;
             top: 24px;
@@ -438,7 +438,7 @@
             </div>
 
             <!-- ============================================================== -->
-            <!-- ETAPA 2: EQUIPE & FINANCEIRO (3 CARDS HORIZONTAIS)             -->
+            <!-- ETAPA 2: EQUIPE & FINANCEIRO (CARDS EXCLUSIVOS SEM SELEÇÃO DUPLA) -->
             <!-- ============================================================== -->
             <div id="step2" class="step-pane d-none">
                 <div class="mb-3">
@@ -447,7 +447,7 @@
                 </div>
 
                 <label class="form-label small fw-bold text-white-50 mb-2">Quem utilizará o sistema?</label>
-                <div class="grid-cards-3 mb-3">
+                <div class="grid-cards-3 mb-4">
                     <div class="card-square-option {% if (equipe_porte or '1') == '1' %}selected{% endif %}" onclick="selectOption('equipe', '1', this)" style="min-height: 140px;">
                         <div class="option-icon-square"><i class="bi bi-person"></i></div>
                         <strong>Apenas Eu (Individual)</strong>
@@ -467,24 +467,22 @@
                     </div>
                 </div>
 
-                <label class="form-label small fw-bold text-white-50 mb-2">Deseja gerenciar Faturamento & Financeiro?</label>
-                <div class="row g-2 mb-4">
-                    <div class="col-6">
-                        <div class="card-square-option py-2 {% if (usar_financeiro is not defined) or usar_financeiro %}selected{% endif %}" onclick="selectOption('financeiro', '1', this)" style="min-height: 80px; flex-direction: row; gap: 12px; justify-content: center;">
-                            <i class="bi bi-cash-stack fs-4 text-success"></i>
-                            <div class="text-start">
-                                <strong class="d-block mb-0">Sim, Ativar Financeiro</strong>
-                                <small>Contas a receber, boletos e sinal</small>
-                            </div>
+                <!-- PERGUNTA DE FINANCEIRO / FATURAMENTO COM EXCLUSIVIDADE ABSOLUTA -->
+                <div class="mb-4">
+                    <label class="form-label small fw-bold text-white-50 mb-2">Deseja gerenciar faturamento e cobranças no ERP?</label>
+                    <div class="grid-cards-2">
+                        <div class="card-square-option {% if not usar_financeiro is defined or usar_financeiro or usar_financeiro == 1 or usar_financeiro == '1' %}selected{% endif %}" 
+                             onclick="selectOption('financeiro', '1', this)" style="min-height: 130px;">
+                            <div class="option-icon-square"><i class="bi bi-cash-coin"></i></div>
+                            <strong>Sim, preciso de financeiro</strong>
+                            <small>Faturas, boletos, PIX e controle de parcelas.</small>
                         </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="card-square-option py-2 {% if (usar_financeiro is defined) and not usar_financeiro %}selected{% endif %}" onclick="selectOption('financeiro', '0', this)" style="min-height: 80px; flex-direction: row; gap: 12px; justify-content: center;">
-                            <i class="bi bi-slash-circle fs-4 text-secondary"></i>
-                            <div class="text-start">
-                                <strong class="d-block mb-0">Sem Financeiro</strong>
-                                <small>Apenas controle operacional interno</small>
-                            </div>
+
+                        <div class="card-square-option {% if usar_financeiro is defined and (not usar_financeiro or usar_financeiro == 0 or usar_financeiro == '0') %}selected{% endif %}" 
+                             onclick="selectOption('financeiro', '0', this)" style="min-height: 130px;">
+                            <div class="option-icon-square"><i class="bi bi-x-circle"></i></div>
+                            <strong>Não no momento</strong>
+                            <small>Interface enxuta com foco 100% operacional.</small>
                         </div>
                     </div>
                 </div>
@@ -594,7 +592,7 @@
         </div>
     </div>
 
-    <!-- MODAL 2: APRESENTAÇÃO DO PLANO + CTA DE TESTE 14 DIAS (REVERSÃO TOTAL DE RISCO) -->
+    <!-- MODAL 2: APRESENTAÇÃO DO PLANO + CTA DE TESTE 14 DIAS COLADO AO PREÇO -->
     <div class="modal fade" id="modalResultadoPlano" tabindex="-1" data-bs-backdrop="static">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content modal-glass border-0 shadow-lg p-3 p-md-4">
@@ -609,7 +607,7 @@
                 </div>
 
                 <div class="modal-body px-0 py-3">
-                    <!-- CARD DO PLANO CALCULADO -->
+                    <!-- CARD DO PLANO CALCULADO COM VALOR & DESTAQUE 14 DIAS GRÁTIS LADO A LADO -->
                     <div class="p-3 rounded-4 mb-3" style="background: rgba(255, 255, 255, 0.04); border: 1.5px solid rgba(59, 130, 246, 0.35);">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <div>
@@ -617,9 +615,23 @@
                                 <small class="text-white-50">Ambiente otimizado para sua demanda</small>
                             </div>
                             <div class="text-end">
-                                <!-- VALOR EM BRANCO PARA ATUALIZAÇÃO FUTURA -->
-                                <span class="fs-4 fw-bold text-success" id="modalValorPlano">R$ --,--</span>
-                                <small class="text-white-50 d-block" style="font-size: 0.7rem;">/mês após o teste</small>
+                                <!-- VALOR REAL CALCULADO -->
+                                <span class="fs-4 fw-bold text-primary" id="modalValorPlano">R$ 14,90</span>
+                                <small class="text-white-50 d-block" style="font-size: 0.72rem;">/mês após o teste</small>
+                            </div>
+                        </div>
+
+                        <!-- DESTAQUE COLADO NO VALOR: R$ 0,00 HOJE & 14 DIAS GRÁTIS -->
+                        <div class="p-2 px-3 rounded-3 d-flex align-items-center justify-content-between my-2" 
+                             style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4);">
+                            <span class="small fw-bold text-white d-flex align-items-center gap-1">
+                                <i class="bi bi-shield-check text-success"></i> A pagar hoje:
+                            </span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-success fw-bold px-2 py-1" style="font-size: 0.85rem;">R$ 0,00</span>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 fw-bold" style="font-size: 0.72rem;">
+                                    14 DIAS GRÁTIS
+                                </span>
                             </div>
                         </div>
 
@@ -631,12 +643,10 @@
                         </ul>
                     </div>
 
-                    <!-- CAIXA DE CONVERSÃO / REVERSÃO DE RISCO -->
-                    <div class="p-3 rounded-3 text-center mb-2" style="background: rgba(16, 185, 129, 0.1); border: 1px dashed rgba(16, 185, 129, 0.4);">
-                        <i class="bi bi-shield-fill-check fs-4 text-success d-block mb-1"></i>
-                        <strong class="text-white d-block small">Teste por 14 dias grátis sem qualquer compromisso</strong>
+                    <!-- CAIXA DE REVERSÃO DE RISCO -->
+                    <div class="p-2.5 px-3 rounded-3 text-center mb-2" style="background: rgba(255, 255, 255, 0.03); border: 1px dashed rgba(255, 255, 255, 0.15);">
                         <p class="text-white-50 small mb-0" style="font-size: 0.76rem;">
-                            Conheça toda a potência do Trivium ERP na prática. Sem taxas ocultas, sem cartão de crédito exigido e com cancelamento livre a qualquer momento.
+                            Acesso completo a todas as funções por 14 dias sem taxas ocultas, sem cartão de crédito exigido e com cancelamento livre a qualquer momento.
                         </p>
                     </div>
                 </div>
@@ -697,6 +707,7 @@
             }
         }
 
+        /* SELEÇÃO EXCLUSIVA DE CARDS - SEM SELEÇÃO DUPLA */
         function selectOption(tipo, valor, el) {
             const container = el.parentElement;
             container.querySelectorAll('.card-square-option').forEach(c => c.classList.remove('selected'));
@@ -852,6 +863,7 @@
             }, 2400);
         }
 
+        /* CÁLCULO DINÂMICO PRECISO CONFORME TABELA OFICIAL */
         function montarApresentacaoPlano() {
             const perfil = document.getElementById('inputPerfilOperacao').value;
             const equipe = document.getElementById('inputEquipePorte').value;
@@ -859,32 +871,42 @@
 
             const nomePerfil = document.getElementById('modalNomePerfil');
             const tituloPlano = document.getElementById('modalTituloPlano');
+            const valorPlano = document.getElementById('modalValorPlano');
             const lista = document.getElementById('modalListaCobertura');
 
             lista.innerHTML = '';
             const addItem = (txt) => lista.innerHTML += `<li class="d-flex align-items-center gap-2 mb-1"><i class="bi bi-check-circle-fill text-success"></i> ${txt}</li>`;
 
+            let valorTotal = 14.90; // Base com 5 acessos inclusos
+
             if (perfil === 'saude') {
                 nomePerfil.innerText = "Profissional Clínico / Saúde";
                 tituloPlano.innerText = "Plano Saúde & Bem-Estar";
+                valorTotal += 15.00; // Módulo Atendimentos
                 addItem("Prontuários SOAP com Queixa, Anamnese e Conduta");
                 addItem("Agenda técnica e histórico cronológico do paciente");
                 addItem("Emissão de declarações e relatórios clínicos");
             } else if (perfil === 'servicos_campo') {
                 nomePerfil.innerText = "Empresas de Serviços & Campo";
                 tituloPlano.innerText = "Plano Operação Técnica";
+                if (equipe !== '1') {
+                    valorTotal += 15.00; // Gestão de Técnicos
+                }
                 addItem("Ordens de Serviço com cronograma Gantt");
                 addItem("App mobile sem login para técnicos colherem assinatura");
                 addItem("Propostas comerciais com ART e custos analíticos");
             } else if (perfil === 'distribuidora') {
                 nomePerfil.innerText = "Comércio, Atacado & Distribuição";
                 tituloPlano.innerText = "Plano Logística & Vendas";
+                valorTotal += 20.00; // Estoque
+                valorTotal += 20.00; // Vendas B2B
                 addItem("Controle de estoque por SKU com imagens de produto");
                 addItem("Portal B2B de autoatendimento para clientes");
                 addItem("Painel de expedição e roteirização com motoristas");
             } else if (perfil === 'estoque_interno') {
                 nomePerfil.innerText = "Almoxarifado & Controle Interno";
                 tituloPlano.innerText = "Plano Almoxarifado Puro";
+                valorTotal += 20.00; // Estoque
                 addItem("Controle de saldo físico e histórico Kardex");
                 addItem("Canal de requisição interna para setores/obras");
                 addItem("Interface enxuta (sem telas de vendas comerciais)");
@@ -896,13 +918,24 @@
                 addItem("Armazenamento seguro de arquivos anexos");
             }
 
-            if (equipe === '1') addItem("Licença individual com acesso simplificado");
-            else if (equipe === '2_5') addItem("Até 5 colaboradores e operadores conectados");
-            else addItem("Estrutura corporativa com múltiplos setores");
+            if (equipe === '1') {
+                addItem("Licença individual com 5 acessos inclusos");
+            } else if (equipe === '2_5') {
+                addItem("Até 5 colaboradores e operadores conectados");
+            } else {
+                valorTotal += (5 * 4.00); // 5 usuários adicionais a R$ 4,00 cada
+                addItem("Estrutura corporativa com 10 usuários simultâneos");
+            }
 
-            // VERSÃO AJUSTADA E COERENTE:
-            if (financeiro) addItem("Controle de faturas, parcelas a receber e sinal de entrada");
-            else addItem("Interface enxuta sem rotinas financeiras (foco 100% operacional)");
+            if (financeiro) {
+                addItem("Controle de faturas, parcelas a receber e sinal de entrada");
+            } else {
+                addItem("Interface enxuta sem rotinas financeiras (foco 100% operacional)");
+            }
+
+            // ATUALIZAÇÃO DO VALOR NA TELA COM FORMATAÇÃO EM REAIS
+            const valorFormatado = valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            valorPlano.innerText = `R$ ${valorFormatado}`;
         }
 
         function finalizarCadastroAprovado() {
