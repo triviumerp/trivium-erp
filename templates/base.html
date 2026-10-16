@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>{% block title %}Trivium ERP{% endblock %}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logofav.png') }}">
     
@@ -29,6 +29,7 @@
             --text-dark: #0f172a;
             --text-muted: #64748b;
             --sidebar-width: 260px;
+            --bottom-nav-height: 60px;
         }
 
         body {
@@ -37,6 +38,7 @@
             color: var(--text-dark);
             min-height: 100vh;
             overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .brand-logo-text {
@@ -54,6 +56,7 @@
             font-weight: 700;
         }
 
+        /* SIDEBAR DESKTOP */
         .sidebar {
             background-color: var(--sidebar-bg);
             border-right: 1px solid var(--border-color);
@@ -74,9 +77,7 @@
         }
 
         .sidebar::-webkit-scrollbar { width: 4px; }
-        .sidebar::-webkit-scrollbar-track { background: transparent; }
         .sidebar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        .sidebar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
         .main-wrapper {
             margin-left: var(--sidebar-width);
@@ -84,18 +85,15 @@
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            transition: margin-left 0.25s ease;
         }
 
-        @media (max-width: 767.98px) {
-            .sidebar { display: none !important; }
-            .main-wrapper { margin-left: 0 !important; width: 100% !important; }
-        }
-
+        /* LINKS DO MENU */
         .nav-link-custom {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 9px 12px;
+            padding: 10px 12px;
             color: var(--text-muted);
             font-weight: 600;
             font-size: 0.90rem;
@@ -124,12 +122,15 @@
 
         .top-navbar {
             background: #ffffff;
-            min-height: 70px;
+            min-height: 64px;
             border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0.5rem 1.5rem;
+            padding: 0.5rem 1.25rem;
+            position: sticky;
+            top: 0;
+            z-index: 1010;
         }
 
         .content-body { padding: 1.5rem; flex-grow: 1; }
@@ -138,54 +139,131 @@
             background: #ffffff;
             border: 1px solid var(--border-color);
             border-radius: 16px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.01);
-            transition: transform 0.25s ease, box-shadow 0.25s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
-        .card-custom:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.06);
+        /* ========================================================== */
+        /* OTIMIZAÇÕES MOBILE PROFISSIONAIS (ECRÃS <= 768px)          */
+        /* ========================================================== */
+        @media (max-width: 767.98px) {
+            .sidebar { display: none !important; }
+            .main-wrapper { 
+                margin-left: 0 !important; 
+                width: 100% !important; 
+                padding-bottom: calc(var(--bottom-nav-height) + 15px); /* Evita conteúdo tapado pelo rodapé */
+            }
+
+            .content-body { 
+                padding: 1rem 0.75rem !important; /* Aproveita melhor a largura no ecrã */
+            }
+
+            .top-navbar { 
+                padding: 0.5rem 0.9rem !important; 
+            }
+
+            /* Cartões com espaçamento mais compacto no celular */
+            .card-custom {
+                border-radius: 14px !important;
+                margin-bottom: 0.85rem !important;
+            }
+
+            /* Suavização de tabelas para rolagem por toque */
+            .table-responsive {
+                border-radius: 12px;
+                -webkit-overflow-scrolling: touch;
+                border: 1px solid var(--border-color);
+            }
+
+            .table-responsive table {
+                min-width: 600px; /* Garante que as colunas não fiquem esmagadas */
+            }
+
+            /* Botões touch-friendly */
+            .btn {
+                min-height: 42px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
         }
 
-        .btn-primary {
-            background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%);
-            border: none;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
-            transition: filter 0.2s ease;
+        /* BARRA INFERIOR MOBILE (BOTTOM NAV BAR) */
+        .bottom-nav {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: var(--bottom-nav-height);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-top: 1px solid var(--border-color);
+            z-index: 1030;
+            justify-content: space-around;
+            align-items: center;
+            padding: 0 0.5rem;
         }
-        .btn-primary:hover {
-            filter: brightness(1.1);
+
+        @media (max-width: 767.98px) {
+            .bottom-nav { display: flex; }
         }
-        .form-control:focus, .form-select:focus {
-            border-color: #2563eb;
-            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+
+        .bottom-nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.68rem;
+            font-weight: 700;
+            flex: 1;
+            padding: 4px 0;
+            transition: color 0.15s ease;
+        }
+
+        .bottom-nav-item i {
+            font-size: 1.25rem;
+            margin-bottom: 2px;
+        }
+
+        .bottom-nav-item.active, .bottom-nav-item:active {
+            color: var(--brand-accent);
+        }
+
+        /* OFFCANVAS (MENU GAVETA MOBILE) */
+        .offcanvas-mobile {
+            max-width: 82vw !important;
+            width: 300px !important;
         }
     </style>
 </head>
 <body>
     {% if session.get('original_master_id') %}
     <div class="bg-warning text-dark py-2 px-3 fw-bold d-flex justify-content-between align-items-center shadow-sm" style="position: sticky; top: 0; z-index: 2000;">
-        <span><i class="bi bi-eye-fill me-2"></i>MODO DE SUPORTE MASTER: A visualizar o ambiente de <u>{{ current_user.empresa.razao_social }}</u>.</span>
-        <a href="{{ url_for('admin_sair_impersonacao') }}" class="btn btn-sm btn-dark fw-bold">
-            <i class="bi bi-box-arrow-right me-1"></i> Sair do Modo Suporte
-        </a>
+        <span class="small"><i class="bi bi-eye-fill me-1"></i>MODO SUPORTE: <u>{{ current_user.empresa.razao_social }}</u></span>
+        <a href="{{ url_for('admin_sair_impersonacao') }}" class="btn btn-xs btn-dark fw-bold py-1 px-2">Sair</a>
     </div>
     {% endif %}
 
-    <!-- BARRA LATERAL DESKTOP -->
-    <aside class="sidebar d-none d-md-flex">
+    <!-- ============================================================== -->
+    <!-- BARRA LATERAL DESKTOP (FIXA À ESQUERDA)                        -->
+    <!-- ============================================================== -->
+    <aside class="sidebar d-none d-md-flex" id="sidebarMenu">
         <a href="{{ url_for('index') }}" class="d-flex align-items-center gap-2 mb-3 px-2 text-decoration-none flex-shrink-0">
-            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Trivium ERP" style="height: 34px; width: auto; object-fit: contain;" onerror="this.style.display='none'">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Trivium ERP" style="height: 32px; width: auto; object-fit: contain;" onerror="this.style.display='none'">
             <span class="brand-logo-text mb-0">Trivium <span>ERP</span></span>
         </a>
 
         <div class="sidebar-badge flex-shrink-0">
             <i class="bi bi-shield-check text-primary"></i>
-            <span>{{ current_user.empresa.plano or 'Trivium Gestão Pro' }}</span>
+            <span class="text-truncate">{{ current_user.empresa.plano or 'Trivium Gestão Pro' }}</span>
         </div>
 
         <nav class="nav flex-column mb-3">
-            <!-- GESTÃO MASTER SUPERADMIN -->
+            <!-- 1. GESTÃO MASTER SUPERADMIN -->
             {% if current_user.is_authenticated and current_user.nivel_acesso == 'master' %}
             <div class="mt-2 mb-1 px-3">
                 <small class="text-uppercase fw-bold text-danger" style="font-size: 0.68rem; letter-spacing: 0.5px;">Gestão SaaS</small>
@@ -208,7 +286,7 @@
             <hr class="my-2 border-secondary opacity-25">
             {% endif %}
 
-            <!-- MÓDULO AFILIADO (SE FOR PARCEIRO) -->
+            <!-- 2. MÓDULO AFILIADO (SE FOR PARCEIRO) -->
             {% if current_user.is_authenticated and current_user.nivel_acesso == 'afiliado' %}
             <a href="{{ url_for('painel_afiliado') }}" class="nav-link-custom text-success fw-bold {% if request.endpoint == 'painel_afiliado' %}active{% endif %}">
                 <i class="bi bi-wallet2"></i><span>Painel Afiliado</span>
@@ -216,34 +294,44 @@
             <hr class="my-2 border-secondary opacity-25">
             {% endif %}
 
-            <!-- Painel de Controlo (Base) -->
+            <!-- 3. PAINEL DE CONTROLE / VISÃO GERAL -->
             <a href="{{ url_for('index') }}" id="tour-dashboard" class="nav-link-custom {% if request.endpoint == 'index' %}active{% endif %}">
-                <i class="bi bi-grid-1x2-fill"></i><span>Painel de Controlo</span>
+                <i class="bi bi-grid-1x2-fill"></i><span>Painel de Controle</span>
             </a>
 
-            <!-- Clientes (Base) -->
-            {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_clientes %}
-            <a href="{{ url_for('listar_clientes') }}" id="tour-clientes" class="nav-link-custom {% if request.endpoint in ['listar_clientes', 'novo_cliente', 'detalhe_cliente', 'editar_cliente'] %}active{% endif %}">
-                <i class="bi bi-people-fill"></i><span>{% if current_user.empresa and current_user.empresa.modulo_atendimentos %}Pacientes{% else %}Clientes{% endif %}</span>
-            </a>
+            <!-- 4. CLIENTES / PACIENTES (OCULTO EM ALMOXARIFADO PURO) -->
+            {% if (current_user.empresa.modulo_servicos_campo or current_user.empresa.modulo_atendimentos or current_user.empresa.modulo_vendas_externas) or current_user.nivel_acesso == 'master' %}
+                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_clientes %}
+                <a href="{{ url_for('listar_clientes') }}" id="tour-clientes" class="nav-link-custom {% if request.endpoint in ['listar_clientes', 'novo_cliente', 'detalhe_cliente', 'editar_cliente'] %}active{% endif %}">
+                    <i class="bi bi-people-fill"></i><span>{% if current_user.empresa and current_user.empresa.modulo_atendimentos %}Pacientes{% else %}Clientes{% endif %}</span>
+                </a>
+                {% endif %}
             {% endif %}
 
-            <!-- Catálogo (Base) -->
-            {% if (current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_propostas) and (current_user.empresa.modulo_servicos_campo or current_user.empresa.modulo_atendimentos or current_user.nivel_acesso == 'master') %}
-            <a href="{{ url_for('listar_catalogo') }}" id="tour-catalogo" class="nav-link-custom {% if request.endpoint == 'listar_catalogo' %}active{% endif %}">
-                <i class="bi bi-journal-bookmark-fill"></i><span>Catálogo</span>
-            </a>
+            <!-- 5. CATÁLOGO & PROPOSTAS (SERVIÇOS / SAÚDE) -->
+            {% if (current_user.empresa.modulo_servicos_campo or current_user.empresa.modulo_atendimentos) or current_user.nivel_acesso == 'master' %}
+                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_propostas %}
+                <a href="{{ url_for('listar_catalogo') }}" id="tour-catalogo" class="nav-link-custom {% if request.endpoint == 'listar_catalogo' %}active{% endif %}">
+                    <i class="bi bi-journal-bookmark-fill"></i><span>Catálogo</span>
+                </a>
+                <a href="{{ url_for('listar_propostas') }}" id="tour-propostas" class="nav-link-custom {% if request.endpoint in ['listar_propostas', 'nova_proposta'] %}active{% endif %}">
+                    <i class="bi bi-file-earmark-text-fill"></i><span>Propostas</span>
+                </a>
+                {% endif %}
             {% endif %}
 
-            <!-- Propostas & Orçamentos (Base) -->
-            {% if (current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_propostas) and (current_user.empresa.modulo_servicos_campo or current_user.nivel_acesso == 'master') %}
-            <a href="{{ url_for('listar_propostas') }}" id="tour-propostas" class="nav-link-custom {% if request.endpoint in ['listar_propostas', 'nova_proposta'] %}active{% endif %}">
-                <i class="bi bi-file-earmark-text-fill"></i><span>Propostas</span>
-            </a>
-            {% endif %}
+            <!-- 6. MÓDULO SERVIÇOS & ORDENS / ATENDIMENTOS CLÍNICOS -->
+            {% set tem_servicos = (current_user.empresa.modulo_servicos_campo and (current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_servicos)) or current_user.nivel_acesso == 'master' %}
+            {% set tem_saude = (current_user.empresa.modulo_atendimentos and (current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_servicos)) or current_user.nivel_acesso == 'master' %}
+            {% set tem_tecnicos = current_user.empresa.modulo_gestao_tecnicos or current_user.nivel_acesso == 'master' %}
 
-            <!-- MÓDULO SERVIÇOS / OS (COM SUBMENUS) -->
-            {% if (current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_servicos) and (current_user.empresa.modulo_servicos_campo or current_user.empresa.modulo_servicos_campo is none or current_user.empresa.modulo_atendimentos or current_user.nivel_acesso == 'master') %}
+            {# Cenário A: Apenas Saúde / Clínica #}
+            {% if tem_saude and not tem_servicos %}
+            <a href="{{ url_for('listar_atendimentos') }}" class="nav-link-custom {% if request.endpoint in ['listar_atendimentos', 'visualizar_ficha_servico'] %}active{% endif %}">
+                <i class="bi bi-heart-pulse-fill"></i><span>Atendimentos & Prontuários</span>
+            </a>
+            {# Cenário B: Serviços de Campo ou Híbrido #}
+            {% elif tem_servicos %}
             <div class="nav-item">
                 <a class="nav-link-custom d-flex justify-content-between align-items-center {% if request.endpoint in ['consultar_servicos', 'listar_atendimentos', 'gestao_operadores', 'visualizar_ficha_servico'] %}active{% endif %}" 
                    data-bs-toggle="collapse" href="#submenuServicos" role="button">
@@ -255,21 +343,15 @@
                 </a>
                 <div class="collapse {% if request.endpoint in ['consultar_servicos', 'listar_atendimentos', 'gestao_operadores', 'visualizar_ficha_servico'] %}show{% endif %}" id="submenuServicos">
                     <div class="ps-3 py-1 d-flex flex-column gap-1">
-                        {% if current_user.empresa.modulo_servicos_campo or current_user.nivel_acesso == 'master' %}
                         <a href="{{ url_for('consultar_servicos') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'consultar_servicos' %}active fw-bold text-primary{% endif %}">
                             <i class="bi bi-tools"></i><span>Ordens de Serviço</span>
                         </a>
-                        {% endif %}
-
-                        <!-- Fichas de Atendimento Clínico -->
-                        {% if current_user.empresa.modulo_atendimentos or current_user.nivel_acesso == 'master' %}
+                        {% if tem_saude %}
                         <a href="{{ url_for('listar_atendimentos') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'listar_atendimentos' %}active fw-bold text-primary{% endif %}">
-                            <i class="bi bi-person-lines-fill"></i><span>Fichas Clínicas</span>
+                            <i class="bi bi-heart-pulse-fill"></i><span>Fichas Clínicas</span>
                         </a>
                         {% endif %}
-
-                        <!-- Técnicos & Operadores de Campo -->
-                        {% if current_user.empresa.modulo_gestao_tecnicos or current_user.nivel_acesso == 'master' %}
+                        {% if tem_tecnicos %}
                         <a href="{{ url_for('gestao_operadores') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'gestao_operadores' %}active fw-bold text-primary{% endif %}">
                             <i class="bi bi-people"></i><span>Técnicos & Equipe</span>
                         </a>
@@ -279,74 +361,78 @@
             </div>
             {% endif %}
 
-            <!-- MÓDULO VENDAS DE MERCADORIAS -->
-            {% if current_user.empresa.modulo_estoque or current_user.empresa.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}
+            <!-- 7. ESTOQUE & ALMOXARIFADO (EXIBIDO EM ALMOXARIFADO PURO OU DISTRIBUIDORA) -->
+            {% if current_user.empresa.modulo_estoque or current_user.nivel_acesso == 'master' %}
+            <a href="{{ url_for('listar_estoque') }}" class="nav-link-custom {% if request.endpoint == 'listar_estoque' %}active{% endif %}">
+                <i class="bi bi-boxes"></i><span>Estoque & Almoxarifado</span>
+            </a>
+            <a href="{{ url_for('listar_requisicoes_estoque') }}" class="nav-link-custom {% if request.endpoint == 'listar_requisicoes_estoque' %}active{% endif %}">
+                <i class="bi bi-clipboard-check-fill"></i><span>Requisições de Materiais</span>
+            </a>
+            {% endif %}
+
+            <!-- 8. VENDAS COMERCIAIS (APENAS DISTRIBUIDORA / QUEM VENDE) -->
+            {% if current_user.empresa.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}
             <a href="{{ url_for('listar_vendas') }}" class="nav-link-custom {% if request.endpoint == 'listar_vendas' %}active{% endif %}">
                 <i class="bi bi-cart-check-fill"></i><span>Pedidos & Vendas</span>
             </a>
             {% endif %}
 
-            <!-- MÓDULO EXPEDIÇÃO & LOGÍSTICA -->
-            {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_expedicao or current_user.perm_estoque %}
-            <a href="{{ url_for('painel_expedicao') }}" class="nav-link-custom {% if request.endpoint == 'painel_expedicao' %}active{% endif %}">
-                <i class="bi bi-truck"></i><span>Expedição & Cargas</span>
-            </a>
-            <a href="{{ url_for('gestao_motoristas') }}" class="nav-link-custom {% if request.endpoint == 'gestao_motoristas' %}active{% endif %}">
-                <i class="bi bi-person-badge-fill"></i><span>Motoristas & Frotas</span>
-            </a>
-            {% endif %}
-
-            <!-- MÓDULO ESTOQUE -->
-            {% if current_user.empresa.modulo_estoque or current_user.nivel_acesso == 'master' %}
-            <a href="{{ url_for('listar_estoque') }}" class="nav-link-custom {% if request.endpoint in ['listar_estoque', 'listar_requisicoes_estoque'] %}active{% endif %}">
-                <i class="bi bi-boxes"></i><span>Estoque & Almoxarifado</span>
-            </a>
-            {% endif %}
-
-            <!-- Financeiro (Base) -->
-            {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
-            <a href="{{ url_for('financeiro') }}" id="tour-financeiro" class="nav-link-custom {% if request.endpoint == 'financeiro' %}active{% endif %}">
-                <i class="bi bi-cash-stack"></i><span>Financeiro</span>
-            </a>
-            {% endif %}
-
-            <!-- RELATÓRIOS GERENCIAIS & CONTÁBEIS (COM SUBMENU) -->
-            {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
-            <div class="nav-item">
-                <a class="nav-link-custom d-flex justify-content-between align-items-center {% if request.endpoint in ['relatorio_contabil', 'relatorio_lucratividade', 'relatorio_vendas'] %}active{% endif %}" 
-                   data-bs-toggle="collapse" href="#submenuRelatorios" role="button">
-                    <div class="d-flex align-items-center gap-2">
-                        <i class="bi bi-bar-chart-line-fill"></i>
-                        <span>Relatórios & DRE</span>
-                    </div>
-                    <i class="bi bi-chevron-down small opacity-75"></i>
+            <!-- 9. EXPEDIÇÃO E FROTAS (DISPONÍVEL EM ALMOXARIFADO PURO E DISTRIBUIDORA) -->
+            {% if current_user.empresa.modulo_estoque or current_user.empresa.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}
+                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_expedicao or current_user.perm_estoque %}
+                <a href="{{ url_for('painel_expedicao') }}" class="nav-link-custom {% if request.endpoint == 'painel_expedicao' %}active{% endif %}">
+                    <i class="bi bi-truck"></i><span>Expedição & Cargas</span>
                 </a>
-                <div class="collapse {% if request.endpoint in ['relatorio_contabil', 'relatorio_lucratividade', 'relatorio_vendas'] %}show{% endif %}" id="submenuRelatorios">
-                    <div class="ps-3 py-1 d-flex flex-column gap-1">
-                        <!-- Relatório Contábil (ZIP/CSV) -->
-                        <a href="{{ url_for('relatorio_contabil') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'relatorio_contabil' %}active fw-bold text-primary{% endif %}">
-                            <i class="bi bi-journal-check"></i><span>Contábil & Fiscal</span>
-                        </a>
+                <a href="{{ url_for('gestao_motoristas') }}" class="nav-link-custom {% if request.endpoint == 'gestao_motoristas' %}active{% endif %}">
+                    <i class="bi bi-person-badge-fill"></i><span>Motoristas & Frotas</span>
+                </a>
+                {% endif %}
+            {% endif %}
 
-                        <!-- Lucratividade Serviços (ART/Margem) -->
-                        {% if current_user.empresa.modulo_servicos_campo or current_user.nivel_acesso == 'master' %}
-                        <a href="{{ url_for('relatorio_lucratividade') }}" id="tour-lucratividade" class="nav-link-custom py-1 small {% if request.endpoint == 'relatorio_lucratividade' %}active fw-bold text-primary{% endif %}">
-                            <i class="bi bi-graph-up-arrow"></i><span>Lucratividade Serviços</span>
-                        </a>
-                        {% endif %}
+            <!-- 10. FINANCEIRO (OCULTO EM ALMOXARIFADO PURO) -->
+            {% if (current_user.empresa.modulo_servicos_campo or current_user.empresa.modulo_atendimentos or current_user.empresa.modulo_vendas_externas) or current_user.nivel_acesso == 'master' %}
+                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
+                <a href="{{ url_for('financeiro') }}" id="tour-financeiro" class="nav-link-custom {% if request.endpoint == 'financeiro' %}active{% endif %}">
+                    <i class="bi bi-cash-stack"></i><span>Financeiro</span>
+                </a>
+                {% endif %}
+            {% endif %}
 
-                        <!-- Rentabilidade Vendas (CMV) -->
-                        {% if current_user.empresa.modulo_estoque or current_user.empresa.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}
-                        <a href="{{ url_for('relatorio_vendas') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'relatorio_vendas' %}active fw-bold text-primary{% endif %}">
-                            <i class="bi bi-receipt"></i><span>Rentabilidade Vendas</span>
-                        </a>
-                        {% endif %}
+            <!-- 11. RELATÓRIOS & DRE (OCULTO EM ALMOXARIFADO PURO) -->
+            {% if (current_user.empresa.modulo_servicos_campo or current_user.empresa.modulo_vendas_externas or current_user.empresa.modulo_atendimentos) or current_user.nivel_acesso == 'master' %}
+                {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
+                <div class="nav-item">
+                    <a class="nav-link-custom d-flex justify-content-between align-items-center {% if request.endpoint in ['relatorio_contabil', 'relatorio_lucratividade', 'relatorio_vendas'] %}active{% endif %}" 
+                       data-bs-toggle="collapse" href="#submenuRelatorios" role="button">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-bar-chart-line-fill"></i>
+                            <span>Relatórios & DRE</span>
+                        </div>
+                        <i class="bi bi-chevron-down small opacity-75"></i>
+                    </a>
+                    <div class="collapse {% if request.endpoint in ['relatorio_contabil', 'relatorio_lucratividade', 'relatorio_vendas'] %}show{% endif %}" id="submenuRelatorios">
+                        <div class="ps-3 py-1 d-flex flex-column gap-1">
+                            <a href="{{ url_for('relatorio_contabil') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'relatorio_contabil' %}active fw-bold text-primary{% endif %}">
+                                <i class="bi bi-journal-check"></i><span>Contábil & Fiscal</span>
+                            </a>
+                            {% if current_user.empresa.modulo_servicos_campo or current_user.nivel_acesso == 'master' %}
+                            <a href="{{ url_for('relatorio_lucratividade') }}" id="tour-lucratividade" class="nav-link-custom py-1 small {% if request.endpoint == 'relatorio_lucratividade' %}active fw-bold text-primary{% endif %}">
+                                <i class="bi bi-graph-up-arrow"></i><span>Lucratividade Serviços</span>
+                            </a>
+                            {% endif %}
+                            {% if (current_user.empresa.modulo_estoque and current_user.empresa.modulo_vendas_externas) or current_user.nivel_acesso == 'master' %}
+                            <a href="{{ url_for('relatorio_vendas') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'relatorio_vendas' %}active fw-bold text-primary{% endif %}">
+                                <i class="bi bi-receipt"></i><span>Rentabilidade Vendas</span>
+                            </a>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
-            </div>
+                {% endif %}
             {% endif %}
 
-            <!-- Configurações (Base) -->
+            <!-- 12. CONFIGURAÇÕES -->
             {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_configuracoes %}
             <a href="{{ url_for('perfil_empresa') }}" id="tour-config" class="nav-link-custom {% if request.endpoint == 'perfil_empresa' %}active{% endif %}">
                 <i class="bi bi-gear-wide-connected"></i><span>Configurações</span>
@@ -367,11 +453,119 @@
         </div>
     </aside>
 
-    <!-- WRAPPER PRINCIPAL -->
+    <!-- ============================================================== -->
+    <!-- GAVETA LATERAL OFFCANVAS MOBILE (ABRE AO CLICAR NO HAMBURGUER) -->
+    <!-- ============================================================== -->
+    <div class="offcanvas offcanvas-start offcanvas-mobile d-md-none p-2" tabindex="-1" id="offcanvasMobileMenu" aria-labelledby="offcanvasMobileMenuLabel">
+        <div class="offcanvas-header border-bottom pb-2">
+            <div class="d-flex align-items-center gap-2">
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Trivium ERP" style="height: 28px; width: auto;" onerror="this.style.display='none'">
+                <span class="brand-logo-text fs-5 mb-0">Trivium <span>ERP</span></span>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body px-2 py-3">
+            <div class="sidebar-badge mb-3">
+                <i class="bi bi-shield-check text-primary"></i>
+                <span class="small text-truncate">{{ current_user.empresa.plano or 'Trivium Gestão Pro' }}</span>
+            </div>
+
+            <!-- Links Idênticos aos da Sidebar Desktop para Mobile -->
+            <nav class="nav flex-column gap-1">
+                <a href="{{ url_for('index') }}" class="nav-link-custom {% if request.endpoint == 'index' %}active{% endif %}">
+                    <i class="bi bi-grid-1x2-fill"></i><span>Painel de Controle</span>
+                </a>
+
+                {% if (current_user.empresa.modulo_servicos_campo or current_user.empresa.modulo_atendimentos or current_user.empresa.modulo_vendas_externas) or current_user.nivel_acesso == 'master' %}
+                    {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_clientes %}
+                    <a href="{{ url_for('listar_clientes') }}" class="nav-link-custom {% if request.endpoint in ['listar_clientes', 'novo_cliente', 'detalhe_cliente', 'editar_cliente'] %}active{% endif %}">
+                        <i class="bi bi-people-fill"></i><span>{% if current_user.empresa and current_user.empresa.modulo_atendimentos %}Pacientes{% else %}Clientes{% endif %}</span>
+                    </a>
+                    {% endif %}
+                {% endif %}
+
+                {% if (current_user.empresa.modulo_servicos_campo or current_user.empresa.modulo_atendimentos) or current_user.nivel_acesso == 'master' %}
+                    {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_propostas %}
+                    <a href="{{ url_for('listar_propostas') }}" class="nav-link-custom {% if request.endpoint in ['listar_propostas', 'nova_proposta'] %}active{% endif %}">
+                        <i class="bi bi-file-earmark-text-fill"></i><span>Propostas</span>
+                    </a>
+                    {% endif %}
+                {% endif %}
+
+                {% if tem_saude and not tem_servicos %}
+                <a href="{{ url_for('listar_atendimentos') }}" class="nav-link-custom {% if request.endpoint in ['listar_atendimentos', 'visualizar_ficha_servico'] %}active{% endif %}">
+                    <i class="bi bi-heart-pulse-fill"></i><span>Atendimentos & Prontuários</span>
+                </a>
+                {% elif tem_servicos %}
+                <a href="{{ url_for('consultar_servicos') }}" class="nav-link-custom {% if request.endpoint == 'consultar_servicos' %}active{% endif %}">
+                    <i class="bi bi-tools"></i><span>Ordens de Serviço</span>
+                </a>
+                {% endif %}
+
+                {% if current_user.empresa.modulo_estoque or current_user.nivel_acesso == 'master' %}
+                <a href="{{ url_for('listar_estoque') }}" class="nav-link-custom {% if request.endpoint == 'listar_estoque' %}active{% endif %}">
+                    <i class="bi bi-boxes"></i><span>Estoque & Almoxarifado</span>
+                </a>
+                <a href="{{ url_for('listar_requisicoes_estoque') }}" class="nav-link-custom {% if request.endpoint == 'listar_requisicoes_estoque' %}active{% endif %}">
+                    <i class="bi bi-clipboard-check-fill"></i><span>Requisições de Materiais</span>
+                </a>
+                {% endif %}
+
+                {% if current_user.empresa.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}
+                <a href="{{ url_for('listar_vendas') }}" class="nav-link-custom {% if request.endpoint == 'listar_vendas' %}active{% endif %}">
+                    <i class="bi bi-cart-check-fill"></i><span>Vendas de Produtos</span>
+                </a>
+                {% endif %}
+
+                {% if current_user.empresa.modulo_estoque or current_user.empresa.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}
+                    {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_expedicao or current_user.perm_estoque %}
+                    <a href="{{ url_for('painel_expedicao') }}" class="nav-link-custom {% if request.endpoint == 'painel_expedicao' %}active{% endif %}">
+                        <i class="bi bi-truck"></i><span>Expedição & Cargas</span>
+                    </a>
+                    <a href="{{ url_for('gestao_motoristas') }}" class="nav-link-custom {% if request.endpoint == 'gestao_motoristas' %}active{% endif %}">
+                        <i class="bi bi-person-badge-fill"></i><span>Motoristas & Frotas</span>
+                    </a>
+                    {% endif %}
+                {% endif %}
+
+                {% if (current_user.empresa.modulo_servicos_campo or current_user.empresa.modulo_atendimentos or current_user.empresa.modulo_vendas_externas) or current_user.nivel_acesso == 'master' %}
+                    {% if current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_financeiro %}
+                    <a href="{{ url_for('financeiro') }}" class="nav-link-custom {% if request.endpoint == 'financeiro' %}active{% endif %}">
+                        <i class="bi bi-cash-stack"></i><span>Financeiro</span>
+                    </a>
+                    {% endif %}
+                {% endif %}
+
+                <a href="{{ url_for('perfil_empresa') }}" class="nav-link-custom {% if request.endpoint == 'perfil_empresa' %}active{% endif %}">
+                    <i class="bi bi-gear-wide-connected"></i><span>Configurações</span>
+                </a>
+                <a href="{{ url_for('faq') }}" class="nav-link-custom {% if request.endpoint == 'faq' %}active{% endif %}">
+                    <i class="bi bi-question-circle-fill"></i><span>Ajuda & FAQ</span>
+                </a>
+                <a href="{{ url_for('auth.logout') }}" class="nav-link-custom text-danger mt-3">
+                    <i class="bi bi-box-arrow-left"></i><span>Terminar Sessão</span>
+                </a>
+            </nav>
+        </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- WRAPPER PRINCIPAL & TOPBAR                                     -->
+    <!-- ============================================================== -->
     <div class="main-wrapper">
         <header class="top-navbar">
-            <div class="d-flex align-items-center gap-3">
-                <h6 class="mb-0 fw-bold text-muted d-none d-sm-block">
+            <div class="d-flex align-items-center gap-2">
+                <!-- BOTÃO HAMBURGUER (VISÍVEL APENAS EM SMARTPHONES) -->
+                <button class="btn btn-light d-md-none p-2 border rounded-3 text-dark" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasMobileMenu" aria-controls="offcanvasMobileMenu">
+                    <i class="bi bi-list fs-5"></i>
+                </button>
+
+                <!-- LOGO COMPACTA NO CABEÇALHO DO CELULAR -->
+                <a href="{{ url_for('index') }}" class="d-flex d-md-none align-items-center gap-1 text-decoration-none">
+                    <span class="brand-logo-text fs-5 mb-0">Trivium <span>ERP</span></span>
+                </a>
+
+                <h6 class="mb-0 fw-bold text-muted d-none d-md-block">
                     {% if current_user.is_authenticated and current_user.empresa %}
                         {{ current_user.empresa.razao_social }}
                     {% else %}
@@ -380,7 +574,10 @@
                 </h6>
             </div>
 
-            <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-light text-secondary border d-none d-sm-inline-block small">
+                    <i class="bi bi-building me-1"></i>{{ current_user.empresa.cidade or 'Online' }}
+                </span>
                 <a href="{{ url_for('auth.logout') }}" class="btn btn-sm btn-outline-danger d-none d-sm-inline-flex align-items-center gap-1">
                     <i class="bi bi-box-arrow-left"></i> Sair
                 </a>
@@ -414,6 +611,105 @@
         </main>
     </div>
 
+    <!-- ============================================================== -->
+    <!-- BARRA INFERIOR MOBILE FIXA (BOTTOM NAVIGATION BAR)             -->
+    <!-- ============================================================== -->
+    <nav class="bottom-nav d-md-none">
+        <a href="{{ url_for('index') }}" class="bottom-nav-item {% if request.endpoint == 'index' %}active{% endif %}">
+            <i class="bi bi-grid-1x2-fill"></i>
+            <span>Início</span>
+        </a>
+
+        {% if current_user.empresa.modulo_estoque %}
+        <a href="{{ url_for('listar_estoque') }}" class="bottom-nav-item {% if request.endpoint == 'listar_estoque' %}active{% endif %}">
+            <i class="bi bi-boxes"></i>
+            <span>Estoque</span>
+        </a>
+        {% elif current_user.empresa.modulo_atendimentos %}
+        <a href="{{ url_for('listar_atendimentos') }}" class="bottom-nav-item {% if request.endpoint == 'listar_atendimentos' %}active{% endif %}">
+            <i class="bi bi-heart-pulse-fill"></i>
+            <span>Sessões</span>
+        </a>
+        {% elif current_user.empresa.modulo_servicos_campo %}
+        <a href="{{ url_for('consultar_servicos') }}" class="bottom-nav-item {% if request.endpoint == 'consultar_servicos' %}active{% endif %}">
+            <i class="bi bi-tools"></i>
+            <span>Ordens</span>
+        </a>
+        {% else %}
+        <a href="{{ url_for('listar_clientes') }}" class="bottom-nav-item {% if request.endpoint == 'listar_clientes' %}active{% endif %}">
+            <i class="bi bi-people-fill"></i>
+            <span>Clientes</span>
+        </a>
+        {% endif %}
+
+        {% if (current_user.empresa.modulo_servicos_campo or current_user.empresa.modulo_atendimentos or current_user.empresa.modulo_vendas_externas) %}
+        <a href="{{ url_for('financeiro') }}" class="bottom-nav-item {% if request.endpoint == 'financeiro' %}active{% endif %}">
+            <i class="bi bi-cash-stack"></i>
+            <span>Financeiro</span>
+        </a>
+        {% else %}
+        <a href="{{ url_for('listar_requisicoes_estoque') }}" class="bottom-nav-item {% if request.endpoint == 'listar_requisicoes_estoque' %}active{% endif %}">
+            <i class="bi bi-clipboard-check-fill"></i>
+            <span>Pedidos</span>
+        </a>
+        {% endif %}
+
+        <button type="button" class="bottom-nav-item bg-transparent border-0" data-bs-toggle="offcanvas" data-bs-target="#offcanvasMobileMenu">
+            <i class="bi bi-list"></i>
+            <span>Mais</span>
+        </button>
+    </nav>
+
+    <!-- ============================================================== -->
+    <!-- POP-UP REINCIDENTE DE CONCLUSÃO DE CADASTRO                    -->
+    <!-- ============================================================== -->
+    {% if current_user.is_authenticated and current_user.nivel_acesso != 'master' and cadastro_pendente and request.endpoint != 'perfil_empresa' %}
+    <div class="modal fade" id="modalCompletarCadastro" tabindex="-1" aria-labelledby="modalCompletarCadastroLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="p-4 text-white position-relative" style="background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);">
+                    <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="bg-warning text-dark rounded-circle p-3 d-flex align-items-center justify-content-center shadow-sm" style="width: 50px; height: 50px;">
+                            <i class="bi bi-shield-exclamation fs-3"></i>
+                        </div>
+                        <div>
+                            <span class="badge bg-white text-primary fw-bold px-2 py-0.5 rounded-pill small mb-1">Ação Importante</span>
+                            <h5 class="fw-bold mb-0" id="modalCompletarCadastroLabel">Finalize o seu cadastro</h5>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-body p-4 text-dark">
+                    <p class="mb-3 text-muted">
+                        Notamos que alguns dados fundamentais da sua empresa ainda não foram cadastrados (como <strong>CNPJ ou CPF</strong>, <strong>Telefone de Contato</strong> ou <strong>Endereço</strong>).
+                    </p>
+                    <div class="p-3 bg-light border rounded-3 mb-3">
+                        <h6 class="fw-bold text-primary mb-2 small"><i class="bi bi-info-circle-fill me-1"></i> Por que completar é importante?</h6>
+                        <ul class="list-unstyled small text-muted mb-0" style="line-height: 1.6;">
+                            <li><i class="bi bi-check2 text-success me-1"></i> <strong>Logotipo & Dados no PDF:</strong> Essenciais para a emissão de propostas, romaneios e ordens.</li>
+                            <li><i class="bi bi-check2 text-success me-1"></i> <strong>Faturamento & Cobrança:</strong> Evita divergências na geração de faturas e boletos.</li>
+                            <li><i class="bi bi-check2 text-success me-1"></i> <strong>Profissionalismo:</strong> Garante comprovantes com validade formal.</li>
+                        </ul>
+                    </div>
+                    <small class="text-muted d-block text-center">
+                        Leva menos de 1 minuto para concluir!
+                    </small>
+                </div>
+
+                <div class="modal-footer bg-light border-top-0 py-3 px-4 d-flex justify-content-between">
+                    <button type="button" class="btn btn-outline-secondary btn-sm fw-bold px-3" data-bs-dismiss="modal">
+                        Lembrar mais tarde
+                    </button>
+                    <a href="{{ url_for('perfil_empresa') }}#dados-tab" class="btn btn-primary btn-sm fw-bold px-4 py-2 rounded-3 shadow-sm">
+                        <i class="bi bi-arrow-right-circle-fill me-1"></i> OK, Completar Cadastro
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Bootstrap 5 JS & Driver.js -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
@@ -426,222 +722,173 @@
                     setTimeout(() => t.remove(), 300);
                 }, 4500);
             });
+
+            const elModalCadastro = document.getElementById('modalCompletarCadastro');
+            if (elModalCadastro) {
+                const modalCadastroInstance = new bootstrap.Modal(elModalCadastro);
+                modalCadastroInstance.show();
+            }
         });
     </script>
-<!-- ================================================================= -->
-<!-- RECURSOS DO TOUR GUIADO (DRIVER.JS) & ABA LATERAL RETRÁTIL        -->
-<!-- ================================================================= -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
-<script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.bind.iife.js"></script>
 
-<style>
-/* ABA LATERAL RETRÁTIL (NÃO FICA NA FRENTE DOS ELEMENTOS DA TELA) */
-#abaAjudaLateral {
-    position: fixed;
-    top: 50%;
-    right: 0;
-    transform: translateY(-50%);
-    z-index: 1040;
-    display: flex;
-    align-items: center;
-    background: #1e3a8a;
-    color: #ffffff;
-    border-radius: 24px 0 0 24px;
-    box-shadow: -3px 3px 12px rgba(0, 0, 0, 0.2);
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    cursor: pointer;
-    overflow: hidden;
-    padding: 6px 10px 6px 12px;
-}
-
-#abaAjudaLateral:hover {
-    background: #0f172a;
-    padding-right: 16px;
-    box-shadow: -4px 4px 16px rgba(0, 0, 0, 0.3);
-}
-
-#abaAjudaLateral .texto-aba {
-    max-width: 0;
-    opacity: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    transition: all 0.3s ease;
-    font-size: 0.82rem;
-    font-weight: 700;
-    margin-left: 0;
-}
-
-#abaAjudaLateral:hover .texto-aba {
-    max-width: 140px;
-    opacity: 1;
-    margin-left: 8px;
-}
-
-#abaAjudaLateral .btn-fechar-aba {
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 1rem;
-    padding: 0 0 0 8px;
-    display: none;
-    line-height: 1;
-}
-
-#abaAjudaLateral:hover .btn-fechar-aba {
-    display: inline-block;
-}
-
-#abaAjudaLateral .btn-fechar-aba:hover {
-    color: #ffffff;
-}
-</style>
-
-<!-- ELEMENTO DA ABA LATERAL -->
-<div id="abaAjudaLateral" onclick="iniciarTourDaPagina()" title="Clique para iniciar o Tour Guiado desta tela">
-    <i class="bi bi-question-circle-fill fs-5"></i>
-    <span class="texto-aba">Ajuda desta Tela</span>
-    <button type="button" class="btn-fechar-aba" onclick="ocultarAbaAjuda(event)" title="Ocultar aba">×</button>
-</div>
-
-<script>
-function ocultarAbaAjuda(event) {
-    event.stopPropagation();
-    const aba = document.getElementById('abaAjudaLateral');
-    if (aba) {
-        aba.style.display = 'none';
-        sessionStorage.setItem('trivium_aba_ajuda_oculta', 'true');
+    <!-- ================================================================= -->
+    <!-- RECURSOS DO TOUR GUIADO (DRIVER.JS) & ABA LATERAL RETRÁTIL        -->
+    <!-- ================================================================= -->
+    <style>
+    #abaAjudaLateral {
+        position: fixed;
+        top: 50%;
+        right: 0;
+        transform: translateY(-50%);
+        z-index: 1040;
+        display: flex;
+        align-items: center;
+        background: #1e3a8a;
+        color: #ffffff;
+        border-radius: 24px 0 0 24px;
+        box-shadow: -3px 3px 12px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        cursor: pointer;
+        overflow: hidden;
+        padding: 6px 10px 6px 12px;
     }
-}
 
-document.addEventListener('DOMContentLoaded', () => {
-    if (sessionStorage.getItem('trivium_aba_ajuda_oculta') === 'true') {
+    #abaAjudaLateral:hover {
+        background: #0f172a;
+        padding-right: 16px;
+        box-shadow: -4px 4px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    #abaAjudaLateral .texto-aba {
+        max-width: 0;
+        opacity: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        font-size: 0.82rem;
+        font-weight: 700;
+        margin-left: 0;
+    }
+
+    #abaAjudaLateral:hover .texto-aba {
+        max-width: 140px;
+        opacity: 1;
+        margin-left: 8px;
+    }
+
+    #abaAjudaLateral .btn-fechar-aba {
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 1rem;
+        padding: 0 0 0 8px;
+        display: none;
+        line-height: 1;
+    }
+
+    #abaAjudaLateral:hover .btn-fechar-aba {
+        display: inline-block;
+    }
+
+    #abaAjudaLateral .btn-fechar-aba:hover {
+        color: #ffffff;
+    }
+
+    @media (max-width: 767.98px) {
+        #abaAjudaLateral {
+            top: 75% !important; /* Posiciona um pouco mais abaixo no celular para não tapar botões de ação */
+        }
+    }
+    </style>
+
+    <div id="abaAjudaLateral" onclick="iniciarTourDaPagina()" title="Clique para iniciar o Tour Guiado desta tela">
+        <i class="bi bi-question-circle-fill fs-5"></i>
+        <span class="texto-aba">Ajuda desta Tela</span>
+        <button type="button" class="btn-fechar-aba" onclick="ocultarAbaAjuda(event)" title="Ocultar aba">×</button>
+    </div>
+
+    <script>
+    function ocultarAbaAjuda(event) {
+        event.stopPropagation();
         const aba = document.getElementById('abaAjudaLateral');
-        if (aba) aba.style.display = 'none';
-    }
-});
-
-function iniciarTourDaPagina() {
-    if (!window.driver || !window.driver.js) {
-        alert("O recurso de tour guiado ainda está a carregar. Tente novamente num instante.");
-        return;
+        if (aba) {
+            aba.style.display = 'none';
+            sessionStorage.setItem('trivium_aba_ajuda_oculta', 'true');
+        }
     }
 
-    const driver = window.driver.js.driver;
-    const path = window.location.pathname;
-
-    let etapas = [];
-
-    // 1. DASHBOARD INICIAL
-    if (path === '/' || path.includes('/index')) {
-        etapas = [
-            { element: '#sidebarMenu', popover: { title: 'Menu Lateral de Módulos', description: 'Navegue entre todos os setores contratados do ERP: Clientes, Propostas, Serviços, Estoque, Vendas e Financeiro.' } },
-            { element: '.row.g-3.mb-4', popover: { title: 'Cards de Indicadores', description: 'Visão em tempo real do faturamento do mês, propostas em negociação, ordens abertas e faturas atrasadas.' } },
-            { element: '.col-lg-7, .col-lg-8', popover: { title: 'Atividades Recentes', description: 'Listagem das próximas ordens e cronogramas técnicos agendados para os próximos dias.' } }
-        ];
-    }
-    // 2. CLIENTES
-    else if (path.includes('/clientes')) {
-        etapas = [
-            { element: 'input[name="busca"]', popover: { title: 'Busca Rápida de Clientes', description: 'Pesquise por nome, CPF/CNPJ ou cidade cadastrada.' } },
-            { element: 'a[href*="/cliente/novo"]', popover: { title: 'Botão + Novo Cliente', description: 'Clique aqui para cadastrar um novo cliente, selecionar se é PJ ou PF e preencher os dados de contacto e cobrança.' } },
-            { element: '.table-responsive', popover: { title: 'Lista de Cadastros', description: 'Aceda à ficha completa do cliente, visualize propostas emitidas, histórico financeiro e faça upload de laudos/documentos em PDF.' } }
-        ];
-    }
-    // 3. PROPOSTAS COMERCIAIS
-    else if (path.includes('/propostas')) {
-        etapas = [
-            { element: 'button[data-bs-target="#modalNovaProposta"]', popover: { title: 'Botão + Nova Proposta', description: 'Crie um orçamento selecionando o cliente, inserindo itens, descontos, condição de pagamento e sinal/entrada.' } },
-            { element: '.nav-pills', popover: { title: 'Filtros de Status', description: 'Alterne rapidamente entre propostas Em Aberto, Aprovadas ou Canceladas.' } },
-            { element: 'a[href*="/pdf"]', popover: { title: 'Gerar Carta Proposta em PDF', description: 'Emite o documento timbrado oficial com a logo da sua empresa pronto para envio ao cliente.' } },
-            { element: 'form[action*="/status"]', popover: { title: 'Aprovar Proposta', description: 'Ao marcar como "Aprovado", o sistema gera a fatura no Financeiro e as ordens técnicas na Agenda.' } }
-        ];
-    }
-    // 4. SERVIÇOS & ORDENS DE SERVIÇO
-    else if (path.includes('/servicos')) {
-        etapas = [
-            { element: 'button[data-bs-target="#modalNovoServicoAvulso"]', popover: { title: 'Botão + Nova OS Avulsa', description: 'Abra um chamado ou ordem de serviço imediata sem precisar gerar uma proposta prévia.' } },
-            { element: '.btn-group, .nav-pills', popover: { title: 'Filtros da Agenda', description: 'Filtre por Em Andamento, Pendentes, Concluídos ou Contratos Recorrentes.' } },
-            { element: 'button[data-bs-target*="modalEditarOperacao"]', popover: { title: 'Ajustar Operação & Técnicos', description: 'Aloque operadores, ajuste datas/horários, monte o cronograma Gantt e anexe fotos de comprovação.' } },
-            { element: 'a[href*="/pdf"]', popover: { title: 'Imprimir Ordem de Serviço', description: 'Gera a ficha de execução física em PDF com campos para assinatura e laudo técnico.' } }
-        ];
-    }
-    // 5. ATENDIMENTOS CLÍNICOS
-    else if (path.includes('/atendimentos')) {
-        etapas = [
-            { element: 'input[name="busca"]', popover: { title: 'Localizador de Pacientes', description: 'Busque prontuários por nome ou CPF do paciente.' } },
-            { element: '.table-responsive', popover: { title: 'Fichas Clínicas', description: 'Acompanhe a queixa principal, evolução da sessão, diagnóstico e condutas recomendadas.' } }
-        ];
-    }
-    // 6. ESTOQUE & ALMOXARIFADO
-    else if (path.includes('/estoque')) {
-        etapas = [
-            { element: 'button[data-bs-target="#modalNovoProduto"]', popover: { title: 'Botão + Novo Item', description: 'Cadastre materiais e produtos com código SKU, código de barras, estoque mínimo e preços de custo/venda.' } },
-            { element: 'button[data-bs-target="#modalImportarExcel"]', popover: { title: 'Botão Importar Planilha', description: 'Atualize centenas de itens ou saldos em lote enviando a sua folha de cálculo preenchida.' } },
-            { element: 'a[href*="exportar-excel"]', popover: { title: 'Botão Exportar Excel', description: 'Baixe toda a posição atual do seu inventário físico em formato .xlsx.' } },
-            { element: 'button[data-bs-target*="modalMovimentar"]', popover: { title: 'Entrada / Saída Rápida', description: 'Lançamento manual avulso de ajuste de saldo com registro imediato no Kardex.' } }
-        ];
-    }
-    // 7. VENDAS DE MERCADORIAS
-    else if (path.includes('/vendas')) {
-        etapas = [
-            { element: 'button[data-bs-target="#modalNovaVenda"]', popover: { title: 'Botão + Nova Venda Balcão', description: 'Lance vendas presenciais ou comerciais com escolha de cliente, controle de parcelas e regras de sinal.' } },
-            { element: 'button[onclick*="copiarLinkLoja"]', popover: { title: 'Copiar Link do Portal B2B', description: 'Copie e partilhe o catálogo online direto para os seus clientes fazerem encomendas sem login.' } },
-            { element: 'form[action*="enviar-expedicao"]', popover: { title: 'Enviar para Expedição', description: 'Despacha os pedidos aprovados diretamente para a esteira de separação e rota.' } }
-        ];
-    }
-    // 8. EXPEDIÇÃO & LOGÍSTICA
-    else if (path.includes('/expedicao')) {
-        etapas = [
-            { element: 'button[data-bs-target="#modalNovoMotorista"]', popover: { title: 'Botão + Novo Motorista', description: 'Cadastre entregadores e aceda aos links dedicados para telemóvel.' } },
-            { element: 'a[href*="pdf-separacao"]', popover: { title: 'Guia de Separação Cega', description: 'Imprime a lista de materiais sem valores para os separadores de almoxarifado conferirem os volumes.' } },
-            { element: 'button[data-bs-target*="modalAlocar"]', popover: { title: 'Escalar Motorista & Ordem', description: 'Selecione quem fará a entrega e a ordem sequencial das paragens.' } }
-        ];
-    }
-    // 9. GESTÃO DE MOTORISTAS & ROTAS
-    else if (path.includes('/motoristas')) {
-        etapas = [
-            { element: 'button[data-bs-target="#modalNovoMotorista"]', popover: { title: 'Cadastrar Entregador', description: 'Cadastre condutores com placa do veículo, WhatsApp e contacto.' } },
-            { element: '.btn-copiar-link-motorista, a[href*="/motorista/rota/"]', popover: { title: 'Link Mobile do Motorista', description: 'Envie este link para o WhatsApp do motorista: ele acede à rota, reordena paragens e recolhe a assinatura do recebedor.' } }
-        ];
-    }
-    // 10. FINANCEIRO
-    else if (path.includes('/financeiro')) {
-        etapas = [
-            { element: '.nav-pills', popover: { title: 'Filtros da Carteira', description: 'Acompanhe títulos A Faturar, Aguardando Pagamento, Em Atraso ou já Quitados.' } },
-            { element: 'form[action*="faturar-mes"]', popover: { title: 'Faturar Mês de Contratos', description: 'Gera em lote as faturas e ordens mensais de todos os clientes com contratos recorrentes ativos.' } },
-            { element: 'button[data-bs-target*="modalEditarParcela"], button[data-bs-target*="modalEditarFatura"]', popover: { title: 'Baixa & Anexos', description: 'Confirme o recebimento de valores, adicione ocorrências de cobrança e anexe comprovativos/NFs.' } }
-        ];
-    }
-    // 11. CONFIGURAÇÕES & PERFIL DA EMPRESA
-    else if (path.includes('/configuracoes/perfil')) {
-        etapas = [
-            { element: '#dados-tab', popover: { title: 'Aba Dados Cadastrais', description: 'Alterne entre PJ e PF, cadastre telefone, endereço e faça o upload do logotipo oficial da empresa.' } },
-            { element: '#planos-tab', popover: { title: 'Aba Planos & Módulos', description: 'Personalize os módulos ativos, utilizadores adicionais e realize o pagamento seguro via Mercado Pago.' } },
-            { element: '#equipe-tab', popover: { title: 'Aba Equipe & Acessos', description: 'Adicione funcionários e defina permissões setorizadas para cada membro.' } },
-            { element: '#minha-conta-tab', popover: { title: 'Aba Minha Conta', description: 'Atualize o seu nome, e-mail de login e redefina a sua senha mestra.' } }
-        ];
-    }
-    // FALLBACK
-    else {
-        etapas = [
-            { element: '#sidebarMenu', popover: { title: 'Navegação Geral', description: 'Selecione no menu lateral a área que deseja gerenciar.' } },
-            { element: 'a[href*="/faq"]', popover: { title: 'Central de Ajuda Completa', description: 'Consulte tutoriais com vídeos e imagens explicativas.' } }
-        ];
-    }
-
-    // Filtra apenas os elementos existentes no DOM da página atual
-    const etapasValidas = etapas.filter(e => !e.element || document.querySelector(e.element));
-
-    const driverObj = driver({
-        showProgress: true,
-        nextBtnText: 'Próximo &rarr;',
-        prevBtnText: '&larr; Anterior',
-        doneBtnText: 'Entendi!',
-        steps: etapasValidas.length > 0 ? etapasValidas : etapas
+    document.addEventListener('DOMContentLoaded', () => {
+        if (sessionStorage.getItem('trivium_aba_ajuda_oculta') === 'true') {
+            const aba = document.getElementById('abaAjudaLateral');
+            if (aba) aba.style.display = 'none';
+        }
     });
 
-    driverObj.drive();
-}
-</script>
+    function iniciarTourDaPagina() {
+        if (!window.driver || !window.driver.js) {
+            alert("O recurso de tour guiado ainda está a carregar. Tente novamente num instante.");
+            return;
+        }
+
+        const driver = window.driver.js.driver;
+        const path = window.location.pathname;
+
+        let etapas = [];
+
+        if (path === '/' || path.includes('/index')) {
+            etapas = [
+                { element: '#sidebarMenu', popover: { title: 'Menu Lateral de Módulos', description: 'Navegue entre todos os setores contratados do ERP: Clientes, Propostas, Serviços, Estoque, Vendas e Financeiro.' } },
+                { element: '.row.g-3.mb-4', popover: { title: 'Cards de Indicadores', description: 'Visão em tempo real do faturamento do mês, propostas em negociação, ordens abertas e faturas atrasadas.' } },
+                { element: '.col-lg-7, .col-lg-8', popover: { title: 'Atividades Recentes', description: 'Listagem das próximas ordens e cronogramas técnicos agendados para os próximos dias.' } }
+            ];
+        } else if (path.includes('/clientes')) {
+            etapas = [
+                { element: 'input[name="busca"]', popover: { title: 'Busca Rápida de Clientes', description: 'Pesquise por nome, CPF/CNPJ ou cidade cadastrada.' } },
+                { element: 'a[href*="/cliente/novo"]', popover: { title: 'Botão + Novo Cliente', description: 'Clique aqui para cadastrar um novo cliente, selecionar se é PJ ou PF e preencher os dados de contacto e cobrança.' } },
+                { element: '.table-responsive', popover: { title: 'Lista de Cadastros', description: 'Aceda à ficha completa do cliente, visualize propostas emitidas, histórico financeiro e faça upload de laudos/documentos em PDF.' } }
+            ];
+        } else if (path.includes('/propostas')) {
+            etapas = [
+                { element: 'button[data-bs-target="#modalNovaProposta"]', popover: { title: 'Botão + Nova Proposta', description: 'Crie um orçamento selecionando o cliente, inserindo itens, descontos, condição de pagamento e sinal/entrada.' } },
+                { element: '.nav-pills', popover: { title: 'Filtros de Status', description: 'Alterne rapidamente entre propostas Em Aberto, Aprovadas ou Canceladas.' } },
+                { element: 'a[href*="/pdf"]', popover: { title: 'Gerar Carta Proposta em PDF', description: 'Emite o documento timbrado oficial com a logo da sua empresa pronto para envio ao cliente.' } }
+            ];
+        } else if (path.includes('/servicos')) {
+            etapas = [
+                { element: 'button[data-bs-target="#modalNovoServicoAvulso"]', popover: { title: 'Botão + Nova OS Avulsa', description: 'Abra um chamado ou ordem de serviço imediata sem precisar gerar uma proposta prévia.' } },
+                { element: '.btn-group, .nav-pills', popover: { title: 'Filtros da Agenda', description: 'Filtre por Em Andamento, Pendentes, Concluídos ou Contratos Recorrentes.' } },
+                { element: 'button[data-bs-target*="modalEditarOperacao"]', popover: { title: 'Ajustar Operação & Técnicos', description: 'Aloque operadores, ajuste datas/horários, monte o cronograma Gantt e anexe fotos de comprovação.' } }
+            ];
+        } else if (path.includes('/estoque')) {
+            etapas = [
+                { element: 'button[data-bs-target="#modalNovoProduto"]', popover: { title: 'Botão + Novo Item', description: 'Cadastre materiais e produtos com código SKU, código de barras, estoque mínimo e preços de custo/venda.' } },
+                { element: 'button[data-bs-target="#modalImportarExcel"]', popover: { title: 'Botão Importar Planilha', description: 'Atualize centenas de itens ou saldos em lote enviando a sua folha de cálculo preenchida.' } },
+                { element: 'a[href*="exportar-excel"]', popover: { title: 'Botão Exportar Excel', description: 'Baixe toda a posição atual do seu inventário físico em formato .xlsx.' } }
+            ];
+        } else if (path.includes('/financeiro')) {
+            etapas = [
+                { element: '.nav-pills', popover: { title: 'Filtros da Carteira', description: 'Acompanhe títulos A Faturar, Aguardando Pagamento, Em Atraso ou já Quitados.' } },
+                { element: 'form[action*="faturar-mes"]', popover: { title: 'Faturar Mês de Contratos', description: 'Gera em lote as faturas e ordens mensais de todos os clientes com contratos recorrentes ativos.' } }
+            ];
+        } else {
+            etapas = [
+                { element: '#sidebarMenu', popover: { title: 'Navegação Geral', description: 'Selecione no menu lateral a área que deseja gerenciar.' } },
+                { element: 'a[href*="/faq"]', popover: { title: 'Central de Ajuda Completa', description: 'Consulte tutoriais com vídeos e imagens explicativas.' } }
+            ];
+        }
+
+        const etapasValidas = etapas.filter(e => !e.element || document.querySelector(e.element));
+
+        const driverObj = driver({
+            showProgress: true,
+            nextBtnText: 'Próximo &rarr;',
+            prevBtnText: '&larr; Anterior',
+            doneBtnText: 'Entendi!',
+            steps: etapasValidas.length > 0 ? etapasValidas : etapas
+        });
+
+        driverObj.drive();
+    }
+    </script>
 </body>
 </html>

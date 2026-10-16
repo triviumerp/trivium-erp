@@ -458,9 +458,20 @@ def load_user(user_id):
 @app.context_processor
 def utility_processor():
     perfil = None
-    if current_user.is_authenticated:
+    cadastro_pendente = False
+    
+    if current_user.is_authenticated and current_user.empresa:
         perfil = current_user.empresa
-    return dict(perfil_empresa=perfil)
+        # Verifica se faltam dados vitais de emissão fiscal / relatórios
+        sem_doc = not perfil.cnpj or len(perfil.cnpj.strip()) < 11
+        sem_tel = not perfil.telefone or len(perfil.telefone.strip()) < 8
+        sem_cidade = not perfil.cidade or not perfil.cidade.strip()
+        
+        # Considera pendente se faltar documento, telefone ou cidade
+        if sem_doc or sem_tel or sem_cidade:
+            cadastro_pendente = True
+
+    return dict(perfil_empresa=perfil, cadastro_pendente=cadastro_pendente)
 
 @app.before_request
 def interceptar_bloqueio_assinatura():
@@ -2987,12 +2998,26 @@ def perfil_empresa():
         # 3. CALCULADORA MODULAR (R$ 14,90 BASE + MÓDULOS + USUÁRIOS)
         elif form_type == 'config_assinatura_modular':
             valor_calculado = 14.90
+            
+            # Lê os módulos diretamente dos switches da tela
+            modulo_atend = bool(request.form.get('modulo_atendimentos'))
+            modulo_tecnicos = bool(request.form.get('modulo_gestao_tecnicos'))
+            modulo_estoque = bool(request.form.get('modulo_estoque'))
+            modulo_vendas = bool(request.form.get('modulo_vendas_externas'))
 
-            empresa.modulo_servicos_campo = True
-            empresa.modulo_atendimentos = bool(request.form.get('modulo_atendimentos'))
-            empresa.modulo_gestao_tecnicos = bool(request.form.get('modulo_gestao_tecnicos'))
-            empresa.modulo_estoque = bool(request.form.get('modulo_estoque'))
-            empresa.modulo_vendas_externas = bool(request.form.get('modulo_vendas_externas'))
+            if modulo_atend and not (modulo_tecnicos or modulo_estoque or modulo_vendas):
+                modulo_servicos = False
+            elif modulo_estoque and not (modulo_vendas or modulo_tecnicos or modulo_atend):
+                modulo_servicos = False
+            else:
+                # Caso contrário (ou se for o pacote base tradicional de serviços), mantém ativo
+                modulo_servicos = True
+
+            empresa.modulo_servicos_campo = modulo_servicos
+            empresa.modulo_atendimentos = modulo_atend
+            empresa.modulo_gestao_tecnicos = modulo_tecnicos
+            empresa.modulo_estoque = modulo_estoque
+            empresa.modulo_vendas_externas = modulo_vendas
 
             if empresa.modulo_atendimentos:
                 valor_calculado += 15.00
