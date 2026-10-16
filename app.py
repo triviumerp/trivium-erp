@@ -872,21 +872,30 @@ def deletar_documento(doc_id):
     flash('Documento removido com sucesso.', 'info')
     return redirect(url_for('detalhe_cliente', id=cliente_id))
 
-@app.route('/uploads/<path:filename>')
+@app.route('/uploads/<path:filename>', endpoint='download_file')
 @login_required
-def download_arquivo_seguro(filename):
-    """Entrega o arquivo do Disco Persistente do Render com barreira de segurança multi-tenant."""
-    # 1. Barreira multi-tenant: impede acesso a arquivos de outras empresas
+def download_file(filename):
+    """
+    Entrega o arquivo protegendo o isolamento multi-tenant a partir do disco persistente.
+    """
+    # 1. Barreira multi-tenant: impede acesso a ficheiros de outras empresas
     prefixo_empresa = f"emp_{current_user.empresa_id}/"
     if not filename.startswith(prefixo_empresa) and getattr(current_user, 'nivel_acesso', '') != 'master':
         abort(403)
 
-    # 2. Constrói o caminho dentro do disco persistente
+    # 2. Constrói o caminho seguro no disco montado
     caminho_completo = os.path.join(PASTA_STORAGE_LOCAL, filename)
     if os.path.exists(caminho_completo):
         pasta = os.path.dirname(caminho_completo)
         nome = os.path.basename(caminho_completo)
         return send_from_directory(pasta, nome)
+
+    # 3. Fallback para ficheiros legados em static/uploads caso ainda existam
+    caminho_estatico = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if os.path.exists(caminho_estatico):
+        pasta_est = os.path.dirname(caminho_estatico)
+        nome_est = os.path.basename(caminho_estatico)
+        return send_from_directory(pasta_est, nome_est)
 
     abort(404)
 
