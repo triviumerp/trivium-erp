@@ -62,13 +62,20 @@ from services.storage_service import (
     excluir_arquivo_supabase,
     gerar_url_temporaria,
     obter_arquivo_bytes,
-    excluir_pasta_empresa_supabase
+    excluir_pasta_empresa_supabase, PASTA_STORAGE_LOCAL
 )
 
 # -----------------------------------------------------------------------------
 # 1. CONFIGURAÇÃO DA APLICAÇÃO
 # -----------------------------------------------------------------------------
 app = Flask(__name__)
+
+app.config['MAX_CONTENT_LENGTH'] = 2.5 * 1024 * 1024  # 2.5 Megabytes
+
+@app.errorhandler(413)
+def arquivo_muito_grande(e):
+    flash('O arquivo enviado excede o limite máximo permitido de 2 MB. Por favor, envie um arquivo menor.', 'danger')
+    return redirect(request.referrer or url_for('index'))
 
 # Configurações de Upload
 UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
@@ -183,21 +190,20 @@ def master_required(f):
     return decorated_function
 
 def _obter_logo_reportlab(logo_filename, width=1.5*inch, height=0.6*inch):
-    """Auxiliar unificado para obter imagem para o ReportLab sem travar o PDF."""
+    """Obtém a logo da empresa do disco montado do Render para inserção no PDF."""
     if not logo_filename:
         return None
     try:
-        # Se estiver no Supabase
-        if logo_filename.startswith('emp_') or '/' in logo_filename:
-            stream = obter_arquivo_bytes(logo_filename)
-            if stream:
-                img = RLImage(stream, width=width, height=height)
-                img.hAlign = 'LEFT'
-                return img
-        # Suporte para caminho local
-        caminho_local = os.path.join(app.config['UPLOAD_FOLDER'], logo_filename)
-        if os.path.exists(caminho_local):
-            img = RLImage(caminho_local, width=width, height=height)
+        stream = obter_arquivo_bytes(logo_filename)
+        if stream:
+            img = RLImage(stream, width=width, height=height)
+            img.hAlign = 'LEFT'
+            return img
+
+        # Fallback legado em static/uploads
+        caminho_legado = os.path.join(app.config['UPLOAD_FOLDER'], logo_filename)
+        if os.path.exists(caminho_legado):
+            img = RLImage(caminho_legado, width=width, height=height)
             img.hAlign = 'LEFT'
             return img
     except Exception as e:
@@ -868,17 +874,21 @@ def deletar_documento(doc_id):
 
 @app.route('/uploads/<path:filename>')
 @login_required
-def download_file(filename):
-    """Redireciona diretamente para o link assinado temporário do Supabase Storage."""
-    prefixo_permitido = f"emp_{current_user.empresa_id}/"
-    if not filename.startswith(prefixo_permitido) and getattr(current_user, 'nivel_acesso', '') != 'master':
+def download_arquivo_seguro(filename):
+    """Entrega o arquivo do Disco Persistente do Render com barreira de segurança multi-tenant."""
+    # 1. Barreira multi-tenant: impede acesso a arquivos de outras empresas
+    prefixo_empresa = f"emp_{current_user.empresa_id}/"
+    if not filename.startswith(prefixo_empresa) and getattr(current_user, 'nivel_acesso', '') != 'master':
         abort(403)
 
-    url_temporaria = gerar_url_temporaria(filename, tempo_segundos=900)
-    if not url_temporaria:
-        abort(404)
+    # 2. Constrói o caminho dentro do disco persistente
+    caminho_completo = os.path.join(PASTA_STORAGE_LOCAL, filename)
+    if os.path.exists(caminho_completo):
+        pasta = os.path.dirname(caminho_completo)
+        nome = os.path.basename(caminho_completo)
+        return send_from_directory(pasta, nome)
 
-    return redirect(url_temporaria)
+    abort(404)
 
 
 # =============================================================================

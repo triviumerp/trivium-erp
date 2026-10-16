@@ -1,44 +1,106 @@
 import io
 import os
 import uuid
-import boto3
-from PIL import Image, ImageOps
-from botocore.config import Config
+import shutil
 from werkzeug.utils import secure_filename
+from PIL import Image, ImageOps
 
+try:
+    import pypdf
+except ImportError:
+    pypdf = None
+
+# Extensões seguras permitidas
 EXTENSOES_PERMITIDAS = {'pdf', 'png', 'jpg', 'jpeg', 'webp'}
-MAX_TAMANHO_BYTES = 2 * 1024 * 1024  # 2 MB por arquivo
+MAX_TAMANHO_BYTES = 2 * 1024 * 1024  # Limite estrito de 2 MB por arquivo
 
-def obter_cliente_s3():
-    """Conecta ao Supabase Storage via protocolo S3."""
-    return boto3.client(
-        's3',
-        endpoint_url=os.getenv('SUPABASE_S3_ENDPOINT'),
-        aws_access_key_id=os.getenv('SUPABASE_S3_ACCESS_KEY'),
-        aws_secret_access_key=os.getenv('SUPABASE_S3_SECRET_KEY'),
-        region_name=os.getenv('SUPABASE_S3_REGION', 'sa-east-1'),
-        config=Config(signature_version='s3v4')
-    )
+# Diretório base do Disco Persistente do Render (ou fallback para ambiente local)
+PASTA_STORAGE_LOCAL = os.getenv(
+    'UPLOAD_STORAGE_PATH',
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'uploads')
+)
 
-def otimizar_imagem_se_necessario(file_storage, max_dimensao=1600, qualidade=80):
+os.makedirs(PASTA_STORAGE_LOCAL, exist_ok=True)
+
+
+def _caminho_absoluto(chave_relativa):
+    """Resolve a chave relativa para o caminho real no disco persistente."""
+    if not chave_relativa:
+        return None
+    # Prevenção contra path traversal
+    chave_limpa = chave_relativa.replace('\\', '/').lstrip('/')
+    return os.path.join(PASTA_STORAGE_LOCAL, chave_limpa)
+
+
+def otimizar_pdf(file_storage):
     """
-    Se for imagem (PNG/JPG/WEBP), redimensiona proporcionalmente,
-    corrige a orientação EXIF do celular e comprime em JPEG na memória.
-    Retorna (BytesIO_otimizado, nova_extensao, content_type).
+    Comprime streams internas de PDFs (texto, fontes e vetores) se o pypdf estiver disponível.
+    Retorna (BytesIO, 'pdf', 'application/pdf').
     """
-    ext = file_storage.filename.rsplit('.', 1)[-1].lower()
-    
-    # Se for PDF, mantém original
-    if ext == 'pdf':
-        return file_storage, ext, 'application/pdf'
+    file_storage.seek(0)
+    conteudo = file_storage.read()
+
+    if not pypdf:
+        return io.BytesIO(conteudo), 'pdf', 'application/pdf'
 
     try:
+        leitor = pypdf.PdfReader(io.BytesIO(conteudo))
+        escritor = pypdf.PdfWriter()
+
+        for pagina in leitor.pages:
+            pagina.compress_content_streams()
+            escritor.add_page(pagina)
+
+        if leitor.metadata:
+            escritor.add_metadata(leitor.metadata)
+
+        buffer_saida = io.BytesIO()
+        escritor.write(buffer_saida)
+        buffer_saida.seek(0)
+
+        # Se a compressão reduziu o tamanho, usa a versão otimizada
+        if buffer_saida.getbuffer().nbytes < len(conteudo):
+            return buffer_saida, 'pdf', 'application/pdf'
+    except Exception as e:
+        print(f"[AVISO COMPRESSAO PDF]: {e}. Mantendo arquivo original.")
+
+    return io.BytesIO(conteudo), 'pdf', 'application/pdf'
+
+
+def otimizar_imagem_se_necessario(file_storage, pasta_destino='documentos', max_dimensao=1920, qualidade=82):
+    """
+    Redimensiona proporcionalmente, corrige orientação EXIF e reduz o tamanho:
+    - Se for logotipo ou imagem com transparência (PNG): preserva o canal alpha.
+    - Se for foto geral (câmera, comprovantes, ordens de serviço): converte para JPEG otimizado.
+    """
+    ext = file_storage.filename.rsplit('.', 1)[-1].lower()
+
+    if ext == 'pdf':
+        return otimizar_pdf(file_storage)
+
+    file_storage.seek(0)
+    try:
         img = Image.open(file_storage)
-        # Corrige rotação automática de foto tirada no celular (dados EXIF)
         img = ImageOps.exif_transpose(img)
-        
-        # Converte modos com transparência para RGB com fundo branco
-        if img.mode in ('RGBA', 'P'):
+
+        # 1. Tratamento para logotipos ou imagens com canal de transparência
+        if pasta_destino == 'logos' or ext == 'png':
+            max_dim = min(max_dimensao, 1000)
+            img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+            buffer_saida = io.BytesIO()
+
+            if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                img.save(buffer_saida, format='PNG', optimize=True)
+                buffer_saida.seek(0)
+                return buffer_saida, 'png', 'image/png'
+            else:
+                img = img.convert('RGB')
+                img.save(buffer_saida, format='JPEG', optimize=True, quality=qualidade)
+                buffer_saida.seek(0)
+                return buffer_saida, 'jpg', 'image/jpeg'
+
+        # 2. Tratamento para fotos gerais de operação, comprovantes e notas
+        if img.mode in ('RGBA', 'P', 'LA'):
             fundo_branco = Image.new('RGB', img.size, (255, 255, 255))
             if img.mode == 'RGBA':
                 fundo_branco.paste(img, mask=img.split()[3])
@@ -48,24 +110,22 @@ def otimizar_imagem_se_necessario(file_storage, max_dimensao=1600, qualidade=80)
         elif img.mode != 'RGB':
             img = img.convert('RGB')
 
-        # Redimensiona mantendo a proporção caso exceda max_dimensao
         img.thumbnail((max_dimensao, max_dimensao), Image.Resampling.LANCZOS)
-
         buffer_saida = io.BytesIO()
         img.save(buffer_saida, format='JPEG', optimize=True, quality=qualidade)
         buffer_saida.seek(0)
-        
+
         return buffer_saida, 'jpg', 'image/jpeg'
     except Exception as e:
-        print(f"[AVISO COMPRESSAO IMAGEM]: {e}. Mantendo arquivo original.")
+        print(f"[AVISO COMPRESSAO IMAGEM]: {e}. Usando original.")
         file_storage.seek(0)
-        return file_storage, ext, file_storage.content_type
+        return io.BytesIO(file_storage.read()), ext, getattr(file_storage, 'content_type', 'application/octet-stream')
+
 
 def salvar_arquivo_supabase(file_storage, pasta_destino, empresa_id):
     """
-    Valida extensão, comprime fotos automaticamente via Pillow,
-    valida o tamanho final (máx 2MB), renomeia com UUID e faz upload.
-    Retorna a chave única: emp_<id>/<pasta>/<uuid>.<ext>
+    Substitui a dependência do Supabase: grava de forma nativa e segura
+    no Disco Persistente do Render com isolamento multi-tenant (emp_<id>/<pasta>/<uuid>.<ext>).
     """
     if not file_storage or not getattr(file_storage, 'filename', None):
         return None
@@ -78,90 +138,82 @@ def salvar_arquivo_supabase(file_storage, pasta_destino, empresa_id):
     if extensao not in EXTENSOES_PERMITIDAS:
         raise ValueError(f"Extensão '.{extensao}' não é permitida por motivos de segurança.")
 
-    # 1. Compressão e Otimização Automática
-    arquivo_processado, nova_ext, content_type = otimizar_imagem_se_necessario(file_storage)
+    # 1. Compressão inteligente
+    arquivo_processado, nova_ext, _ = otimizar_imagem_se_necessario(
+        file_storage, pasta_destino=pasta_destino
+    )
 
-    # 2. Validação rigorosa do tamanho pós-compressão (Máx 2 MB)
+    # 2. Validação rigorosa do tamanho final (Teto de 2 MB)
     arquivo_processado.seek(0, os.SEEK_END)
     tamanho = arquivo_processado.tell()
     arquivo_processado.seek(0)
 
     if tamanho > MAX_TAMANHO_BYTES:
-        raise ValueError("O arquivo excede o limite máximo permitido de 2 MB mesmo após otimização.")
+        tamanho_mb = round(tamanho / (1024 * 1024), 2)
+        raise ValueError(f"O arquivo ({tamanho_mb} MB) excede o limite máximo permitido de 2 MB mesmo após otimização.")
 
-    chave_bucket = f"emp_{empresa_id}/{pasta_destino}/{uuid.uuid4().hex}.{nova_ext}"
-    bucket = os.getenv('SUPABASE_BUCKET_NAME', 'trivium-documentos')
-    
-    s3 = obter_cliente_s3()
-    s3.upload_fileobj(
-        arquivo_processado,
-        bucket,
-        chave_bucket,
-        ExtraArgs={
-            'ContentType': content_type
-        }
-    )
-    return chave_bucket
+    # 3. Criação do caminho isolado da empresa no disco persistente
+    nome_uuid = f"{uuid.uuid4().hex}.{nova_ext}"
+    chave_relativa = f"emp_{empresa_id}/{pasta_destino}/{nome_uuid}"
+
+    diretorio_destino = os.path.join(PASTA_STORAGE_LOCAL, f"emp_{empresa_id}", pasta_destino)
+    os.makedirs(diretorio_destino, exist_ok=True)
+
+    caminho_final = os.path.join(diretorio_destino, nome_uuid)
+    with open(caminho_final, 'wb') as f_out:
+        f_out.write(arquivo_processado.read())
+
+    return chave_relativa
+
 
 def excluir_arquivo_supabase(chave_bucket):
-    """Remove o arquivo do bucket S3."""
+    """Remove o arquivo do disco persistente."""
     if not chave_bucket:
         return False
-    try:
-        bucket = os.getenv('SUPABASE_BUCKET_NAME', 'trivium-documentos')
-        s3 = obter_cliente_s3()
-        s3.delete_object(Bucket=bucket, Key=chave_bucket)
-        return True
-    except Exception as e:
-        print(f"[ERRO AO EXCLUIR ARQUIVO S3]: {e}")
-        return False
+    caminho = _caminho_absoluto(chave_bucket)
+    if caminho and os.path.exists(caminho):
+        try:
+            os.remove(caminho)
+            return True
+        except Exception as e:
+            print(f"[ERRO AO EXCLUIR ARQUIVO DO DISCO]: {e}")
+    return False
+
 
 def gerar_url_temporaria(chave_bucket, tempo_segundos=900):
-    """Gera link pré-assinado com validade de 15 minutos (900s)."""
+    """
+    Substitui a URL pré-assinada do S3.
+    Retorna a rota interna segura do próprio ERP para entrega do arquivo.
+    """
     if not chave_bucket:
         return None
+    return f"/uploads/{chave_bucket}"
 
-    bucket = os.getenv('SUPABASE_BUCKET_NAME', 'trivium-documentos')
-    s3 = obter_cliente_s3()
-
-    return s3.generate_presigned_url(
-        'get_object',
-        Params={'Bucket': bucket, 'Key': chave_bucket},
-        ExpiresIn=tempo_segundos
-    )
 
 def obter_arquivo_bytes(chave_bucket):
     """
-    Baixa os bytes do arquivo em memória (BytesIO).
-    Ideal para alimentar o ReportLab (geração de PDF de logo) sem gravar no disco.
+    Lê os bytes do arquivo direto do disco montado do Render.
+    Alimenta o ReportLab (geração de PDFs) ou pacotes ZIP instantaneamente sem requisição de rede.
     """
     if not chave_bucket:
         return None
-    try:
-        bucket = os.getenv('SUPABASE_BUCKET_NAME', 'trivium-documentos')
-        s3 = obter_cliente_s3()
-        resposta = s3.get_object(Bucket=bucket, Key=chave_bucket)
-        return io.BytesIO(resposta['Body'].read())
-    except Exception as e:
-        print(f"[ERRO AO BAIXAR BYTES S3]: {e}")
-        return None
+    caminho = _caminho_absoluto(chave_bucket)
+    if caminho and os.path.exists(caminho):
+        try:
+            with open(caminho, 'rb') as f_in:
+                return io.BytesIO(f_in.read())
+        except Exception as e:
+            print(f"[ERRO AO LER BYTES DO ARQUIVO]: {e}")
+    return None
+
 
 def excluir_pasta_empresa_supabase(empresa_id):
-    """
-    Remove todos os arquivos e anexos pertencentes à empresa no bucket Supabase.
-    Identifica todos os objetos com o prefixo emp_<empresa_id>/
-    """
-    try:
-        bucket = os.getenv('SUPABASE_BUCKET_NAME', 'trivium-documentos')
-        s3 = obter_cliente_s3()
-        prefixo = f"emp_{empresa_id}/"
-
-        paginator = s3.get_paginator('list_objects_v2')
-        for page in paginator.paginate(Bucket=bucket, Prefix=prefixo):
-            if 'Contents' in page:
-                objetos = [{'Key': obj['Key']} for obj in page['Contents']]
-                s3.delete_objects(Bucket=bucket, Delete={'Objects': objetos})
-        return True
-    except Exception as e:
-        print(f"[ERRO AO LIMPAR ARQUIVOS DA EMPRESA NO S3]: {e}")
-        return False
+    """Remove todos os dados e pastas da empresa no disco persistente."""
+    caminho_empresa = os.path.join(PASTA_STORAGE_LOCAL, f"emp_{empresa_id}")
+    if os.path.exists(caminho_empresa):
+        try:
+            shutil.rmtree(caminho_empresa)
+            return True
+        except Exception as e:
+            print(f"[ERRO AO EXCLUIR DIRETORIO DA EMPRESA]: {e}")
+    return False
