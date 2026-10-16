@@ -8,10 +8,11 @@ import csv
 import zipfile
 import pandas as pd
 from functools import wraps
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time as dt_time
 from dateutil.relativedelta import relativedelta
 from io import BytesIO, StringIO
 from collections import defaultdict
+
 
 
 # Carrega variáveis de ambiente (.env)
@@ -2511,7 +2512,7 @@ def gestao_operadores():
         })
         
     # Ordena a escala unificada por data e hora de início
-    itens_escala.sort(key=lambda x: (x['data'] or date.min, x['hora_inicio'] or time.min))
+    itens_escala.sort(key=lambda x: (x['data'] or date.min, x['hora_inicio'] or dt_time.min))
 
     return render_template(
         'operadores.html',
