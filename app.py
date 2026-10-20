@@ -1193,8 +1193,18 @@ def criar_proposta():
         
         total_existentes = Proposta.query.filter_by(empresa_id=current_user.empresa_id).count() + 1
         numero_proposta = f"PROP-{date.today().year}-{total_existentes:03d}"
-        tipo_destino = request.form.get('tipo_destino', 'operacional')
+        if current_user.empresa.modulo_atendimentos and not current_user.empresa.modulo_servicos_campo:
+            tipo_destino = 'atendimento'
+        elif current_user.empresa.modulo_servicos_campo and not current_user.empresa.modulo_atendimentos:
+            tipo_destino = 'operacional'
+        else:
+            tipo_destino = request.form.get('tipo_destino', 'operacional')
 
+        # 1. Lê os campos de desconto do formulário PRIMEIRO:
+        aplicar_desc = request.form.get('aplicar_desconto') in ['1', 'true', 'on']
+        perc_desc = float(request.form.get('percentual_desconto') or 0.0) if aplicar_desc else 0.0
+
+        # 2. Cria a instância de Proposta já com os dados de desconto:
         nova_prop = Proposta(
             empresa_id=current_user.empresa_id,
             numero_proposta=numero_proposta,
@@ -1212,11 +1222,14 @@ def criar_proposta():
             forma_pagamento_entrada=forma_pagamento_entrada,
             qtd_parcelas=qtd_parcelas,
             forma_pagamento_parcelas=forma_pagamento_parcelas,
-            intervalo_dias=intervalo_dias
+            intervalo_dias=intervalo_dias,
+            aplicar_desconto=aplicar_desc,
+            percentual_desconto=perc_desc
         )
         db.session.add(nova_prop)
         db.session.flush()
 
+        # 3. Processamento dos itens da proposta...
         servicos_ids = request.form.getlist('tipo_servico_id[]')
         valores = request.form.getlist('valor_unitario[]')
         quantidades = request.form.getlist('quantidade[]')
@@ -1259,6 +1272,12 @@ def criar_proposta():
 
         db.session.commit()
         flash(f'Proposta {nova_prop.numero_proposta} gerada com sucesso!', 'success')
+        return redirect(url_for('listar_propostas'))
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"\n[ERRO CRÍTICO AO GERAR PROPOSTA]: {e}\n")
+        flash(f'Erro ao salvar proposta: {str(e)}', 'danger')
         return redirect(url_for('listar_propostas'))
 
     except Exception as e:
@@ -1453,9 +1472,18 @@ def editar_proposta(id):
         proposta.forma_pagamento_parcelas = request.form.get('forma_pagamento_parcelas', 'Boleto Bancário')
         proposta.intervalo_dias = int(request.form.get('intervalo_dias') or 30)
 
+        # --- CAPTURA DO DESCONTO COMERCIAL (CORREÇÃO AQUI) ---
+        aplicar_desc = request.form.get('aplicar_desconto') in ['1', 'true', 'on']
+        perc_desc = float(request.form.get('percentual_desconto') or 0.0) if aplicar_desc else 0.0
+
+        proposta.aplicar_desconto = aplicar_desc
+        proposta.percentual_desconto = perc_desc
+        # -----------------------------------------------------
+
         # Remove itens anteriores e recadastra atualizados
         ItemProposta.query.filter_by(proposta_id=proposta.id).delete()
         
+               
         servicos_ids = request.form.getlist('tipo_servico_id[]')
         valores = request.form.getlist('valor_unitario[]')
         quantidades = request.form.getlist('quantidade[]')
@@ -1875,49 +1903,255 @@ def consultar_servicos():
 @app.route('/atendimentos')
 @login_required
 def listar_atendimentos():
+    empresa_id = current_user.empresa_id
     busca = request.args.get('busca', '').strip()
     filtro_status = request.args.get('status', 'todos')
-    hoje = date.today()
+    data_agenda_str = request.args.get('data_agenda', date.today().strftime('%Y-%m-%d'))
+    prof_id_filtro = request.args.get('profissional_id')
+
+    try:
+        data_agenda = datetime.strptime(data_agenda_str, '%Y-%m-%d').date()
+    except Exception:
+        data_agenda = date.today()
 
     query = ServicoCliente.query.filter_by(
-        empresa_id=current_user.empresa_id,
+        empresa_id=empresa_id,
         tipo_ficha='atendimento'
     )
 
     if busca:
-        doc_busca = re.sub(r'\D', '', busca)
         query = query.join(Cliente).filter(
-            (Cliente.nome.ilike(f'%{busca}%')) |
-            (Cliente.cnpj_cpf.ilike(f'%{busca}%')) |
-            (Cliente.cnpj_cpf.ilike(f'%{doc_busca}%'))
+            db.or_(
+                Cliente.nome.ilike(f'%{busca}%'),
+                Cliente.cnpj_cpf.ilike(f'%{busca}%')
+            )
         )
 
     if filtro_status == 'em_curso':
-        query = query.filter(ServicoCliente.status.in_(['Em Andamento', 'Pendente']))
+        query = query.filter(ServicoCliente.status.in_(['Pendente', 'Em Andamento']))
     elif filtro_status == 'concluidos':
         query = query.filter_by(status='Concluido')
 
-    atendimentos = query.order_by(ServicoCliente.data_previsao.desc().nullslast(), ServicoCliente.id.desc()).all()
+    atendimentos = query.order_by(
+        ServicoCliente.data_previsao.desc(),
+        ServicoCliente.hora_inicio_agendada.asc()
+    ).all()
 
-    total_atendimentos = query.count()
-    total_concluidos = ServicoCliente.query.filter_by(empresa_id=current_user.empresa_id, tipo_ficha='atendimento', status='Concluido').count()
-    total_pendentes = ServicoCliente.query.filter_by(empresa_id=current_user.empresa_id, tipo_ficha='atendimento').filter(ServicoCliente.status != 'Concluido').count()
+    # Métricas de resumo
+    total_atendimentos = ServicoCliente.query.filter_by(empresa_id=empresa_id, tipo_ficha='atendimento').count()
+    total_pendentes = ServicoCliente.query.filter(
+        ServicoCliente.empresa_id == empresa_id,
+        ServicoCliente.tipo_ficha == 'atendimento',
+        ServicoCliente.status.in_(['Pendente', 'Em Andamento'])
+    ).count()
+    total_concluidos = ServicoCliente.query.filter_by(
+        empresa_id=empresa_id,
+        tipo_ficha='atendimento',
+        status='Concluido'
+    ).count()
 
-    catalogo = TipoServico.query.filter_by(empresa_id=current_user.empresa_id).all()
-    clientes = Cliente.query.filter_by(empresa_id=current_user.empresa_id).order_by(Cliente.nome).all()
+    # Profissionais para o filtro e grade da agenda
+    profissionais = OperadorCampo.query.filter_by(
+        empresa_id=empresa_id,
+        ativo=True,
+        tipo_operador='tecnico'
+    ).order_by(OperadorCampo.nome.asc()).all()
+
+    # Atendimentos do dia específico para a vista em grelha
+    query_dia = ServicoCliente.query.filter(
+        ServicoCliente.empresa_id == empresa_id,
+        ServicoCliente.tipo_ficha == 'atendimento',
+        ServicoCliente.data_previsao == data_agenda,
+        ServicoCliente.status != 'Cancelado'
+    )
+    if prof_id_filtro and prof_id_filtro.isdigit():
+        query_dia = query_dia.filter_by(operador_id=int(prof_id_filtro))
+
+    atendimentos_do_dia = query_dia.order_by(ServicoCliente.hora_inicio_agendada.asc()).all()
 
     return render_template(
         'atendimentos.html',
         atendimentos=atendimentos,
-        busca=busca,
-        filtro_status=filtro_status,
+        atendimentos_do_dia=atendimentos_do_dia,
+        profissionais=profissionais,
+        data_agenda=data_agenda,
+        prof_id_filtro=int(prof_id_filtro) if prof_id_filtro and prof_id_filtro.isdigit() else None,
         total_atendimentos=total_atendimentos,
-        total_concluidos=total_concluidos,
         total_pendentes=total_pendentes,
-        catalogo=catalogo,
-        clientes=clientes,
-        hoje=hoje
+        total_concluidos=total_concluidos,
+        busca=busca,
+        filtro_status=filtro_status
     )
+
+# app.py -> Módulo Clínico / Agendamentos
+
+@app.route('/atendimentos/novo', methods=['GET', 'POST'])
+@login_required
+def novo_agendamento_clinico():
+    empresa_id = current_user.empresa_id
+
+    if request.method == 'POST':
+        try:
+            paciente_id = int(request.form.get('cliente_id'))
+            tipo_servico_id = int(request.form.get('tipo_servico_id'))
+            operador_id = request.form.get('operador_id')
+            data_agendada_str = request.form.get('data_previsao')
+            hora_inicio_str = request.form.get('hora_inicio_agendada')
+            observacoes = request.form.get('observacoes', '').strip()
+
+            if not data_agendada_str or not hora_inicio_str:
+                flash('Por favor, selecione a data e o horário do atendimento.', 'warning')
+                return redirect(url_for('novo_agendamento_clinico'))
+
+            dt_agendada = datetime.strptime(data_agendada_str, '%Y-%m-%d').date()
+            h_inicio = datetime.strptime(hora_inicio_str, '%H:%M').time()
+
+            # Recupera o profissional para calcular a hora final exata
+            prof = OperadorCampo.query.get(int(operador_id)) if operador_id and operador_id.isdigit() else None
+            duracao = prof.duracao_padrao_minutos if prof and prof.duracao_padrao_minutos else 45
+
+            dt_inicio_completo = datetime.combine(dt_agendada, h_inicio)
+            dt_fim_completo = dt_inicio_completo + timedelta(minutes=duracao)
+            h_fim = dt_fim_completo.time()
+
+            # Validação anti-conflito no mesmo dia e profissional
+            if prof:
+                conflito = ServicoCliente.query.filter_by(
+                    empresa_id=empresa_id,
+                    operador_id=prof.id,
+                    data_previsao=dt_agendada
+                ).filter(
+                    ServicoCliente.status != 'Cancelado',
+                    ServicoCliente.hora_inicio_agendada < h_fim,
+                    ServicoCliente.hora_fim_agendada > h_inicio
+                ).first()
+
+                if conflito:
+                    flash(f'O horário das {hora_inicio_str} coincide com outra marcação do profissional {prof.nome}. Escolha outro intervalo.', 'danger')
+                    return redirect(url_for('novo_agendamento_clinico'))
+
+            servico_tipo = TipoServico.query.get(tipo_servico_id)
+
+            novo_atendimento = ServicoCliente(
+                empresa_id=empresa_id,
+                cliente_id=paciente_id,
+                tipo_servico_id=tipo_servico_id,
+                operador_id=prof.id if prof else None,
+                responsavel_tecnico=prof.nome if prof else None,
+                documento_responsavel=prof.documento_registro if prof else None,
+                valor_cobrado=float(servico_tipo.valor_sugerido if servico_tipo else 0.0),
+                status='Em Andamento',
+                data_solicitacao=date.today(),
+                data_previsao=dt_agendada,
+                hora_inicio_agendada=h_inicio,
+                hora_fim_agendada=h_fim,
+                titulo_documento_custom='Ficha de Atendimento Clínico',
+                tipo_ficha='atendimento',
+                observacoes=observacoes or 'Agendamento registrado na recepção clínica.'
+            )
+            novo_atendimento.gerar_token_se_necessario()
+            db.session.add(novo_atendimento)
+            db.session.commit()
+
+            flash(f'Consulta agendada com sucesso para o paciente {novo_atendimento.cliente.nome}!', 'success')
+            return redirect(url_for('listar_atendimentos'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao agendar consulta: {str(e)}', 'danger')
+            return redirect(url_for('novo_agendamento_clinico'))
+
+    pacientes = Cliente.query.filter_by(empresa_id=empresa_id).order_by(Cliente.nome.asc()).all()
+    profissionais = OperadorCampo.query.filter_by(empresa_id=empresa_id, ativo=True, tipo_operador='tecnico').order_by(OperadorCampo.nome.asc()).all()
+    servicos_clinicos = TipoServico.query.filter_by(empresa_id=empresa_id).order_by(TipoServico.nome.asc()).all()
+
+    return render_template(
+        'novo_agendamento.html',
+        pacientes=pacientes,
+        profissionais=profissionais,
+        servicos_clinicos=servicos_clinicos,
+        hoje=date.today()
+    )
+
+
+@app.route('/api/clinica/horarios-disponiveis', methods=['POST'])
+@login_required
+def api_horarios_disponiveis_clinica():
+    """Gera a grade de intervalos livres de um profissional sem choques de horário."""
+    dados = request.get_json(silent=True) or {}
+    operador_id = dados.get('operador_id')
+    data_str = dados.get('data')
+
+    if not operador_id or not data_str:
+        return jsonify({'horarios': [], 'mensagem': 'Profissional e data são obrigatórios.'}), 400
+
+    prof = OperadorCampo.query.filter_by(id=int(operador_id), empresa_id=current_user.empresa_id).first()
+    if not prof:
+        return jsonify({'horarios': [], 'mensagem': 'Profissional não localizado.'}), 404
+
+    dt_consulta = datetime.strptime(data_str, '%Y-%m-%d').date()
+    duracao_min = prof.duracao_padrao_minutos or 45
+
+    # Horários de expediente
+    h_ini_exp = prof.hora_inicio_trabalho or dt_time(8, 0)
+    h_fim_exp = prof.hora_fim_trabalho or dt_time(18, 0)
+    h_ini_alm = prof.hora_inicio_almoco or dt_time(12, 0)
+    h_fim_alm = prof.hora_fim_almoco or dt_time(13, 0)
+
+    # Marcações já existentes no dia
+    agendamentos = ServicoCliente.query.filter_by(
+        empresa_id=current_user.empresa_id,
+        operador_id=prof.id,
+        data_previsao=dt_consulta
+    ).filter(
+        ServicoCliente.status != 'Cancelado',
+        ServicoCliente.hora_inicio_agendada.isnot(None)
+    ).all()
+
+    horarios_ocupados = []
+    for ag in agendamentos:
+        horarios_ocupados.append({
+            'inicio': ag.hora_inicio_agendada,
+            'fim': ag.hora_fim_agendada or (datetime.combine(dt_consulta, ag.hora_inicio_agendada) + timedelta(minutes=duracao_min)).time()
+        })
+
+    # Gera os blocos do dia
+    cursor_dt = datetime.combine(dt_consulta, h_ini_exp)
+    limite_dt = datetime.combine(dt_consulta, h_fim_exp)
+    slots = []
+
+    while cursor_dt + timedelta(minutes=duracao_min) <= limite_dt:
+        slot_ini = cursor_dt.time()
+        slot_fim = (cursor_dt + timedelta(minutes=duracao_min)).time()
+
+        # Verifica almoço
+        no_almoco = False
+        if h_ini_alm and h_fim_alm:
+            if not (slot_fim <= h_ini_alm or slot_ini >= h_fim_alm):
+                no_almoco = True
+
+        # Verifica choque com agendamentos anteriores
+        ocupado = False
+        for oc in horarios_ocupados:
+            if not (slot_fim <= oc['inicio'] or slot_ini >= oc['fim']):
+                ocupado = True
+                break
+
+        slots.append({
+            'inicio': slot_ini.strftime('%H:%M'),
+            'fim': slot_fim.strftime('%H:%M'),
+            'disponivel': (not no_almoco) and (not ocupado),
+            'motivo': 'Almoço' if no_almoco else ('Ocupado' if ocupado else 'Livre')
+        })
+
+        cursor_dt += timedelta(minutes=duracao_min)
+
+    return jsonify({
+        'profissional': prof.nome,
+        'duracao': duracao_min,
+        'data': data_str,
+        'slots': slots
+    })
 
 @app.route('/catalogo', methods=['GET'])
 @login_required
@@ -2311,6 +2545,8 @@ def visualizar_ficha_servico(id):
     servico = ServicoCliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     return render_template('detalhe_servico.html', servico=servico, hoje=date.today())
 
+# app.py -> dentro de salvar_evolucao_atendimento(id)
+
 @app.route('/servicos/atendimento/<int:id>/salvar', methods=['POST'])
 @login_required
 def salvar_evolucao_atendimento(id):
@@ -2319,10 +2555,11 @@ def salvar_evolucao_atendimento(id):
         servico.responsavel_tecnico = request.form.get('responsavel_tecnico', '').strip()
         servico.documento_responsavel = request.form.get('documento_responsavel', '').strip()
         
-        servico.observacoes = request.form.get('motivo_queixa', '').strip() # Queixa principal
-        servico.anamnese_historico = request.form.get('anamnese_historico', '').strip() # Relato da sessão
-        servico.conclusao_parecer = request.form.get('conclusao_parecer', '').strip() # Parecer / Diagnóstico
-        servico.orientacoes_cliente = request.form.get('orientacoes_cliente', '').strip() # Conduta / Plano de ação
+        # Sincronização dos campos clínicos
+        servico.observacoes = request.form.get('motivo_queixa', request.form.get('observacoes', '')).strip()
+        servico.anamnese_historico = request.form.get('anamnese_historico', '').strip()
+        servico.conclusao_parecer = request.form.get('conclusao_parecer', '').strip()
+        servico.orientacoes_cliente = request.form.get('orientacoes_cliente', '').strip()
         
         num_sessao = request.form.get('numero_sessao')
         if num_sessao and num_sessao.isdigit():
@@ -2337,7 +2574,7 @@ def salvar_evolucao_atendimento(id):
         if novo_status == 'Concluido' and not servico.data_fim_execucao:
             servico.data_fim_execucao = datetime.now()
 
-        # Upload de exames, bioimpedância ou avaliações em anexo
+        # Upload de exames e anexos
         anexos = request.files.getlist('anexos_atendimento[]')
         for arq in anexos:
             if arq and arq.filename:
@@ -2355,7 +2592,8 @@ def salvar_evolucao_atendimento(id):
         db.session.rollback()
         flash(f'Erro ao salvar evolução: {str(e)}', 'danger')
 
-    return redirect(url_for('consultar_servicos', tipo='atendimentos'))
+    # CORREÇÃO AQUI: Retorna diretamente para a tela de Atendimentos Clínicos!
+    return redirect(url_for('listar_atendimentos'))
 
 # -----------------------------------------------------------------------------
 # 6.1. NOVA ATIVIDADE / OS AVULSA INDEPENDENTE (SEM PROPOSTA)
@@ -2438,19 +2676,28 @@ def criar_servico_avulso():
 # -----------------------------------------------------------------------------
 # 6.2. MÓDULO DE GESTÃO DE OPERADORES & TÉCNICOS DE CAMPO
 # -----------------------------------------------------------------------------
+# app.py -> substitua a rota gestao_operadores e adicione editar_operador_campo
+
 @app.route('/operadores', methods=['GET', 'POST'])
 @login_required
 def gestao_operadores():
     if request.method == 'POST':
         nome = request.form.get('nome', '').strip()
-        cargo = request.form.get('cargo', 'Técnico de Campo').strip()
+        cargo = request.form.get('cargo', 'Profissional / Atendente').strip()
         telefone = re.sub(r'\D', '', request.form.get('telefone', ''))
         doc_registro = request.form.get('documento_registro', '').strip()
         email = request.form.get('email', '').strip().lower()
         cli_alocado_id = request.form.get('cliente_id')
 
+        # Novos campos de Agenda e Duração
+        duracao = int(request.form.get('duracao_padrao_minutos') or 45)
+        h_ini = request.form.get('hora_inicio_trabalho')
+        h_fim = request.form.get('hora_fim_trabalho')
+        h_alm_ini = request.form.get('hora_inicio_almoco')
+        h_alm_fim = request.form.get('hora_fim_almoco')
+
         if not nome or not telefone:
-            flash('Nome e WhatsApp do operador são obrigatórios.', 'warning')
+            flash('Nome e WhatsApp são obrigatórios.', 'warning')
             return redirect(url_for('gestao_operadores'))
 
         novo_op = OperadorCampo(
@@ -2460,23 +2707,25 @@ def gestao_operadores():
             cargo=cargo,
             telefone=telefone,
             documento_registro=doc_registro,
-            email=email or None
+            email=email or None,
+            duracao_padrao_minutos=duracao,
+            hora_inicio_trabalho=datetime.strptime(h_ini, '%H:%M').time() if h_ini else dt_time(8, 0),
+            hora_fim_trabalho=datetime.strptime(h_fim, '%H:%M').time() if h_fim else dt_time(18, 0),
+            hora_inicio_almoco=datetime.strptime(h_alm_ini, '%H:%M').time() if h_alm_ini else dt_time(12, 0),
+            hora_fim_almoco=datetime.strptime(h_alm_fim, '%H:%M').time() if h_alm_fim else dt_time(13, 0)
         )
+        novo_op.gerar_token_se_necessario()
         db.session.add(novo_op)
         db.session.commit()
-        flash(f'Operador "{nome}" cadastrado com sucesso!', 'success')
+        flash(f'Profissional "{nome}" cadastrado com sucesso!', 'success')
         return redirect(url_for('gestao_operadores'))
 
-    operadores = OperadorCampo.query.filter_by(empresa_id=current_user.empresa_id).order_by(OperadorCampo.nome.asc()).all()
+    operadores = OperadorCampo.query.filter_by(empresa_id=current_user.empresa_id, tipo_operador='tecnico').order_by(OperadorCampo.nome.asc()).all()
     clientes = Cliente.query.filter_by(empresa_id=current_user.empresa_id).order_by(Cliente.nome.asc()).all()
     
-    # -------------------------------------------------------------------------
-    # CONSOLIDAÇÃO DA ESCALA: ORDENS GERAIS + FASES ESPECÍFICAS DO GANTT
-    # -------------------------------------------------------------------------
+    # Lista consolidada de agendamentos
     hoje = date.today()
     itens_escala = []
-
-    # 1. OS Gerais com Operador Vinculado
     ordens_gerais = ServicoCliente.query.filter(
         ServicoCliente.empresa_id == current_user.empresa_id,
         ServicoCliente.operador_id.isnot(None)
@@ -2493,53 +2742,53 @@ def gestao_operadores():
             'operador_telefone': os_item.operador_responsavel.telefone if os_item.operador_responsavel else '',
             'cliente_nome': os_item.cliente.nome,
             'endereco': os_item.endereco_exibicao,
-            'servico_nome': os_item.tipo_servico.nome if os_item.tipo_servico else 'Serviço Técnico',
-            'descricao_atividade': os_item.titulo_documento_custom or 'Execução Geral da OS',
+            'servico_nome': os_item.tipo_servico.nome if os_item.tipo_servico else 'Consulta / Sessão',
+            'descricao_atividade': os_item.titulo_documento_custom or 'Atendimento Agendado',
             'is_etapa': False,
             'token_externo': os_item.token_externo,
             'status': os_item.status
         })
 
-    # 2. Etapas / Fases do Cronograma (Gantt) com Operador Designado
-    etapas_gantt = ServicoEtapaRastreio.query.join(ServicoCliente).filter(
-        ServicoCliente.empresa_id == current_user.empresa_id,
-        ServicoEtapaRastreio.operador_id.isnot(None)
-    ).all()
-
-    for et in etapas_gantt:
-        os_pai = et.servico
-        token_link = et.gerar_token_se_necessario()
-        db.session.commit()
-        
-        # APPEND DA FASE DO GANTT NA ESCALA (O QUE ESTAVA FALTANDO)
-        itens_escala.append({
-            'servico_id': os_pai.id,
-            'etapa_id': et.id,
-            'numero_os': os_pai.numero_sequencial_empresa,
-            'data': et.data_inicio or os_pai.data_previsao,
-            'hora_inicio': et.hora_inicio,
-            'hora_fim': et.hora_fim,
-            'operador_nome': et.operador.nome if et.operador else '--',
-            'operador_telefone': et.operador.telefone if et.operador else '',
-            'cliente_nome': os_pai.cliente.nome,
-            'endereco': os_pai.endereco_exibicao,
-            'servico_nome': os_pai.tipo_servico.nome if os_pai.tipo_servico else 'Serviço Técnico',
-            'descricao_atividade': f"Fase #{et.ordem}: {et.titulo_fase}",
-            'is_etapa': True,
-            'token_externo': et.token_externo,
-            'status': 'Concluido' if et.status_fase == 'concluido' else ('Em Andamento' if et.status_fase == 'em_andamento' else 'Pendente')
-        })
-        
-    # Ordena a escala unificada por data e hora de início
     itens_escala.sort(key=lambda x: (x['data'] or date.min, x['hora_inicio'] or dt_time.min))
 
     return render_template(
         'operadores.html',
         operadores=operadores,
         clientes=clientes,
-        ordens_agendadas=itens_escala,  # Passa a lista consolidada
+        ordens_agendadas=itens_escala,
         hoje=hoje
     )
+
+
+@app.route('/operadores/<int:id>/editar', methods=['POST'])
+@login_required
+def editar_operador_campo(id):
+    op = OperadorCampo.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    
+    op.nome = request.form.get('nome', op.nome).strip()
+    op.cargo = request.form.get('cargo', op.cargo).strip()
+    op.telefone = re.sub(r'\D', '', request.form.get('telefone', op.telefone))
+    op.documento_registro = request.form.get('documento_registro', '').strip() or None
+    op.email = request.form.get('email', '').strip().lower() or None
+    
+    # Atualização de horários e duração de consulta
+    duracao = request.form.get('duracao_padrao_minutos')
+    if duracao and duracao.isdigit():
+        op.duracao_padrao_minutos = int(duracao)
+
+    h_ini = request.form.get('hora_inicio_trabalho')
+    h_fim = request.form.get('hora_fim_trabalho')
+    h_alm_ini = request.form.get('hora_inicio_almoco')
+    h_alm_fim = request.form.get('hora_fim_almoco')
+
+    if h_ini: op.hora_inicio_trabalho = datetime.strptime(h_ini, '%H:%M').time()
+    if h_fim: op.hora_fim_trabalho = datetime.strptime(h_fim, '%H:%M').time()
+    if h_alm_ini: op.hora_inicio_almoco = datetime.strptime(h_alm_ini, '%H:%M').time()
+    if h_alm_fim: op.hora_fim_almoco = datetime.strptime(h_alm_fim, '%H:%M').time()
+
+    db.session.commit()
+    flash(f'Dados do profissional "{op.nome}" atualizados com sucesso!', 'success')
+    return redirect(url_for('gestao_operadores'))
 
 @app.route('/operadores/<int:id>/status', methods=['POST'])
 @login_required
@@ -4546,11 +4795,30 @@ def listar_vendas():
 def criar_venda_produto():
     try:
         cliente_id = request.form.get('cliente_id')
-        cli_obj = Cliente.query.get(int(cliente_id)) if cliente_id and cliente_id.isdigit() else None
+        cli_obj = None
+        if cliente_id and cliente_id.isdigit():
+            cli_obj = Cliente.query.filter_by(id=int(cliente_id), empresa_id=current_user.empresa_id).first()
         
-        nome_comprador = cli_obj.nome if cli_obj else request.form.get('nome_solicitante', 'Venda Balcão').strip()
-        contato = cli_obj.telefone if cli_obj else request.form.get('contato_solicitante', '').strip()
-        endereco_entrega = request.form.get('endereco_entrega', '').strip()
+        # Garante que se for venda balcão avulsa, cria/vincula um cliente para não violar not-null em faturas
+        if not cli_obj:
+            nome_digitado = request.form.get('nome_solicitante', '').strip() or 'Consumidor Final (Balcão)'
+            contato_digitado = request.form.get('contato_solicitante', '').strip() or '(00) 00000-0000'
+            
+            cli_obj = Cliente.query.filter_by(empresa_id=current_user.empresa_id, nome=nome_digitado).first()
+            if not cli_obj:
+                cli_obj = Cliente(
+                    empresa_id=current_user.empresa_id,
+                    nome=nome_digitado,
+                    cnpj_cpf='000.000.000-00',
+                    telefone=contato_digitado,
+                    observacoes='Cliente cadastrado automaticamente via Venda Balcão.'
+                )
+                db.session.add(cli_obj)
+                db.session.flush()
+
+        nome_comprador = cli_obj.nome
+        contato = cli_obj.telefone or request.form.get('contato_solicitante', '').strip()
+        endereco_entrega = request.form.get('endereco_entrega', '').strip() or 'Retirada no Balcão'
         obs = request.form.get('observacoes', '').strip()
         
         # Regras Financeiras e Condições de Pagamento
@@ -5065,6 +5333,128 @@ def enviar_pedido_para_expedicao(id):
     flash(f'Pedido #{pedido.numero_pedido} enviado com sucesso para a fila de expedição!', 'success')
     return redirect(url_for('listar_vendas'))
 
+@app.route('/vendas/pedido/<int:id>/editar', methods=['POST'])
+@login_required
+def editar_pedido_venda(id):
+    pedido = PedidoRequisicao.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    
+    # Bloqueia se já avançou para entrega ou rota
+    if pedido.status in ['em_rota', 'entregue']:
+        flash('Pedidos já despachados ou concluídos não podem ser editados.', 'warning')
+        return redirect(url_for('listar_vendas'))
+
+    try:
+        cliente_id = request.form.get('cliente_id')
+        if cliente_id and cliente_id.isdigit():
+            pedido.cliente_id = int(cliente_id)
+            cli = Cliente.query.get(pedido.cliente_id)
+            if cli:
+                pedido.nome_solicitante = cli.nome
+                pedido.contato_solicitante = cli.telefone or pedido.contato_solicitante
+
+        pedido.setor_obra_destino = request.form.get('endereco_entrega', pedido.setor_obra_destino)
+        pedido.observacoes = request.form.get('observacoes', pedido.observacoes)
+
+        # Atualização financeira (Sinal vs Faturamento Integral)
+        exige_entrada = request.form.get('exige_entrada') in ['1', 'true', 'on']
+        valor_entrada = float(request.form.get('valor_entrada') or 0.0) if exige_entrada else 0.0
+        qtd_parcelas = max(1, int(request.form.get('qtd_parcelas') or 1))
+        forma_entrada = request.form.get('forma_pagamento_entrada', 'PIX')
+        forma_parcelas = request.form.get('forma_pagamento_parcelas', 'Boleto Bancário')
+        intervalo = max(1, int(request.form.get('intervalo_dias') or 30))
+
+        pedido.exige_entrada = exige_entrada
+        pedido.valor_entrada = valor_entrada
+        pedido.forma_pagamento_entrada = forma_entrada
+        pedido.qtd_parcelas = qtd_parcelas
+        pedido.forma_pagamento_parcelas = forma_parcelas
+        pedido.intervalo_dias = intervalo
+
+        # Recalcula Itens se enviados
+        produtos_ids = request.form.getlist('produto_id[]')
+        quantidades = request.form.getlist('quantidade[]')
+        valores = request.form.getlist('valor_unitario[]')
+
+        if produtos_ids:
+            ItemPedidoRequisicao.query.filter_by(pedido_id=pedido.id).delete()
+            novo_total = 0.0
+
+            for p_id, q_str, v_str in zip(produtos_ids, quantidades, valores):
+                if p_id and q_str and float(q_str) > 0:
+                    prod = ProdutoEstoque.query.get(int(p_id))
+                    qtd = float(q_str)
+                    unit = float(v_str or (prod.preco_venda_sugerido if prod else 0.0))
+                    subtotal = round(qtd * unit, 2)
+                    novo_total += subtotal
+
+                    item = ItemPedidoRequisicao(
+                        pedido_id=pedido.id,
+                        produto_id=int(p_id),
+                        quantidade_solicitada=qtd,
+                        preco_unitario=unit,
+                        valor_total=subtotal
+                    )
+                    db.session.add(item)
+
+            pedido.valor_total = round(novo_total, 2)
+
+        # Regra de Bloqueio por Sinal
+        if pedido.exige_entrada and pedido.valor_entrada > 0:
+            pedido.status = 'bloqueado_pagamento'
+        else:
+            if pedido.status == 'bloqueado_pagamento':
+                pedido.status = 'em_separacao'
+
+        # Sincroniza faturas e títulos no Financeiro
+        if pedido.fatura_vinculada:
+            fatura = pedido.fatura_vinculada
+            fatura.valor_total = pedido.valor_total
+            ParcelaFatura.query.filter_by(fatura_id=fatura.id).delete()
+
+            saldo_parcelar = max(0.0, pedido.valor_total - valor_entrada)
+            total_titulos = (1 if (exige_entrada and valor_entrada > 0) else 0) + (qtd_parcelas if saldo_parcelar > 0 else 0)
+            seq = 1
+
+            if exige_entrada and valor_entrada > 0:
+                db.session.add(ParcelaFatura(
+                    empresa_id=current_user.empresa_id,
+                    fatura_id=fatura.id,
+                    numero_parcela=seq,
+                    total_parcelas=total_titulos,
+                    descricao_parcela="Sinal / Entrada Venda",
+                    is_entrada=True,
+                    forma_pagamento=forma_entrada,
+                    valor=valor_entrada,
+                    data_vencimento=date.today() + timedelta(days=3),
+                    status="A Faturar"
+                ))
+                seq += 1
+
+            if saldo_parcelar > 0:
+                v_parc = round(saldo_parcelar / qtd_parcelas, 2)
+                for i in range(1, qtd_parcelas + 1):
+                    db.session.add(ParcelaFatura(
+                        empresa_id=current_user.empresa_id,
+                        fatura_id=fatura.id,
+                        numero_parcela=seq,
+                        total_parcelas=total_titulos,
+                        descricao_parcela=f"Parcela {i}/{qtd_parcelas}" if qtd_parcelas > 1 else "Parcela Única",
+                        is_entrada=False,
+                        forma_pagamento=forma_parcelas,
+                        valor=v_parc,
+                        data_vencimento=date.today() + timedelta(days=i * intervalo),
+                        status="A Faturar"
+                    ))
+                    seq += 1
+
+        db.session.commit()
+        flash(f'Pedido #{pedido.numero_pedido} atualizado com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao editar pedido: {str(e)}', 'danger')
+
+    return redirect(url_for('listar_vendas'))
+
 @app.route('/vendas/pedido/<int:id>/excluir', methods=['POST'])
 @login_required
 def excluir_pedido_venda(id):
@@ -5320,25 +5710,67 @@ def painel_expedicao():
 def alocar_motorista_pedido(id):
     pedido = PedidoRequisicao.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
     
+    tipo_operacao = request.form.get('tipo_operacao', 'motorista')  # 'motorista' ou 'balcao'
     motorista_id = request.form.get('motorista_id')
     data_entrega = request.form.get('data_agendada_entrega')
     ordem_entrega = request.form.get('ordem_entrega', 1)
-
-    if motorista_id and motorista_id.isdigit():
-        pedido.operador_id = int(motorista_id)
-        pedido.status = 'em_rota'
-    else:
-        pedido.operador_id = None
-        pedido.status = 'em_separacao'
-
-    if data_entrega:
-        pedido.data_agendada_entrega = datetime.strptime(data_entrega, '%Y-%m-%d').date()
     
-    if ordem_entrega:
-        pedido.ordem_entrega = int(ordem_entrega)
+    # 1. Validação de estoque antes de qualquer saída
+    for item in pedido.itens:
+        prod = item.produto
+        if prod and float(prod.quantidade_atual or 0) < float(item.quantidade_solicitada or 0):
+            flash(f'Estoque insuficiente para "{prod.nome}". Disponível: {prod.quantidade_atual} {prod.unidade_medida}, Solicitado: {item.quantidade_solicitada}.', 'danger')
+            return redirect(url_for('painel_expedicao'))
+
+    # 2. Executa a baixa imediata no estoque e grava Kardex (se ainda não baixado)
+    if pedido.status not in ['em_rota', 'entregue']:
+        for item in pedido.itens:
+            prod = item.produto
+            if prod:
+                qtd_baixa = float(item.quantidade_solicitada or 0)
+                saldo_ant = float(prod.quantidade_atual or 0)
+                saldo_novo = max(0.0, saldo_ant - qtd_baixa)
+                prod.quantidade_atual = saldo_novo
+                item.quantidade_atendida = qtd_baixa
+
+                motivo = f"Expedição: Saída p/ Rota Motorista - Pedido #{pedido.numero_pedido}" if tipo_operacao == 'motorista' else f"Expedição: Retirada no Balcão - Pedido #{pedido.numero_pedido}"
+
+                db.session.add(MovimentacaoEstoque(
+                    empresa_id=current_user.empresa_id,
+                    produto_id=prod.id,
+                    tipo_movimento='saida_venda',
+                    quantidade=qtd_baixa,
+                    saldo_anterior=saldo_ant,
+                    saldo_posterior=saldo_novo,
+                    motivo_observacao=motivo,
+                    usuario_id=current_user.id
+                ))
+
+    # 3. Atualização de status e logística
+    if tipo_operacao == 'balcao':
+        pedido.status = 'entregue'
+        pedido.operador_id = None
+        pedido.data_conclusao = datetime.now()
+        pedido.data_entrega_realizada = datetime.now()
+        pedido.recebido_por_nome = request.form.get('recebido_por_nome', '').strip() or 'Cliente / Retirada Balcão'
+        pedido.recebido_por_documento = request.form.get('recebido_por_documento', '').strip() or '--'
+        flash(f'Pedido #{pedido.numero_pedido} baixado do estoque e finalizado como Retirada no Balcão!', 'success')
+    else:
+        if motorista_id and motorista_id.isdigit():
+            pedido.operador_id = int(motorista_id)
+            pedido.status = 'em_rota'
+        else:
+            pedido.operador_id = None
+            pedido.status = 'em_separacao'
+
+        if data_entrega:
+            pedido.data_agendada_entrega = datetime.strptime(data_entrega, '%Y-%m-%d').date()
+        if ordem_entrega:
+            pedido.ordem_entrega = int(ordem_entrega)
+
+        flash(f'Pedido #{pedido.numero_pedido} baixado do estoque e escalado Em Rota com o motorista!', 'success')
 
     db.session.commit()
-    flash(f'Logística do Pedido #{pedido.numero_pedido} atualizada com sucesso!', 'success')
     return redirect(url_for('painel_expedicao'))
 
 

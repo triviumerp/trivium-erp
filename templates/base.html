@@ -366,9 +366,12 @@
             <a href="{{ url_for('listar_estoque') }}" class="nav-link-custom {% if request.endpoint == 'listar_estoque' %}active{% endif %}">
                 <i class="bi bi-boxes"></i><span>Estoque & Almoxarifado</span>
             </a>
+            {# Só exibe Requisições se for almoxarifado interno puro; se for distribuidora com vendas, oculta para não duplicar com Expedição #}
+            {% if not current_user.empresa.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}
             <a href="{{ url_for('listar_requisicoes_estoque') }}" class="nav-link-custom {% if request.endpoint == 'listar_requisicoes_estoque' %}active{% endif %}">
                 <i class="bi bi-clipboard-check-fill"></i><span>Requisições de Materiais</span>
             </a>
+            {% endif %}
             {% endif %}
 
             <!-- 8. VENDAS COMERCIAIS (APENAS DISTRIBUIDORA / QUEM VENDE) -->
@@ -506,9 +509,11 @@
                 <a href="{{ url_for('listar_estoque') }}" class="nav-link-custom {% if request.endpoint == 'listar_estoque' %}active{% endif %}">
                     <i class="bi bi-boxes"></i><span>Estoque & Almoxarifado</span>
                 </a>
+                {% if not current_user.empresa.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}
                 <a href="{{ url_for('listar_requisicoes_estoque') }}" class="nav-link-custom {% if request.endpoint == 'listar_requisicoes_estoque' %}active{% endif %}">
                     <i class="bi bi-clipboard-check-fill"></i><span>Requisições de Materiais</span>
                 </a>
+                {% endif %}
                 {% endif %}
 
                 {% if current_user.empresa.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}

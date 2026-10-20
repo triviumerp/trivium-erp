@@ -342,6 +342,13 @@ class OperadorCampo(db.Model):
     ordens_servico = db.relationship('ServicoCliente', backref='operador_responsavel', lazy=True)
     entregas = db.relationship('PedidoRequisicao', backref='motorista_responsavel', lazy=True)
 
+    duracao_padrao_minutos = db.Column(db.Integer, default=45) # Ex: 30, 45, 60, 90 minutos
+    hora_inicio_trabalho = db.Column(db.Time, default=time(8, 0))
+    hora_fim_trabalho = db.Column(db.Time, default=time(18, 0))
+    hora_inicio_almoco = db.Column(db.Time, default=time(12, 0))
+    hora_fim_almoco = db.Column(db.Time, default=time(13, 0))
+    dias_atendimento = db.Column(db.String(50), default='seg,ter,qua,qui,sex')
+
     def gerar_token_se_necessario(self):
         if not self.token_acesso:
             self.token_acesso = secrets.token_urlsafe(32)
@@ -426,9 +433,31 @@ class Proposta(db.Model):
     intervalo_dias = db.Column(db.Integer, default=30)
     tipo_destino = db.Column(db.String(30), default='operacional')
 
+    aplicar_desconto = db.Column(db.Boolean, default=False)
+    percentual_desconto = db.Column(db.Float, default=0.0)
+
     itens = db.relationship('ItemProposta', backref='proposta', lazy='select', cascade="all, delete-orphan")
     faturas = db.relationship('Fatura', backref='proposta', lazy='select')
     contratos_gerados = db.relationship('ContratoGerado', backref='proposta', lazy='select')
+
+    @property
+    def subtotal_bruto(self):
+        """Soma pura dos itens antes do desconto."""
+        if not self.itens:
+            return 0.0
+        return sum((item.valor_total or 0.0) for item in self.itens)
+
+    @property
+    def valor_desconto_calculado(self):
+        """Calcula o valor nominal em R$ do desconto."""
+        if self.aplicar_desconto and (self.percentual_desconto or 0.0) > 0:
+            return round(self.subtotal_bruto * (self.percentual_desconto / 100.0), 2)
+        return 0.0
+
+    @property
+    def valor_total(self):
+        """Total líquido com desconto aplicado."""
+        return round(max(0.0, self.subtotal_bruto - self.valor_desconto_calculado), 2)
 
     @property
     def valor_total(self):

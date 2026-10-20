@@ -56,13 +56,123 @@
                             </span>
                         </td>
                         <td class="text-end pe-3">
-                            <form action="{{ url_for('excluir_tipo_servico', id=c.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Deseja realmente remover este serviço do catálogo?')">
-                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                    <i class="bi bi-trash"></i>
+                            <div class="d-inline-flex gap-1">
+                                <!-- BOTÃO EDITAR FICHA TÉCNICA -->
+                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditarServico{{ c.id }}" title="Editar Serviço">
+                                    <i class="bi bi-pencil-fill"></i>
                                 </button>
-                            </form>
+
+                                <!-- BOTÃO EXCLUIR DO CATÁLOGO -->
+                                <form action="{{ url_for('excluir_tipo_servico', id=c.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Deseja realmente remover este serviço do catálogo?')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Serviço">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
+
+                    <!-- MODAL: EDITAR SERVIÇO DO CATÁLOGO -->
+                    <div class="modal fade" id="modalEditarServico{{ c.id }}" tabindex="-1">
+                        <div class="modal-dialog modal-lg modal-dialog-centered">
+                            <div class="modal-content border-0 shadow rounded-4 text-start">
+                                <form action="{{ url_for('editar_tipo_servico', id=c.id) }}" method="POST">
+                                    <div class="modal-header bg-light">
+                                        <h5 class="modal-title fw-bold text-dark">
+                                            <i class="bi bi-pencil-square text-primary me-2"></i>Editar Serviço do Catálogo
+                                        </h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body p-4">
+                                        <div class="alert alert-info py-2 px-3 small rounded-3 mb-3 border-0">
+                                            <i class="bi bi-shield-check me-1"></i> <strong>Histórico Protegido:</strong> A alteração deste preço servirá apenas para novos orçamentos. Propostas já emitidas e contratos em andamento permanecem com seus valores inalterados.
+                                        </div>
+
+                                        <div class="row g-3 mb-3">
+                                            <div class="col-md-7">
+                                                <label class="form-label small fw-bold">Nome do Serviço *</label>
+                                                <input type="text" name="nome" class="form-control" value="{{ c.nome }}" required>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label small fw-bold">Modelo de Cobrança</label>
+                                                <select name="modelo_cobranca" class="form-select">
+                                                    <option value="pontual" {% if c.modelo_cobranca == 'pontual' %}selected{% endif %}>Pontual / Avulso</option>
+                                                    <option value="mensal" {% if c.modelo_cobranca == 'mensal' %}selected{% endif %}>Recorrente Mensal</option>
+                                                    <option value="anual" {% if c.modelo_cobranca == 'anual' %}selected{% endif %}>Recorrente Anual</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small fw-bold">Unidade</label>
+                                                <input type="text" name="unidade_medida" class="form-control" value="{{ c.unidade_medida or 'un' }}">
+                                            </div>
+                                        </div>
+
+                                        <div class="row g-3 mb-3">
+                                            <div class="col-md-4">
+                                                <label class="form-label small fw-bold">Margem de Lucro Alvo (%)</label>
+                                                <input type="number" step="0.1" name="margem_lucro_alvo" id="edit_margem_{{ c.id }}" class="form-control" value="{{ c.margem_lucro_alvo or 35.0 }}" oninput="calcularPrecoSugeridoEdicao('{{ c.id }}')">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label small fw-bold">Custo Base Estimado (R$)</label>
+                                                <input type="number" step="0.01" id="edit_custo_total_{{ c.id }}" class="form-control bg-light" value="{{ '%.2f'|format(c.custo_total_estimado) }}" readonly>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label small fw-bold text-success">Valor Sugerido de Venda (R$) *</label>
+                                                <input type="number" step="0.01" name="valor_sugerido" id="edit_valor_sugerido_{{ c.id }}" class="form-control fw-bold border-success text-success" value="{{ '%.2f'|format(c.valor_sugerido) }}" required>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Descrição Padrão / Escopo</label>
+                                            <textarea name="descricao" class="form-control" rows="2">{{ c.descricao_padrao or '' }}</textarea>
+                                        </div>
+
+                                        <!-- BLOCOS DE CUSTOS PADRÃO (EDIÇÃO) -->
+                                        <div class="p-3 bg-light rounded-3 border">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <h6 class="fw-bold text-dark mb-0"><i class="bi bi-calculator me-1 text-primary"></i>Composição de Custos Padrão</h6>
+                                                <button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="adicionarLinhaCustoEdicao('{{ c.id }}')">
+                                                    <i class="bi bi-plus-lg me-1"></i>Adicionar Custo
+                                                </button>
+                                            </div>
+                                            <div id="container-custos-edit-{{ c.id }}" class="d-flex flex-column gap-2">
+                                                {% for cp in c.custos_padrao %}
+                                                <div class="row g-2 align-items-center bg-white p-2 rounded border">
+                                                    <div class="col-md-3">
+                                                        <select name="custo_tipo[]" class="form-select form-select-sm">
+                                                            <option value="mao_de_obra" {% if cp.tipo_custo == 'mao_de_obra' %}selected{% endif %}>👷 Mão de Obra</option>
+                                                            <option value="material" {% if cp.tipo_custo == 'material' %}selected{% endif %}>🧱 Insumo/Material</option>
+                                                            <option value="logistica" {% if cp.tipo_custo == 'logistica' %}selected{% endif %}>🚚 Logística/KM</option>
+                                                            <option value="taxa" {% if cp.tipo_custo == 'taxa' %}selected{% endif %}>📑 Taxa/Outros</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <input type="text" name="custo_desc[]" class="form-control form-control-sm" value="{{ cp.descricao }}" placeholder="Descrição do custo" required>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <input type="number" step="0.1" name="custo_qtd[]" class="form-control form-control-sm custo-qtd-{{ c.id }}" value="{{ cp.quantidade or 1.0 }}" oninput="calcularPrecoSugeridoEdicao('{{ c.id }}')">
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <input type="number" step="0.01" name="custo_unit[]" class="form-control form-control-sm custo-unit-{{ c.id }}" value="{{ cp.custo_unitario or 0.0 }}" oninput="calcularPrecoSugeridoEdicao('{{ c.id }}')">
+                                                    </div>
+                                                    <div class="col-md-1 text-end">
+                                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.row').remove(); calcularPrecoSugeridoEdicao('{{ c.id }}');">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer bg-light">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                        <button type="submit" class="btn btn-primary fw-bold px-4">Salvar Alterações</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
                     {% else %}
                     <tr>
                         <td colspan="6" class="text-center py-5 text-muted">
@@ -149,6 +259,7 @@
 </div>
 
 <script>
+// --- FUNÇÕES DE CUSTO PARA NOVO SERVIÇO ---
 function adicionarLinhaCustoCatalogo() {
     const container = document.getElementById('container-custos-catalogo');
     const div = document.createElement('div');
@@ -197,6 +308,61 @@ function calcularPrecoSugeridoCatalogo() {
     if (margem < 100 && custoTotal > 0) {
         const preco = custoTotal / (1 - (margem / 100.0));
         document.getElementById('cat_valor_sugerido').value = preco.toFixed(2);
+    }
+}
+
+// --- FUNÇÕES DE CUSTO PARA EDIÇÃO ---
+function adicionarLinhaCustoEdicao(id) {
+    const container = document.getElementById(`container-custos-edit-${id}`);
+    const div = document.createElement('div');
+    div.className = 'row g-2 align-items-center bg-white p-2 rounded border';
+    div.innerHTML = `
+        <div class="col-md-3">
+            <select name="custo_tipo[]" class="form-select form-select-sm">
+                <option value="mao_de_obra">👷 Mão de Obra</option>
+                <option value="material">🧱 Insumo/Material</option>
+                <option value="logistica">🚚 Logística/KM</option>
+                <option value="taxa">📑 Taxa/Outros</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <input type="text" name="custo_desc[]" class="form-control form-control-sm" placeholder="Descrição do custo" required>
+        </div>
+        <div class="col-md-2">
+            <input type="number" step="0.1" name="custo_qtd[]" class="form-control form-control-sm custo-qtd-${id}" value="1" placeholder="Qtd" oninput="calcularPrecoSugeridoEdicao('${id}')">
+        </div>
+        <div class="col-md-2">
+            <input type="number" step="0.01" name="custo_unit[]" class="form-control form-control-sm custo-unit-${id}" placeholder="Custo Unit." oninput="calcularPrecoSugeridoEdicao('${id}')">
+        </div>
+        <div class="col-md-1 text-end">
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.row').remove(); calcularPrecoSugeridoEdicao('${id}');">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    `;
+    container.appendChild(div);
+}
+
+function calcularPrecoSugeridoEdicao(id) {
+    let custoTotal = 0.0;
+    const qtds = document.querySelectorAll(`.custo-qtd-${id}`);
+    const units = document.querySelectorAll(`.custo-unit-${id}`);
+
+    for (let i = 0; i < qtds.length; i++) {
+        const q = parseFloat(qtds[i].value) || 0.0;
+        const u = parseFloat(units[i].value) || 0.0;
+        custoTotal += (q * u);
+    }
+
+    const inputCusto = document.getElementById(`edit_custo_total_${id}`);
+    if (inputCusto) inputCusto.value = custoTotal.toFixed(2);
+
+    const margem = parseFloat(document.getElementById(`edit_margem_${id}`).value) || 0.0;
+
+    if (margem < 100 && custoTotal > 0) {
+        const preco = custoTotal / (1 - (margem / 100.0));
+        const inputPreco = document.getElementById(`edit_valor_sugerido_${id}`);
+        if (inputPreco) inputPreco.value = preco.toFixed(2);
     }
 }
 </script>

@@ -86,7 +86,6 @@
                     <th>ORDEM / IDENTIFICAÇÃO</th>
                     <th>CLIENTE / LOCAL</th>
                     <th>PREVISÃO / HORÁRIO</th>
-                    <th>VALOR</th>
                     <th>RESPONSÁVEL TÉCNICO</th>
                     <th>STATUS</th>
                     <th class="text-end pe-3">AÇÕES</th>
@@ -116,10 +115,7 @@
                         {% if s.data_previsao and s.data_previsao < hoje and s.status != 'Concluido' %}
                             <span class="badge bg-danger-subtle text-danger border border-danger-subtle d-block mt-1" style="font-size: 0.70rem;">Prazo Expirado</span>
                         {% endif %}
-                    </td>
-                    <td>
-                        <strong class="text-dark">R$ {{ "%.2f"|format(s.valor_cobrado or 0.0) }}</strong>
-                    </td>
+                    </td>                    
                     <td>
                         {% if s.operador_responsavel %}
                             <span class="badge bg-light text-dark border">{{ s.operador_responsavel.nome }}</span>
