@@ -11,6 +11,9 @@
         <p class="text-muted mb-0">Gestão contínua de prontuários, acompanhamento terapêutico e registo de consultas</p>
     </div>
     <div class="d-flex gap-2">
+        <a href="{{ url_for('gestao_operadores') }}" class="btn btn-outline-primary fw-bold shadow-sm">
+            <i class="bi bi-person-badge me-1"></i>Corpo Clínico & Atendentes
+        </a>
         <a href="{{ url_for('novo_agendamento_clinico') }}" class="btn btn-primary fw-bold shadow-sm">
             <i class="bi bi-calendar-plus me-1"></i>+ Novo Agendamento Clínico
         </a>

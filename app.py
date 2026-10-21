@@ -488,6 +488,7 @@ def interceptar_bloqueio_assinatura():
         'download_file',
         'webhook_mercadopago',
         'regularizar_assinatura',
+        'api_checkout_preferencia',
         'api_checkout_transparente'
     ]
     if request.endpoint and any(request.endpoint.startswith(r) for r in rotas_livres):
@@ -501,11 +502,21 @@ def interceptar_bloqueio_assinatura():
             return None
 
         if current_user.empresa:
+            # 1. Se estiver com status explicitamente bloqueado ou cancelado
             if current_user.empresa.status_assinatura in ['bloqueado', 'cancelado']:
                 if request.endpoint != 'regularizar_assinatura':
                     return redirect(url_for('regularizar_assinatura'))
 
+            # 2. Se for trial e expirou os 14 dias
             if current_user.empresa.status_assinatura == 'trial' and current_user.empresa.data_vencimento:
+                if current_user.empresa.data_vencimento < date.today():
+                    current_user.empresa.status_assinatura = 'bloqueado'
+                    db.session.commit()
+                    if request.endpoint != 'regularizar_assinatura':
+                        return redirect(url_for('regularizar_assinatura'))
+
+            # 3. Se for plano ativo e a data de vencimento ultrapassou a data atual
+            if current_user.empresa.status_assinatura == 'ativo' and current_user.empresa.data_vencimento:
                 if current_user.empresa.data_vencimento < date.today():
                     current_user.empresa.status_assinatura = 'bloqueado'
                     db.session.commit()
@@ -1983,6 +1994,113 @@ def listar_atendimentos():
         filtro_status=filtro_status
     )
 
+
+# =============================================================================
+# ÁREA CLÍNICA EXCLUSIVA: GESTÃO DO CORPO CLÍNICO & HORÁRIOS DE CONSULTAS
+# =============================================================================
+
+@app.route('/clinica/profissionais', methods=['GET', 'POST'])
+@login_required
+def gestao_corpo_clinico():
+    empresa_id = current_user.empresa_id
+
+    if request.method == 'POST':
+        nome = request.form.get('nome', '').strip()
+        cargo = request.form.get('cargo', 'Especialista').strip()
+        telefone = re.sub(r'\D', '', request.form.get('telefone', ''))
+        doc_registro = request.form.get('documento_registro', '').strip()
+        email = request.form.get('email', '').strip().lower()
+
+        duracao = int(request.form.get('duracao_padrao_minutos') or 45)
+        h_ini = request.form.get('hora_inicio_trabalho')
+        h_fim = request.form.get('hora_fim_trabalho')
+        h_alm_ini = request.form.get('hora_inicio_almoco')
+        h_alm_fim = request.form.get('hora_fim_almoco')
+
+        if not nome or not telefone:
+            flash('Nome e WhatsApp são obrigatórios.', 'warning')
+            return redirect(url_for('gestao_corpo_clinico'))
+
+        novo_prof = OperadorCampo(
+            empresa_id=empresa_id,
+            nome=nome,
+            cargo=cargo,
+            telefone=telefone,
+            documento_registro=doc_registro or None,
+            email=email or None,
+            tipo_operador='tecnico',
+            funcao_clinica='profissional',  # Marcação exclusiva para a área clínica
+            duracao_padrao_minutos=duracao,
+            hora_inicio_trabalho=datetime.strptime(h_ini, '%H:%M').time() if h_ini else dt_time(8, 0),
+            hora_fim_trabalho=datetime.strptime(h_fim, '%H:%M').time() if h_fim else dt_time(18, 0),
+            hora_inicio_almoco=datetime.strptime(h_alm_ini, '%H:%M').time() if h_alm_ini else dt_time(12, 0),
+            hora_fim_almoco=datetime.strptime(h_alm_fim, '%H:%M').time() if h_alm_fim else dt_time(13, 0)
+        )
+        novo_prof.gerar_token_se_necessario()
+        db.session.add(novo_prof)
+        db.session.commit()
+
+        flash(f'Profissional "{nome}" adicionado com sucesso ao corpo clínico!', 'success')
+        return redirect(url_for('gestao_corpo_clinico'))
+
+    # Filtra exclusivamente quem faz parte do corpo clínico
+    profissionais = OperadorCampo.query.filter_by(
+        empresa_id=empresa_id,
+        funcao_clinica='profissional'
+    ).order_by(OperadorCampo.nome.asc()).all()
+
+    total_agendadas = ServicoCliente.query.filter_by(
+        empresa_id=empresa_id,
+        tipo_ficha='atendimento'
+    ).filter(ServicoCliente.status.in_(['Pendente', 'Em Andamento'])).count()
+
+    total_concluidas = ServicoCliente.query.filter_by(
+        empresa_id=empresa_id,
+        tipo_ficha='atendimento',
+        status='Concluido'
+    ).count()
+
+    return render_template(
+        'profissionais_saude.html',
+        profissionais=profissionais,
+        total_agendadas=total_agendadas,
+        total_concluidas=total_concluidas
+    )
+
+
+@app.route('/clinica/profissionais/<int:id>/editar', methods=['POST'])
+@login_required
+def editar_profissional_clinico(id):
+    prof = OperadorCampo.query.filter_by(
+        id=id, 
+        empresa_id=current_user.empresa_id,
+        funcao_clinica='profissional'
+    ).first_or_404()
+
+    prof.nome = request.form.get('nome', prof.nome).strip()
+    prof.cargo = request.form.get('cargo', prof.cargo).strip()
+    prof.telefone = re.sub(r'\D', '', request.form.get('telefone', prof.telefone))
+    prof.documento_registro = request.form.get('documento_registro', '').strip() or None
+    prof.email = request.form.get('email', '').strip().lower() or None
+
+    duracao = request.form.get('duracao_padrao_minutos')
+    if duracao and duracao.isdigit():
+        prof.duracao_padrao_minutos = int(duracao)
+
+    h_ini = request.form.get('hora_inicio_trabalho')
+    h_fim = request.form.get('hora_fim_trabalho')
+    h_alm_ini = request.form.get('hora_inicio_almoco')
+    h_alm_fim = request.form.get('hora_fim_almoco')
+
+    if h_ini: prof.hora_inicio_trabalho = datetime.strptime(h_ini, '%H:%M').time()
+    if h_fim: prof.hora_fim_trabalho = datetime.strptime(h_fim, '%H:%M').time()
+    if h_alm_ini: prof.hora_inicio_almoco = datetime.strptime(h_alm_ini, '%H:%M').time()
+    if h_alm_fim: prof.hora_fim_almoco = datetime.strptime(h_alm_fim, '%H:%M').time()
+
+    db.session.commit()
+    flash(f'Dados do profissional "{prof.nome}" atualizados com sucesso!', 'success')
+    return redirect(url_for('gestao_corpo_clinico'))
+
 # app.py -> Módulo Clínico / Agendamentos
 
 @app.route('/atendimentos/novo', methods=['GET', 'POST'])
@@ -2062,7 +2180,13 @@ def novo_agendamento_clinico():
             return redirect(url_for('novo_agendamento_clinico'))
 
     pacientes = Cliente.query.filter_by(empresa_id=empresa_id).order_by(Cliente.nome.asc()).all()
-    profissionais = OperadorCampo.query.filter_by(empresa_id=empresa_id, ativo=True, tipo_operador='tecnico').order_by(OperadorCampo.nome.asc()).all()
+    profissionais = OperadorCampo.query.filter_by(
+        empresa_id=empresa_id, 
+        ativo=True, 
+        tipo_operador='tecnico',
+        funcao_clinica='profissional'
+    ).order_by(OperadorCampo.nome.asc()).all()
+
     servicos_clinicos = TipoServico.query.filter_by(empresa_id=empresa_id).order_by(TipoServico.nome.asc()).all()
 
     return render_template(
@@ -2678,26 +2802,21 @@ def criar_servico_avulso():
 # -----------------------------------------------------------------------------
 # app.py -> substitua a rota gestao_operadores e adicione editar_operador_campo
 
+# app.py -> substitua as funções gestao_operadores e editar_operador_campo por este bloco limpo:
+
 @app.route('/operadores', methods=['GET', 'POST'])
 @login_required
 def gestao_operadores():
     if request.method == 'POST':
         nome = request.form.get('nome', '').strip()
-        cargo = request.form.get('cargo', 'Profissional / Atendente').strip()
+        cargo = request.form.get('cargo', 'Técnico de Campo').strip()
         telefone = re.sub(r'\D', '', request.form.get('telefone', ''))
         doc_registro = request.form.get('documento_registro', '').strip()
         email = request.form.get('email', '').strip().lower()
         cli_alocado_id = request.form.get('cliente_id')
 
-        # Novos campos de Agenda e Duração
-        duracao = int(request.form.get('duracao_padrao_minutos') or 45)
-        h_ini = request.form.get('hora_inicio_trabalho')
-        h_fim = request.form.get('hora_fim_trabalho')
-        h_alm_ini = request.form.get('hora_inicio_almoco')
-        h_alm_fim = request.form.get('hora_fim_almoco')
-
         if not nome or not telefone:
-            flash('Nome e WhatsApp são obrigatórios.', 'warning')
+            flash('Nome e WhatsApp do operador são obrigatórios.', 'warning')
             return redirect(url_for('gestao_operadores'))
 
         novo_op = OperadorCampo(
@@ -2706,24 +2825,27 @@ def gestao_operadores():
             nome=nome,
             cargo=cargo,
             telefone=telefone,
-            documento_registro=doc_registro,
+            documento_registro=doc_registro or None,
             email=email or None,
-            duracao_padrao_minutos=duracao,
-            hora_inicio_trabalho=datetime.strptime(h_ini, '%H:%M').time() if h_ini else dt_time(8, 0),
-            hora_fim_trabalho=datetime.strptime(h_fim, '%H:%M').time() if h_fim else dt_time(18, 0),
-            hora_inicio_almoco=datetime.strptime(h_alm_ini, '%H:%M').time() if h_alm_ini else dt_time(12, 0),
-            hora_fim_almoco=datetime.strptime(h_alm_fim, '%H:%M').time() if h_alm_fim else dt_time(13, 0)
+            tipo_operador='tecnico',
+            funcao_clinica='operador_campo'  # Identificador para não colidir com o corpo clínico
         )
         novo_op.gerar_token_se_necessario()
         db.session.add(novo_op)
         db.session.commit()
-        flash(f'Profissional "{nome}" cadastrado com sucesso!', 'success')
+        flash(f'Operador "{nome}" cadastrado com sucesso!', 'success')
         return redirect(url_for('gestao_operadores'))
 
-    operadores = OperadorCampo.query.filter_by(empresa_id=current_user.empresa_id, tipo_operador='tecnico').order_by(OperadorCampo.nome.asc()).all()
+    # Lista apenas os operadores de campo técnicos
+    operadores = OperadorCampo.query.filter_by(
+        empresa_id=current_user.empresa_id, 
+        tipo_operador='tecnico'
+    ).filter(
+        (OperadorCampo.funcao_clinica == 'operador_campo') | (OperadorCampo.funcao_clinica.is_(None))
+    ).order_by(OperadorCampo.nome.asc()).all()
+
     clientes = Cliente.query.filter_by(empresa_id=current_user.empresa_id).order_by(Cliente.nome.asc()).all()
     
-    # Lista consolidada de agendamentos
     hoje = date.today()
     itens_escala = []
     ordens_gerais = ServicoCliente.query.filter(
@@ -2742,10 +2864,8 @@ def gestao_operadores():
             'operador_telefone': os_item.operador_responsavel.telefone if os_item.operador_responsavel else '',
             'cliente_nome': os_item.cliente.nome,
             'endereco': os_item.endereco_exibicao,
-            'servico_nome': os_item.tipo_servico.nome if os_item.tipo_servico else 'Consulta / Sessão',
-            'descricao_atividade': os_item.titulo_documento_custom or 'Atendimento Agendado',
-            'is_etapa': False,
-            'token_externo': os_item.token_externo,
+            'servico_nome': os_item.tipo_servico.nome if os_item.tipo_servico else 'Serviço Operacional',
+            'descricao_atividade': os_item.titulo_documento_custom or 'Ordem de Serviço',
             'status': os_item.status
         })
 
@@ -2771,23 +2891,11 @@ def editar_operador_campo(id):
     op.documento_registro = request.form.get('documento_registro', '').strip() or None
     op.email = request.form.get('email', '').strip().lower() or None
     
-    # Atualização de horários e duração de consulta
-    duracao = request.form.get('duracao_padrao_minutos')
-    if duracao and duracao.isdigit():
-        op.duracao_padrao_minutos = int(duracao)
-
-    h_ini = request.form.get('hora_inicio_trabalho')
-    h_fim = request.form.get('hora_fim_trabalho')
-    h_alm_ini = request.form.get('hora_inicio_almoco')
-    h_alm_fim = request.form.get('hora_fim_almoco')
-
-    if h_ini: op.hora_inicio_trabalho = datetime.strptime(h_ini, '%H:%M').time()
-    if h_fim: op.hora_fim_trabalho = datetime.strptime(h_fim, '%H:%M').time()
-    if h_alm_ini: op.hora_inicio_almoco = datetime.strptime(h_alm_ini, '%H:%M').time()
-    if h_alm_fim: op.hora_fim_almoco = datetime.strptime(h_alm_fim, '%H:%M').time()
+    cli_id = request.form.get('cliente_id')
+    op.cliente_id = int(cli_id) if cli_id and cli_id.isdigit() else None
 
     db.session.commit()
-    flash(f'Dados do profissional "{op.nome}" atualizados com sucesso!', 'success')
+    flash(f'Dados do operador "{op.nome}" atualizados com sucesso!', 'success')
     return redirect(url_for('gestao_operadores'))
 
 @app.route('/operadores/<int:id>/status', methods=['POST'])
@@ -3589,10 +3697,30 @@ def detalhe_chamado(id):
 @login_required
 @limiter.exempt
 def regularizar_assinatura():
-    if current_user.empresa.status_assinatura in ['ativo', 'trial'] or current_user.nivel_acesso == 'master':
+    empresa = current_user.empresa
+    if not empresa:
+        return redirect(url_for('auth.login'))
+
+    # Se a conta estiver regularizada e dentro da data de vencimento, volta ao painel principal
+    if empresa.status_assinatura == 'ativo' and empresa.data_vencimento and empresa.data_vencimento >= date.today():
         return redirect(url_for('index'))
 
-    return render_template('bloqueio_pagamento.html')
+    # Garante valor base
+    mensalidade_base = float(empresa.valor_mensalidade or 14.90)
+    if mensalidade_base <= 0:
+        mensalidade_base = 14.90
+
+    total_semestral = round(mensalidade_base * 6 * 0.88, 2)
+    total_anual = round(mensalidade_base * 12 * 0.75, 2)
+
+    return render_template(
+        'bloqueio_pagamento.html',
+        empresa=empresa,
+        mensalidade=mensalidade_base,
+        total_semestral=total_semestral,
+        total_anual=total_anual,
+        hoje=date.today()
+    )
 
 # -----------------------------------------------------------------------------
 # WEBHOOK OFICIAL MERCADO PAGO
@@ -3608,7 +3736,7 @@ def webhook_mercadopago():
         payment_info = sdk.payment().get(payment_id).get('response', {})
 
         status = payment_info.get('status')
-        ext_ref = payment_info.get('external_reference', '')
+        ext_ref = str(payment_info.get('external_reference') or '').lower()
         valor_pago = float(payment_info.get('transaction_amount') or 0.0)
 
         if ext_ref.startswith('emp_'):
@@ -3617,54 +3745,56 @@ def webhook_mercadopago():
                 empresa_id = int(partes[1])
                 empresa = Empresa.query.get(empresa_id)
 
-                if empresa:
-                    if status == 'approved':
-                        status_anterior = empresa.status_assinatura
-                        empresa.status_assinatura = 'ativo'
-                        empresa.data_ultimo_pagamento = date.today()
+                if empresa and status == 'approved':
+                    status_anterior = empresa.status_assinatura
+                    empresa.status_assinatura = 'ativo'
+                    empresa.data_ultimo_pagamento = date.today()
+                    empresa.valor_mensalidade = valor_pago
+                    empresa.mp_payment_id = str(payment_id)
+
+                    # >>> CÁLCULO DINÂMICO CONFORME O CICLO CONTRATADO:
+                    if 'anual' in ext_ref:
+                        empresa.data_vencimento = date.today() + timedelta(days=365)
+                        empresa.plano = "Assinatura Anual (25% OFF)"
+                    elif 'semestral' in ext_ref:
+                        empresa.data_vencimento = date.today() + timedelta(days=180)
+                        empresa.plano = "Assinatura Semestral (12% OFF)"
+                    else:
                         empresa.data_vencimento = date.today() + timedelta(days=30)
-                        empresa.valor_mensalidade = valor_pago
-                        empresa.mp_payment_id = str(payment_id)
+                        empresa.plano = "Assinatura Mensal"
 
-                        if empresa.cupom_utilizado and status_anterior != 'ativo':
-                            cupom_obj = CupomDesconto.query.filter_by(codigo=empresa.cupom_utilizado).first()
-                            if cupom_obj:
-                                cupom_obj.usos_atuais = (cupom_obj.usos_atuais or 0) + 1
-                                
-                                if cupom_obj.usuario_id:
-                                    mes_ref = date.today().strftime('%Y-%m')
-                                    ja_tem_comissao = ComissaoAfiliado.query.filter_by(
-                                        empresa_id=empresa.id,
-                                        usuario_id=cupom_obj.usuario_id,
-                                        mes_competencia=mes_ref
-                                    ).first()
+                    # Tratamento de comissão de afiliado (se houver)
+                    if empresa.cupom_utilizado and status_anterior != 'ativo':
+                        cupom_obj = CupomDesconto.query.filter_by(codigo=empresa.cupom_utilizado).first()
+                        if cupom_obj and cupom_obj.usuario_id:
+                            cupom_obj.usos_atuais = (cupom_obj.usos_atuais or 0) + 1
+                            mes_ref = date.today().strftime('%Y-%m')
+                            pct_comissao = cupom_obj.percentual_comissao or 20.0
+                            v_comissao = round(valor_pago * (pct_comissao / 100.0), 2)
 
-                                    if not ja_tem_comissao:
-                                        pct_comissao = cupom_obj.percentual_comissao or 20.0
-                                        v_comissao = round(valor_pago * (pct_comissao / 100.0), 2)
+                            db.session.add(ComissaoAfiliado(
+                                usuario_id=cupom_obj.usuario_id,
+                                cupom_id=cupom_obj.id,
+                                empresa_id=empresa.id,
+                                numero_parcela_parceiro=1,
+                                total_parcelas_permitidas=cupom_obj.meses_comissao_limite or 3,
+                                valor_mensalidade=valor_pago,
+                                percentual_comissao=pct_comissao,
+                                valor_comissao=v_comissao,
+                                mes_competencia=mes_ref,
+                                status='liberado'
+                            ))
 
-                                        nova_comissao = ComissaoAfiliado(
-                                            usuario_id=cupom_obj.usuario_id,
-                                            cupom_id=cupom_obj.id,
-                                            empresa_id=empresa.id,
-                                            numero_parcela_parceiro=1,
-                                            total_parcelas_permitidas=cupom_obj.meses_comissao_limite or 3,
-                                            valor_mensalidade=valor_pago,
-                                            percentual_comissao=pct_comissao,
-                                            valor_comissao=v_comissao,
-                                            mes_competencia=mes_ref,
-                                            status='liberado'
-                                        )
-                                        db.session.add(nova_comissao)
+                    db.session.commit()
+                    print(f"[MERCADO PAGO] Sucesso! Empresa {empresa.razao_social} ativada até {empresa.data_vencimento.strftime('%d/%m/%Y')} ({empresa.plano}).")
 
-                        db.session.commit()
-                        print(f"[MERCADO PAGO] Assinatura aprovada e ativada para: {empresa.razao_social}")
-                    elif status in ['cancelled', 'rejected']:
-                        empresa.status_assinatura = 'bloqueado'
-                        db.session.commit()
+                elif empresa and status in ['cancelled', 'rejected']:
+                    empresa.status_assinatura = 'bloqueado'
+                    db.session.commit()
+
             except Exception as e:
                 db.session.rollback()
-                print(f"[ERRO NO PROCESSAMENTO WEBHOOK MP]: {e}")
+                print(f"[ERRO NO WEBHOOK MP]: {e}")
 
     return {"status": "success"}, 200
 

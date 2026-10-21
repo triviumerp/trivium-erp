@@ -60,17 +60,30 @@
 
                 <!-- PROFISSIONAL / CORPO CLÍNICO -->
                 <div class="mb-3">
-                    <label class="form-label small fw-bold">Profissional / Atendente *</label>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label small fw-bold mb-0">Especialista / Profissional de Saúde *</label>
+                        <a href="{{ url_for('gestao_corpo_clinico') }}" target="_blank" class="small text-primary text-decoration-none fw-semibold">
+                            <i class="bi bi-plus-circle me-1"></i>Gerir Corpo Clínico
+                        </a>
+                    </div>
                     <select name="operador_id" id="selectProfissional" class="form-select form-select-sm" required onchange="carregarGradeHorarios()">
-                        <option value="">Selecione o profissional de saúde...</option>
+                        <option value="">Selecione o especialista...</option>
                         {% for prof in profissionais %}
                         <option value="{{ prof.id }}" data-duracao="{{ prof.duracao_padrao_minutos or 45 }}">
-                            {{ prof.nome }} — {{ prof.cargo }} ({{ prof.duracao_padrao_minutos or 45 }} min/sessão)
+                            {{ prof.nome }} — {{ prof.cargo }} ({{ prof.duracao_padrao_minutos or 45 }} min | {{ prof.documento_registro or 'Registo pendente' }})
                         </option>
+                        {% else %}
+                        <option value="" disabled>Nenhum especialista registado no corpo clínico.</option>
                         {% endfor %}
                     </select>
+                    {% if not profissionais %}
+                    <div class="form-text text-danger small">
+                        <i class="bi bi-exclamation-circle me-1"></i>Registe pelo menos um profissional no menu <strong>Corpo Clínico & Horários</strong> para libertar a agenda.
+                    </div>
+                    {% endif %}
                 </div>
 
+                <!-- QUEIXA INICIAL / OBSERVAÇÕES -->
                 <div class="mb-0">
                     <label class="form-label small fw-bold">Queixa Inicial / Observações</label>
                     <textarea name="observacoes" class="form-control form-control-sm" rows="3" placeholder="Motivo do agendamento ou notas clínicas preliminares..."></textarea>
@@ -206,7 +219,6 @@ function carregarGradeHorarios() {
 }
 
 function selecionarHorario(inicio, fim, elementoBtn) {
-    // Remove classe ativa de outros botões
     const botoes = document.getElementById('containerGradeHorarios').querySelectorAll('.btn-success');
     botoes.forEach(b => {
         b.classList.remove('btn-success');

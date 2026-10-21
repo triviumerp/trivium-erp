@@ -1,0 +1,308 @@
+{% extends 'base.html' %}
+
+{% block title %}Corpo Clínico & Especialistas - Trivium ERP{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold text-dark mb-0">
+            <i class="bi bi-person-badge-fill text-primary me-2"></i>Corpo Clínico & Especialistas
+        </h2>
+        <p class="text-muted mb-0">Gestão dos profissionais de saúde, parametrização do tempo de consulta e definição de jornadas de atendimento</p>
+    </div>
+    <div>
+        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovoProfissional">
+            <i class="bi bi-person-plus-fill me-1"></i>Novo Profissional
+        </button>
+    </div>
+</div>
+
+<!-- CARDS RESUMO -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-white">
+            <small class="text-muted fw-bold d-block mb-1">TOTAL DE ESPECIALISTAS</small>
+            <h3 class="fw-bold text-primary mb-0">{{ profissionais|length }}</h3>
+            <span class="text-muted small">Profissionais com agenda ativa</span>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-white">
+            <small class="text-muted fw-bold d-block mb-1">CONSULTAS AGENDADAS</small>
+            <h3 class="fw-bold text-warning mb-0">{{ total_agendadas }}</h3>
+            <span class="text-muted small">Sessões marcadas na agenda</span>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card border-0 shadow-sm p-3 rounded-4 bg-white">
+            <small class="text-muted fw-bold d-block mb-1">CONSULTAS CONCLUÍDAS</small>
+            <h3 class="fw-bold text-success mb-0">{{ total_concluidas }}</h3>
+            <span class="text-muted small">Atendimentos finalizados com prontuário</span>
+        </div>
+    </div>
+</div>
+
+<!-- LISTA DE PROFISSIONAIS DE SAÚDE -->
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light small text-muted">
+                <tr>
+                    <th>NOME DO PROFISSIONAL</th>
+                    <th>ESPECIALIDADE</th>
+                    <th>REGISTO (CRM/CREFITO/CRP)</th>
+                    <th>DURAÇÃO DA SESSÃO</th>
+                    <th>JORNADA DE ATENDIMENTO</th>
+                    <th>WHATSAPP / CONTACTO</th>
+                    <th>STATUS</th>
+                    <th class="text-end pe-3">AÇÕES</th>
+                </tr>
+            </thead>
+            <tbody class="small">
+                {% for prof in profissionais %}
+                <tr>
+                    <td>
+                        <strong class="text-dark d-block">{{ prof.nome }}</strong>
+                        <span class="text-muted">{{ prof.email or 'Sem e-mail registado' }}</span>
+                    </td>
+                    <td><span class="badge bg-light text-dark border">{{ prof.cargo }}</span></td>
+                    <td><code>{{ prof.documento_registro or '--' }}</code></td>
+                    <td>
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold">
+                            <i class="bi bi-clock me-1"></i>{{ prof.duracao_padrao_minutos or 45 }} min
+                        </span>
+                    </td>
+                    <td>
+                        <span class="text-dark d-block">
+                            {{ prof.hora_inicio_trabalho.strftime('%H:%M') if prof.hora_inicio_trabalho else '08:00' }} às {{ prof.hora_fim_trabalho.strftime('%H:%M') if prof.hora_fim_trabalho else '18:00' }}
+                        </span>
+                        {% if prof.hora_inicio_almoco and prof.hora_fim_almoco %}
+                        <small class="text-muted">
+                            Almoço: {{ prof.hora_inicio_almoco.strftime('%H:%M') }} - {{ prof.hora_fim_almoco.strftime('%H:%M') }}
+                        </small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="https://wa.me/55{{ prof.telefone }}?text=Ol%C3%A1%20{{ prof.nome }},%20aqui%20est%C3%A1%20a%20sua%20agenda%20de%20atendimentos." 
+                           target="_blank" class="btn btn-sm btn-outline-success fw-bold py-0 px-2 rounded-pill">
+                            <i class="bi bi-whatsapp me-1"></i>{{ prof.telefone }}
+                        </a>
+                    </td>
+                    <td>
+                        {% if prof.ativo %}
+                            <span class="badge bg-success">Ativo</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inativo</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end pe-3">
+                        <div class="d-inline-flex gap-1">
+                            <!-- EDITAR -->
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditarProfissional{{ prof.id }}" title="Editar Grade e Dados">
+                                <i class="bi bi-pencil-fill"></i>
+                            </button>
+
+                            <!-- ATIVAR / DESATIVAR -->
+                            <form action="{{ url_for('alternar_status_operador', id=prof.id) }}" method="POST" class="d-inline">
+                                <input type="hidden" name="origem" value="clinica">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Ativar/Desativar">
+                                    <i class="bi bi-power"></i>
+                                </button>
+                            </form>
+
+                            <!-- EXCLUIR -->
+                            <form action="{{ url_for('excluir_operador', id=prof.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Deseja realmente remover este profissional do corpo clínico?')">
+                                <input type="hidden" name="origem" value="clinica">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+
+                <!-- MODAL EDITAR PROFISSIONAL -->
+                <div class="modal fade" id="modalEditarProfissional{{ prof.id }}" tabindex="-1">
+                    <div class="modal-dialog modal-lg modal-dialog-centered">
+                        <div class="modal-content border-0 shadow rounded-4 text-start">
+                            <form action="{{ url_for('editar_profissional_clinico', id=prof.id) }}" method="POST">
+                                <div class="modal-header bg-light">
+                                    <h5 class="modal-title fw-bold text-dark">
+                                        <i class="bi bi-pencil-square text-primary me-2"></i>Editar Profissional Clínico
+                                    </h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body p-4">
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-7">
+                                            <label class="form-label small fw-bold">Nome do Profissional *</label>
+                                            <input type="text" name="nome" class="form-control" value="{{ prof.nome }}" required>
+                                        </div>
+                                        <div class="col-md-5">
+                                            <label class="form-label small fw-bold">Especialidade / Área de Atuação *</label>
+                                            <input type="text" name="cargo" class="form-control" value="{{ prof.cargo }}" required>
+                                        </div>
+                                    </div>
+
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-bold">WhatsApp / Celular *</label>
+                                            <input type="text" name="telefone" class="form-control" value="{{ prof.telefone }}" required>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-bold">Registo (CRM, CREFITO, CRP, etc.)</label>
+                                            <input type="text" name="documento_registro" class="form-control" value="{{ prof.documento_registro or '' }}">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-bold">E-mail</label>
+                                            <input type="email" name="email" class="form-control" value="{{ prof.email or '' }}">
+                                        </div>
+                                    </div>
+
+                                    <!-- GRADE DE HORÁRIOS & SESSÃO -->
+                                    <div class="p-3 bg-light rounded-3 border mb-0">
+                                        <h6 class="fw-bold text-primary mb-2">
+                                            <i class="bi bi-clock-history me-1"></i>Parametrização da Agenda & Consultas
+                                        </h6>
+                                        <div class="row g-2 mb-2">
+                                            <div class="col-md-6">
+                                                <label class="form-label small fw-bold">Duração de cada Sessão *</label>
+                                                <select name="duracao_padrao_minutos" class="form-select form-select-sm" required>
+                                                    <option value="30" {% if prof.duracao_padrao_minutos == 30 %}selected{% endif %}>30 minutos</option>
+                                                    <option value="40" {% if prof.duracao_padrao_minutos == 40 %}selected{% endif %}>40 minutos</option>
+                                                    <option value="45" {% if prof.duracao_padrao_minutos == 45 or not prof.duracao_padrao_minutos %}selected{% endif %}>45 minutos</option>
+                                                    <option value="50" {% if prof.duracao_padrao_minutos == 50 %}selected{% endif %}>50 minutos</option>
+                                                    <option value="60" {% if prof.duracao_padrao_minutos == 60 %}selected{% endif %}>60 minutos (1 hora)</option>
+                                                    <option value="90" {% if prof.duracao_padrao_minutos == 90 %}selected{% endif %}>90 minutos (1h30)</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label small fw-bold">Início Expediente</label>
+                                                <input type="time" name="hora_inicio_trabalho" class="form-control form-control-sm" value="{{ prof.hora_inicio_trabalho.strftime('%H:%M') if prof.hora_inicio_trabalho else '08:00' }}" required>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label small fw-bold">Fim Expediente</label>
+                                                <input type="time" name="hora_fim_trabalho" class="form-control form-control-sm" value="{{ prof.hora_fim_trabalho.strftime('%H:%M') if prof.hora_fim_trabalho else '18:00' }}" required>
+                                            </div>
+                                        </div>
+                                        <div class="row g-2">
+                                            <div class="col-md-6">
+                                                <label class="form-label small fw-bold text-muted">Início Almoço / Pausa</label>
+                                                <input type="time" name="hora_inicio_almoco" class="form-control form-control-sm" value="{{ prof.hora_inicio_almoco.strftime('%H:%M') if prof.hora_inicio_almoco else '12:00' }}">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label small fw-bold text-muted">Retorno Almoço</label>
+                                                <input type="time" name="hora_fim_almoco" class="form-control form-control-sm" value="{{ prof.hora_fim_almoco.strftime('%H:%M') if prof.hora_fim_almoco else '13:00' }}">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer bg-light">
+                                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Salvar Alterações</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <tr>
+                    <td colspan="8" class="text-center py-5 text-muted">
+                        <i class="bi bi-person-heart fs-2 d-block mb-2 text-secondary"></i>
+                        Nenhum profissional de saúde cadastrado no corpo clínico. Clique no botão acima para registar.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL NOVO PROFISSIONAL DE SAÚDE -->
+<div class="modal fade" id="modalNovoProfissional" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <form action="{{ url_for('gestao_corpo_clinico') }}" method="POST">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-person-plus text-primary me-2"></i>Cadastrar Profissional Clínico
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold">Nome Completo *</label>
+                            <input type="text" name="nome" class="form-control" required placeholder="Ex: Dra. Mariana Costa">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Especialidade / Área de Atuação *</label>
+                            <input type="text" name="cargo" class="form-control" required placeholder="Ex: Fisioterapeuta, Nutricionista, Médico">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">WhatsApp / Celular *</label>
+                            <input type="text" name="telefone" class="form-control" placeholder="(11) 99999-9999" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Registo (CRM, CREFITO, CRP, etc.)</label>
+                            <input type="text" name="documento_registro" class="form-control" placeholder="Ex: CRM 123456/SP">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">E-mail (Opcional)</label>
+                            <input type="email" name="email" class="form-control" placeholder="profissional@clinica.com">
+                        </div>
+                    </div>
+
+                    <!-- GRADE DE HORÁRIOS & SESSÃO -->
+                    <div class="p-3 bg-light rounded-3 border mb-0">
+                        <h6 class="fw-bold text-primary mb-2">
+                            <i class="bi bi-clock-history me-1"></i>Parametrização da Agenda & Consultas
+                        </h6>
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Duração de cada Sessão *</label>
+                                <select name="duracao_padrao_minutos" class="form-select form-select-sm" required>
+                                    <option value="30">30 minutos</option>
+                                    <option value="40">40 minutos</option>
+                                    <option value="45" selected>45 minutos (Padrão)</option>
+                                    <option value="50">50 minutos</option>
+                                    <option value="60">60 minutos (1 hora)</option>
+                                    <option value="90">90 minutos (1h30)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Início Expediente</label>
+                                <input type="time" name="hora_inicio_trabalho" class="form-control form-control-sm" value="08:00" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Fim Expediente</label>
+                                <input type="time" name="hora_fim_trabalho" class="form-control form-control-sm" value="18:00" required>
+                            </div>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-muted">Início Almoço / Pausa</label>
+                                <input type="time" name="hora_inicio_almoco" class="form-control form-control-sm" value="12:00">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-muted">Retorno Almoço</label>
+                                <input type="time" name="hora_fim_almoco" class="form-control form-control-sm" value="13:00">
+                            </div>
+                        </div>
+                        <small class="text-muted d-block mt-2" style="font-size: 0.72rem;">
+                            <i class="bi bi-info-circle me-1"></i>Estes parâmetros determinam automaticamente as vagas disponíveis no calendário de marcação.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4">Salvar Profissional</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

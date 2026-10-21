@@ -349,6 +349,9 @@ class OperadorCampo(db.Model):
     hora_fim_almoco = db.Column(db.Time, default=time(13, 0))
     dias_atendimento = db.Column(db.String(50), default='seg,ter,qua,qui,sex')
 
+    # Define se atua no atendimento direto (médico/terapeuta) ou suporte (recepção/atendente)
+    funcao_clinica = db.Column(db.String(30), default='profissional') # 'profissional' ou 'atendente'
+
     def gerar_token_se_necessario(self):
         if not self.token_acesso:
             self.token_acesso = secrets.token_urlsafe(32)

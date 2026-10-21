@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Regularizar Assinatura - Trivium ERP</title>
+    <title>Renovação de Assinatura - Trivium ERP</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
@@ -21,452 +20,181 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 3rem 1rem;
+            padding: 2rem 1rem;
         }
-        .container-suspenso { max-width: 1100px; width: 100%; }
-        .icon-lock-wrapper {
-            width: 72px; height: 72px;
-            background-color: #fee2e2; color: #dc2626;
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 2rem; margin: 0 auto 1.5rem auto;
-            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
-        }
-        .card-plano {
+        .card-renovacao {
+            max-width: 860px;
+            width: 100%;
             background: #ffffff;
-            border: 2px solid #e2e8f0;
-            border-radius: 20px;
-            padding: 2rem;
-            transition: all 0.25s ease;
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            height: 100%;
+            border-radius: 1.25rem;
+            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
         }
-        .card-plano:hover { transform: translateY(-4px); box-shadow: 0 12px 24px -10px rgba(0,0,0,0.08); }
-        .preco-valor { font-size: 2.3rem; font-weight: 800; line-height: 1; }
-        .preco-periodo { font-size: 0.9rem; color: #64748b; font-weight: 600; }
-        .lista-recursos { list-style: none; padding: 0; margin: 1.5rem 0 2rem 0; flex-grow: 1; }
-        .lista-recursos li { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 0.75rem; font-size: 0.88rem; color: #334155; }
-        .lista-recursos li i { color: #059669; font-size: 1.1rem; flex-shrink: 0; }
-        .card-ajuda { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 1.25rem 1.75rem; }
+        .card-ciclo {
+            border: 2px solid #e2e8f0;
+            border-radius: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .card-ciclo:hover {
+            border-color: #94a3b8;
+        }
+        .card-ciclo.selecionado {
+            border-color: #2563eb;
+            background-color: #eff6ff;
+        }
     </style>
 </head>
 <body>
 
-    <div class="container-suspenso text-center">
-        <div class="icon-lock-wrapper">
-            <i class="bi bi-shield-lock-fill"></i>
-        </div>
-
-        <h2 class="fw-extrabold text-dark mb-2">Acesso & Assinatura</h2>
-        <p class="text-muted mx-auto mb-4" style="max-width: 680px; font-size: 0.98rem;">
-            Empresa: <strong>{{ current_user.empresa.razao_social }}</strong>. Escolha o ciclo de faturamento ideal para o seu negócio. Todos os planos liberam o sistema completo com ativação imediata via Pix, Cartão ou Boleto.
-        </p>
-
-        <!-- GRADE DOS PLANOS PADRONIZADOS -->
-        <div class="row g-4 text-start mb-4">
-            
-            <!-- PLANO MENSAL -->
-            <div class="col-lg-4">
-                <div class="card-plano">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="badge bg-light text-secondary border px-3 py-1 fw-bold">Mensal</span>
-                    </div>
-                    <h4 class="fw-bold mb-1 text-dark">Plano Mensal</h4>
-                    <p class="text-muted small mb-3">Máxima flexibilidade para o seu dia a dia.</p>
-
-                    <div class="d-flex align-items-baseline gap-2 mb-1">
-                        <span class="preco-valor text-dark">R$ 39,90</span>
-                        <span class="preco-periodo">/mês</span>
-                    </div>
-                    <small class="text-muted d-block mb-3">Cobrança recorrente mensal</small>
-
-                    <ul class="lista-recursos">
-                        <li><i class="bi bi-check-circle-fill"></i><span>Acesso irrestrito a todos os módulos do sistema</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Gestão de clientes e catálogo de serviços</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Propostas comerciais e minutas de contrato em PDF</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Agenda de OS, etapas (Gantt) e fotos na nuvem</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Controle financeiro de parcelas e faturamento</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Sem fidelidade: cancele quando quiser</span></li>
-                    </ul>
-
-                    <button type="button" class="btn btn-outline-primary btn-lg w-100 fw-bold py-2 rounded-3" onclick="abrirCheckoutModal('MENSAL', 39.90, 1, 'R$ 39,90/mês')">
-                        <i class="bi bi-arrow-repeat me-1"></i> Assinar Mensal
-                    </button>
-                </div>
-            </div>
-
-            <!-- PLANO SEMESTRAL -->
-            <div class="col-lg-4">
-                <div class="card-plano">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle px-3 py-1 fw-bold">Semestral</span>
-                        <span class="badge bg-success-subtle text-success small fw-bold">Economize 12%</span>
-                    </div>
-                    <h4 class="fw-bold mb-1 text-dark">Plano Semestral</h4>
-                    <p class="text-muted small mb-3">Equilíbrio perfeito entre economia e previsibilidade.</p>
-
-                    <div class="d-flex align-items-baseline gap-2 mb-1">
-                        <span class="preco-valor text-dark">R$ 34,90</span>
-                        <span class="preco-periodo">/mês</span>
-                    </div>
-                    <small class="text-success fw-bold d-block mb-3">Total de R$ 209,40 em até 6x sem juros</small>
-
-                    <ul class="lista-recursos">
-                        <li><i class="bi bi-check-circle-fill"></i><span><strong>Todos os recursos do Trivium ERP inclusos</strong></span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Economia de 12% em comparação ao plano mensal</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Cobrança única e renovação a cada 6 meses</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Parcelamento no cartão em até 6x sem juros</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Suporte técnico prioritário para a equipe</span></li>
-                    </ul>
-
-                    <button type="button" class="btn btn-outline-primary btn-lg w-100 fw-bold py-2 rounded-3" onclick="abrirCheckoutModal('SEMESTRAL', 209.40, 6, '6x de R$ 34,90')">
-                        <i class="bi bi-credit-card me-1"></i> Assinar Semestral
-                    </button>
-                </div>
-            </div>
-
-            <!-- PLANO ANUAL -->
-            <div class="col-lg-4">
-                <div class="card-plano">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="badge bg-primary px-3 py-1 fw-bold">Anual</span>
-                        <span class="badge bg-success-subtle text-success small fw-bold">Economize 25%</span>
-                    </div>
-                    <h4 class="fw-bold mb-1 text-primary">Plano Anual</h4>
-                    <p class="text-muted small mb-3">Máxima economia para empresas consolidadas.</p>
-
-                    <div class="d-flex align-items-baseline gap-2 mb-1">
-                        <span class="preco-valor text-primary">R$ 29,90</span>
-                        <span class="preco-periodo">/mês</span>
-                    </div>
-                    <small class="text-primary fw-bold d-block mb-3">Total de R$ 358,80 em até 12x sem juros</small>
-
-                    <ul class="lista-recursos">
-                        <li><i class="bi bi-check-circle-fill"></i><span><strong>Todos os recursos do Trivium ERP inclusos</strong></span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Economia máxima de 25% (R$ 29,90/mês equivalente)</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Parcelamento no cartão em até 12x sem juros</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Preço fixo garantido por 1 ano sem reajustes</span></li>
-                        <li><i class="bi bi-check-circle-fill"></i><span>Suporte VIP prioritário direto via WhatsApp</span></li>
-                    </ul>
-
-                    <button type="button" class="btn btn-primary btn-lg w-100 fw-bold py-2 rounded-3 shadow-sm" onclick="abrirCheckoutModal('ANUAL', 358.80, 12, '12x de R$ 29,90')">
-                        <i class="bi bi-lightning-charge-fill me-1"></i> Assinar Anual
-                    </button>
-                </div>
-            </div>
-
-        </div>
-
-        <!-- SUPORTE WHATSAPP & LOGOUT -->
-        <div class="card-ajuda d-flex flex-column flex-md-row align-items-center justify-content-between gap-3 text-start mb-4">
+<div class="card-renovacao">
+    <!-- BARRA SUPERIOR COM LOGO E SAIR -->
+    <div class="d-flex justify-content-between align-items-center p-4 border-bottom bg-light">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-shield-lock-fill text-primary fs-3"></i>
             <div>
-                <h6 class="fw-bold text-dark mb-1">Dúvidas sobre os planos?</h6>
-                <p class="text-muted small mb-0">Fale com nossa equipe técnica para esclarecimentos ou atendimento comercial personalizado.</p>
+                <h5 class="fw-bold text-dark mb-0">Trivium ERP</h5>
+                <small class="text-muted">{{ empresa.razao_social }}</small>
             </div>
-            <a href="https://wa.me/5511914589026?text=Olá,%20gostaria%20de%20tirar%20dúvidas%20sobre%20os%20planos%20do%20Trivium%20ERP" target="_blank" class="btn btn-outline-success fw-bold px-4 py-2 text-nowrap rounded-3">
-                <i class="bi bi-whatsapp me-2"></i> Falar no WhatsApp
-            </a>
         </div>
-
-        <div>
-            <a href="{{ url_for('auth.logout') }}" class="text-danger small fw-semibold text-decoration-none">
-                <i class="bi bi-box-arrow-left me-1"></i> Sair da Minha Conta
-            </a>
-        </div>
+        <a href="{{ url_for('auth.logout') }}" class="btn btn-sm btn-outline-secondary fw-semibold">
+            <i class="bi bi-box-arrow-right me-1"></i>Sair da Conta
+        </a>
     </div>
 
-    <!-- MODAL DE CHECKOUT TRANSPARENTE -->
-    <div class="modal fade" id="modalCheckoutTransparente" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content rounded-4 border-0 shadow">
-                <div class="modal-header border-0 pb-0">
-                    <h5 class="modal-title fw-bold" id="tituloModalPlano">Finalizar Assinatura</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <div class="p-4 p-md-5">
+        <!-- TÍTULO AMIGÁVEL -->
+        <div class="text-center mb-4">
+            {% if empresa.status_assinatura == 'trial' or (empresa.data_vencimento and empresa.data_vencimento < hoje and not empresa.data_ultimo_pagamento) %}
+                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2 rounded-pill fw-bold mb-2">
+                    <i class="bi bi-clock-history me-1"></i>Período de Avaliação Finalizado
+                </span>
+                <h3 class="fw-bold text-dark">Seus 14 dias de teste foram concluídos!</h3>
+                <p class="text-muted">Seus dados e configurações continuam seguros. Escolha um ciclo de renovação abaixo para manter o acesso imediato à sua operação.</p>
+            {% else %}
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2 rounded-pill fw-bold mb-2">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>Ciclo de Faturamento Vencido
+                </span>
+                <h3 class="fw-bold text-dark">Hora de Regularizar a sua Assinatura</h3>
+                <p class="text-muted">Seu ciclo expirou em {{ empresa.data_vencimento.strftime('%d/%m/%Y') if empresa.data_vencimento else 'data recente' }}. Renove agora para reativar as operações da sua equipe.</p>
+            {% endif %}
+        </div>
+
+        <!-- CARDS DE SELEÇÃO DE CICLO -->
+        <div class="row g-3 mb-4">
+            <!-- MENSAL -->
+            <div class="col-md-4">
+                <div class="card-ciclo p-3 text-center h-100" id="cardCicloMensal" onclick="selecionarCiclo('mensal', {{ mensalidade }})">
+                    <small class="text-muted fw-bold d-block mb-1">MENSAL</small>
+                    <h4 class="fw-bold text-dark mb-0">R$ {{ "%.2f"|format(mensalidade) }}</h4>
+                    <span class="small text-muted">por mês</span>
+                    <hr class="my-2 opacity-25">
+                    <span class="badge bg-light text-dark border">Sem compromisso</span>
                 </div>
-                <div class="modal-body p-4">
+            </div>
 
-                    <!-- CAMPO DE CUPOM COM VALIDAÇÃO -->
-                    <div class="mb-3 p-3 bg-light rounded-3 border text-start">
-                        <label class="small text-muted fw-bold d-block">Cupom Promocional de Desconto</label>
-                        <div class="input-group input-group-sm mt-1">
-                            <input type="text" id="cupomCheckoutInput" class="form-control font-monospace fw-bold text-uppercase" 
-                                   value="{{ current_user.empresa.cupom_utilizado or '' }}" placeholder="EX: LUCAS10">
-                            <button class="btn btn-outline-primary fw-bold" type="button" onclick="validarCupomAoVivo()">Validar</button>
-                        </div>
-                        <small id="statusCupomCheckout" class="text-muted d-block mt-1">
-                            {% if current_user.empresa.cupom_utilizado %}
-                                <span class="text-success"><i class="bi bi-check-circle me-1"></i>Cupom vinculado do seu cadastro</span>
-                            {% else %}
-                                Possui um código de parceiro? Digite acima.
-                            {% endif %}
-                        </small>
-                    </div>
+            <!-- SEMESTRAL (12% OFF) -->
+            <div class="col-md-4">
+                <div class="card-ciclo p-3 text-center h-100" id="cardCicloSemestral" onclick="selecionarCiclo('semestral', {{ total_semestral }})">
+                    <span class="badge bg-success small px-2 py-1 mb-1">12% DE DESCONTO</span>
+                    <small class="text-muted fw-bold d-block">SEMESTRAL (6 MESES)</small>
+                    <h4 class="fw-bold text-primary mb-0">R$ {{ "%.2f"|format(total_semestral / 6) }}</h4>
+                    <span class="small text-muted">/mês (Total: R$ {{ "%.2f"|format(total_semestral) }})</span>
+                    <hr class="my-2 opacity-25">
+                    <span class="small text-success fw-bold">Economize 12% no total</span>
+                </div>
+            </div>
 
-                    <ul class="nav nav-pills nav-fill mb-3" id="pills-tab" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active fw-bold" id="tab-cartao" data-bs-toggle="pill" data-bs-target="#conteudo-cartao" type="button" role="tab">
-                                <i class="bi bi-credit-card me-1"></i> Cartão
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link fw-bold" id="tab-pix" data-bs-toggle="pill" data-bs-target="#conteudo-pix" type="button" role="tab">
-                                <i class="bi bi-qr-code me-1"></i> PIX
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link fw-bold" id="tab-boleto" data-bs-toggle="pill" data-bs-target="#conteudo-boleto" type="button" role="tab">
-                                <i class="bi bi-upc-scan me-1"></i> Boleto
-                            </button>
-                        </li>
-                    </ul>
-
-                    <div class="tab-content pt-2">
-                        <!-- CARTÃO DE CRÉDITO -->
-                        <div class="tab-pane fade show active" id="conteudo-cartao" role="tabpanel">
-                            <form id="formCartaoCheckout">
-                                <div class="mb-2 text-start">
-                                    <label class="small text-muted fw-bold">Número do Cartão</label>
-                                    <input type="text" id="cc_numero" class="form-control" placeholder="0000 0000 0000 0000" maxlength="19" required>
-                                </div>
-                                <div class="mb-2 text-start">
-                                    <label class="small text-muted fw-bold">Nome Impresso no Cartão</label>
-                                    <input type="text" id="cc_nome" class="form-control" placeholder="Ex: RODRIGO ANTUNES" required>
-                                </div>
-                                <div class="row g-2 mb-3 text-start">
-                                    <div class="col-4">
-                                        <label class="small text-muted fw-bold">Mês</label>
-                                        <input type="text" id="cc_mes" class="form-control" placeholder="MM" maxlength="2" required>
-                                    </div>
-                                    <div class="col-4">
-                                        <label class="small text-muted fw-bold">Ano</label>
-                                        <input type="text" id="cc_ano" class="form-control" placeholder="AAAA" maxlength="4" required>
-                                    </div>
-                                    <div class="col-4">
-                                        <label class="small text-muted fw-bold">CVV</label>
-                                        <input type="text" id="cc_cvv" class="form-control" placeholder="123" maxlength="4" required>
-                                    </div>
-                                </div>
-                                <button type="button" class="btn btn-primary fw-bold w-100 py-2 shadow-sm" onclick="processarPagamento('CREDIT_CARD')">
-                                    Confirmar e Assinar
-                                </button>
-                            </form>
-                        </div>
-
-                        <!-- PIX -->
-                        <div class="tab-pane fade text-center" id="conteudo-pix" role="tabpanel">
-                            <p class="text-muted small mb-3">Liberação instantânea assim que a transferência for confirmada.</p>
-                            <button type="button" class="btn btn-success fw-bold w-100 py-2 shadow-sm" onclick="processarPagamento('PIX')">
-                                <i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX
-                            </button>
-                            <div id="resultadoPix" class="mt-3 d-none">
-                                <div class="alert alert-info small" id="msgPix">Carregando dados...</div>
-                            </div>
-                        </div>
-
-                        <!-- BOLETO -->
-                        <div class="tab-pane fade text-center" id="conteudo-boleto" role="tabpanel">
-                            <div class="alert alert-light border small text-muted text-start mb-3">
-                                <i class="bi bi-info-circle text-primary me-1"></i> O boleto é emitido no valor integral com vencimento para 3 dias úteis. A liberação ocorre após compensação bancária.
-                            </div>
-                            <button type="button" class="btn btn-outline-primary fw-bold w-100 py-2 shadow-sm" onclick="processarPagamento('BOLETO')">
-                                <i class="bi bi-file-earmark-pdf me-1"></i> Gerar Boleto Bancário
-                            </button>
-                            <div id="resultadoBoleto" class="mt-3 d-none"></div>
-                        </div>
-                    </div>
+            <!-- ANUAL (25% OFF) -->
+            <div class="col-md-4">
+                <div class="card-ciclo p-3 text-center h-100 selecionado" id="cardCicloAnual" onclick="selecionarCiclo('anual', {{ total_anual }})">
+                    <span class="badge bg-primary small px-2 py-1 mb-1">25% DE DESCONTO</span>
+                    <small class="text-muted fw-bold d-block">ANUAL (12 MESES)</small>
+                    <h4 class="fw-bold text-success mb-0">R$ {{ "%.2f"|format(total_anual / 12) }}</h4>
+                    <span class="small text-muted">/mês (Total: R$ {{ "%.2f"|format(total_anual) }})</span>
+                    <hr class="my-2 opacity-25">
+                    <span class="small text-success fw-bold">Validade de 365 dias</span>
                 </div>
             </div>
         </div>
+
+        <!-- RESUMO DO INVESTIMENTO -->
+        <div class="p-3 bg-light rounded-3 border mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <strong class="text-dark d-block" id="labelResumoPlano">Plano Anual (12 Meses de Acesso Completo)</strong>
+                    <small class="text-muted">Liberação instantânea via PIX ou Cartão em até 12x no Mercado Pago</small>
+                </div>
+                <div class="text-end">
+                    <span class="small text-muted d-block">Valor Total:</span>
+                    <h3 class="fw-bold text-primary mb-0" id="valorTotalExibicao">R$ {{ "%.2f"|format(total_anual) }}</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- BOTÃO DE AÇÃO DIRETO DO MERCADO PAGO -->
+        <button type="button" id="btnPagarRenovacao" class="btn btn-primary btn-lg fw-bold w-100 py-3 shadow-sm" onclick="iniciarCheckoutRenovacao()">
+            <i class="bi bi-box-arrow-up-right me-2"></i>Pagar e Reativar Minha Conta com Mercado Pago
+        </button>
+
+        <div class="text-center mt-3">
+            <small class="text-muted">
+                <i class="bi bi-shield-check text-success me-1"></i>Ambiente Seguro Mercado Pago. Assim que o pagamento for concluído, sua conta será desbloqueada imediatamente.
+            </small>
+        </div>
     </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-    let planoEscolhido = 'MENSAL';
-    let valorTotalEscolhido = 39.90;
-    let parcelasEscolhidas = 1;
+<script>
+let cicloAtual = 'anual';
 
-    function abrirCheckoutModal(plano, valorTotal, parcelas, rotulo) {
-        planoEscolhido = plano;
-        valorTotalEscolhido = valorTotal;
-        parcelasEscolhidas = parcelas;
-        
-        const tituloEl = document.getElementById('tituloModalPlano');
-        if (tituloEl) tituloEl.innerText = `Finalizar Assinatura: Plano ${plano.charAt(0) + plano.slice(1).toLowerCase()} (${rotulo})`;
-        
-        const areaPix = document.getElementById('resultadoPix');
-        if (areaPix) {
-            areaPix.classList.add('d-none');
-            areaPix.innerHTML = '<div class="alert alert-info small" id="msgPix">Carregando...</div>';
-        }
+function selecionarCiclo(ciclo, valorTotal) {
+    cicloAtual = ciclo;
 
-        const areaBoleto = document.getElementById('resultadoBoleto');
-        if (areaBoleto) {
-            areaBoleto.classList.add('d-none');
-            areaBoleto.innerHTML = '';
-        }
+    document.querySelectorAll('.card-ciclo').forEach(c => c.classList.remove('selecionado'));
 
-        const modalEl = document.getElementById('modalCheckoutTransparente');
-        if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
-
-        const cupomAtual = document.getElementById('cupomCheckoutInput')?.value;
-        if (cupomAtual) {
-            validarCupomAoVivo();
-        }
+    if (ciclo === 'mensal') {
+        document.getElementById('cardCicloMensal').classList.add('selecionado');
+        document.getElementById('labelResumoPlano').innerText = 'Plano Mensal (30 Dias de Acesso)';
+    } else if (ciclo === 'semestral') {
+        document.getElementById('cardCicloSemestral').classList.add('selecionado');
+        document.getElementById('labelResumoPlano').innerText = 'Plano Semestral (180 Dias com 12% OFF)';
+    } else {
+        document.getElementById('cardCicloAnual').classList.add('selecionado');
+        document.getElementById('labelResumoPlano').innerText = 'Plano Anual (365 Dias com 25% OFF)';
     }
 
-    function validarCupomAoVivo() {
-        const codigo = document.getElementById('cupomCheckoutInput')?.value.trim();
-        const statusEl = document.getElementById('statusCupomCheckout');
+    document.getElementById('valorTotalExibicao').innerText = 'R$ ' + valorTotal.toFixed(2).replace('.', ',');
+}
 
-        if (!codigo) {
-            if (statusEl) statusEl.innerHTML = '<span class="text-muted">Nenhum cupom inserido.</span>';
-            return;
+function iniciarCheckoutRenovacao() {
+    const btn = document.getElementById('btnPagarRenovacao');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Conectando ao Mercado Pago...';
+
+    fetch("{{ url_for('api_checkout_preferencia') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ciclo: cicloAtual })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'success' && (data.init_point || data.sandbox_init_point)) {
+            window.location.href = data.init_point || data.sandbox_init_point;
+        } else {
+            alert(data.mensagem || "Erro ao gerar preferência no Mercado Pago. Tente novamente.");
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-box-arrow-up-right me-2"></i>Pagar e Reativar Minha Conta com Mercado Pago';
         }
+    })
+    .catch(err => {
+        alert("Erro de comunicação com o servidor: " + err);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-box-arrow-up-right me-2"></i>Pagar e Reativar Minha Conta com Mercado Pago';
+    });
+}
+</script>
 
-        fetch('/api/cupom/validar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ codigo: codigo, plano: planoEscolhido })
-        })
-        .then(r => r.json())
-        .then(res => {
-            if (res.valido) {
-                valorTotalEscolhido = res.valor_final;
-                if (statusEl) {
-                    statusEl.innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle me-1"></i>${res.mensagem} Valor com desconto: R$ ${res.valor_final.toFixed(2)}</span>`;
-                }
-            } else {
-                if (statusEl) {
-                    statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${res.mensagem}</span>`;
-                }
-            }
-        })
-        .catch(() => {
-            if (statusEl) statusEl.innerHTML = '<span class="text-danger">Erro ao validar cupom.</span>';
-        });
-    }
-
-    function processarPagamento(tipo) {
-        const cupomDigitado = document.getElementById('cupomCheckoutInput')?.value || '';
-        const payload = {
-            plano: planoEscolhido,
-            valor_total: valorTotalEscolhido,
-            parcelas: parcelasEscolhidas,
-            forma_pagamento: tipo,
-            cupom: cupomDigitado
-        };
-
-        if (tipo === 'CREDIT_CARD') {
-            const num = document.getElementById('cc_numero')?.value || '';
-            const nome = document.getElementById('cc_nome')?.value || '';
-            const mes = document.getElementById('cc_mes')?.value || '';
-            const ano = document.getElementById('cc_ano')?.value || '';
-            const cvv = document.getElementById('cc_cvv')?.value || '';
-
-            if (!num || !nome || !mes || !ano || !cvv) {
-                alert('Por favor, preencha todos os campos do cartão.');
-                return;
-            }
-
-            payload.cartao = {
-                holder_name: nome,
-                number: num,
-                expiry_month: mes,
-                expiry_year: ano,
-                ccv: cvv
-            };
-        }
-
-        const btnPix = document.querySelector('#conteudo-pix button');
-        if (tipo === 'PIX' && btnPix) {
-            btnPix.disabled = true;
-            btnPix.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gerando Pix...';
-        }
-
-        const btnBoleto = document.querySelector('#conteudo-boleto button');
-        if (tipo === 'BOLETO' && btnBoleto) {
-            btnBoleto.disabled = true;
-            btnBoleto.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gerando Boleto...';
-        }
-
-        fetch('/api/assinatura/checkout-transparente', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        })
-        .then(r => r.json())
-        .then(res => {
-            if (tipo === 'PIX' && btnPix) {
-                btnPix.disabled = false;
-                btnPix.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX';
-            }
-            if (tipo === 'BOLETO' && btnBoleto) {
-                btnBoleto.disabled = false;
-                btnBoleto.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i> Gerar Boleto Bancário';
-            }
-
-            if (res.status === 'success') {
-                if (tipo === 'PIX') {
-                    const areaPix = document.getElementById('resultadoPix');
-                    areaPix.classList.remove('d-none');
-
-                    const copiaCola = (res.pix && res.pix.payload) ? res.pix.payload : '';
-                    const encodedImg = (res.pix && res.pix.encodedImage) ? res.pix.encodedImage : '';
-
-                    let imgTag = encodedImg 
-                        ? `<img src="data:image/png;base64,${encodedImg}" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">`
-                        : `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(copiaCola)}" alt="QR Code Pix" class="img-fluid border rounded p-2 bg-white shadow-sm" style="max-height: 200px; width: 200px;">`;
-
-                    areaPix.innerHTML = `
-                        <div class="card p-3 border-success text-center shadow-sm mt-3">
-                            <h6 class="fw-bold text-success mb-2"><i class="bi bi-qr-code me-1"></i> QR Code Pix Gerado</h6>
-                            <div class="my-2 text-center">${imgTag}</div>
-                            <label class="small text-muted fw-bold d-block text-start mb-1">Código Pix Copia e Cola:</label>
-                            <div class="input-group mb-3">
-                                <input type="text" id="pixInput" class="form-control form-control-sm font-monospace" value="${copiaCola}" readonly>
-                                <button class="btn btn-outline-primary btn-sm fw-bold" type="button" onclick="navigator.clipboard.writeText(document.getElementById('pixInput').value); alert('Código copiado!');">
-                                    Copiar
-                                </button>
-                            </div>
-                            <small class="text-muted">A liberação do sistema ocorrerá automaticamente após o pagamento.</small>
-                        </div>
-                    `;
-                } else if (tipo === 'BOLETO') {
-                    const areaBoleto = document.getElementById('resultadoBoleto');
-                    areaBoleto.classList.remove('d-none');
-                    const linkBoleto = res.bankSlipUrl || res.invoiceUrl || (res.dados && (res.dados.bankSlipUrl || res.dados.invoiceUrl)) || '';
-
-                    areaBoleto.innerHTML = `
-                        <div class="card p-3 border-primary text-center shadow-sm mt-3">
-                            <h6 class="fw-bold text-primary mb-2"><i class="bi bi-file-earmark-check me-1"></i> Boleto Gerado</h6>
-                            <p class="small text-muted mb-3">Clique abaixo para visualizar o boleto:</p>
-                            <a href="${linkBoleto}" target="_blank" rel="noopener noreferrer" class="btn btn-primary fw-bold py-2">
-                                <i class="bi bi-printer me-1"></i> Visualizar Boleto
-                            </a>
-                        </div>
-                    `;
-                } else {
-                    alert('Assinatura ativada com sucesso via Cartão!');
-                    window.location.href = '/';
-                }
-            } else {
-                alert('Atenção: ' + res.mensagem);
-            }
-        })
-        .catch(() => {
-            if (tipo === 'PIX' && btnPix) {
-                btnPix.disabled = false;
-                btnPix.innerHTML = '<i class="bi bi-lightning-charge me-1"></i> Gerar Cobrança PIX';
-            }
-            if (tipo === 'BOLETO' && btnBoleto) {
-                btnBoleto.disabled = false;
-                btnBoleto.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i> Gerar Boleto Bancário';
-            }
-            alert('Erro de comunicação com o servidor.');
-        });
-    }
-    </script>
 </body>
 </html>

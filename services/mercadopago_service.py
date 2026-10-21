@@ -167,6 +167,8 @@ def criar_cobranca_mercadopago(empresa, nome_plano, valor, forma_pagamento, cart
 
     return {"sucesso": False, "mensagem": "Método de pagamento inválido."}
 
+# services/mercadopago_service.py -> dentro de criar_preferencia_mercado_pago:
+
 def criar_preferencia_mercado_pago(empresa, plano, valor_total, cupom_codigo=None):
     sdk = _get_sdk()
     if not sdk:
@@ -175,10 +177,13 @@ def criar_preferencia_mercado_pago(empresa, plano, valor_total, cupom_codigo=Non
     chave_plano = str(plano).upper().replace("PLANO ", "").strip()
     if 'ANUAL' in chave_plano:
         cfg = PLANOS_CONFIG['ANUAL']
+        ciclo_tag = 'anual'
     elif 'SEMESTRAL' in chave_plano:
         cfg = PLANOS_CONFIG['SEMESTRAL']
+        ciclo_tag = 'semestral'
     else:
         cfg = PLANOS_CONFIG['MENSAL']
+        ciclo_tag = 'mensal'
 
     valor_final = float(valor_total) if valor_total else float(cfg['valor_total'])
     base_url = os.getenv("APP_BASE_URL", "https://app.triviumerp.com.br").rstrip("/")
@@ -198,11 +203,11 @@ def criar_preferencia_mercado_pago(empresa, plano, valor_total, cupom_codigo=Non
         },
         "back_urls": {
             "success": f"{base_url}/configuracoes/perfil#tab-planos",
-            "failure": f"{base_url}/configuracoes/perfil#tab-planos",
-            "pending": f"{base_url}/configuracoes/perfil#tab-planos"
+            "failure": f"{base_url}/assinatura/regularizar",
+            "pending": f"{base_url}/assinatura/regularizar"
         },
         "auto_return": "approved",
-        "external_reference": f"emp_{empresa.id}_{cfg['nome']}"
+        "external_reference": f"emp_{empresa.id}_{ciclo_tag}"
     }
 
     try:

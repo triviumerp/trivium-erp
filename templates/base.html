@@ -320,42 +320,56 @@
                 {% endif %}
             {% endif %}
 
-            <!-- 6. MÓDULO SERVIÇOS & ORDENS / ATENDIMENTOS CLÍNICOS -->
+            <!-- 6. MÓDULO SERVIÇOS DE CAMPO (OPERACIONAL & ENGENHARIA) -->
             {% set tem_servicos = (current_user.empresa.modulo_servicos_campo and (current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_servicos)) or current_user.nivel_acesso == 'master' %}
-            {% set tem_saude = (current_user.empresa.modulo_atendimentos and (current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_servicos)) or current_user.nivel_acesso == 'master' %}
             {% set tem_tecnicos = current_user.empresa.modulo_gestao_tecnicos or current_user.nivel_acesso == 'master' %}
 
-            {# Cenário A: Apenas Saúde / Clínica #}
-            {% if tem_saude and not tem_servicos %}
-            <a href="{{ url_for('listar_atendimentos') }}" class="nav-link-custom {% if request.endpoint in ['listar_atendimentos', 'visualizar_ficha_servico'] %}active{% endif %}">
-                <i class="bi bi-heart-pulse-fill"></i><span>Atendimentos & Prontuários</span>
-            </a>
-            {# Cenário B: Serviços de Campo ou Híbrido #}
-            {% elif tem_servicos %}
+            {% if tem_servicos %}
             <div class="nav-item">
-                <a class="nav-link-custom d-flex justify-content-between align-items-center {% if request.endpoint in ['consultar_servicos', 'listar_atendimentos', 'gestao_operadores', 'visualizar_ficha_servico'] %}active{% endif %}" 
+                <a class="nav-link-custom d-flex justify-content-between align-items-center {% if request.endpoint in ['consultar_servicos', 'gestao_operadores', 'visualizar_ficha_servico'] and not (request.endpoint == 'visualizar_ficha_servico' and servico and servico.tipo_ficha == 'atendimento') %}active{% endif %}" 
                    data-bs-toggle="collapse" href="#submenuServicos" role="button">
                     <div class="d-flex align-items-center gap-2">
                         <i class="bi bi-briefcase-fill"></i>
-                        <span>Serviços & Ordens</span>
+                        <span>Serviços & Campo</span>
                     </div>
                     <i class="bi bi-chevron-down small opacity-75"></i>
                 </a>
-                <div class="collapse {% if request.endpoint in ['consultar_servicos', 'listar_atendimentos', 'gestao_operadores', 'visualizar_ficha_servico'] %}show{% endif %}" id="submenuServicos">
+                <div class="collapse {% if request.endpoint in ['consultar_servicos', 'gestao_operadores'] %}show{% endif %}" id="submenuServicos">
                     <div class="ps-3 py-1 d-flex flex-column gap-1">
                         <a href="{{ url_for('consultar_servicos') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'consultar_servicos' %}active fw-bold text-primary{% endif %}">
                             <i class="bi bi-tools"></i><span>Ordens de Serviço</span>
                         </a>
-                        {% if tem_saude %}
-                        <a href="{{ url_for('listar_atendimentos') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'listar_atendimentos' %}active fw-bold text-primary{% endif %}">
-                            <i class="bi bi-heart-pulse-fill"></i><span>Fichas Clínicas</span>
-                        </a>
-                        {% endif %}
                         {% if tem_tecnicos %}
                         <a href="{{ url_for('gestao_operadores') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'gestao_operadores' %}active fw-bold text-primary{% endif %}">
                             <i class="bi bi-people"></i><span>Técnicos & Equipe</span>
                         </a>
                         {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 6.1 MÓDULO DE SAÚDE & CLÍNICA (ÁREA DEDICADA E INDEPENDENTE) -->
+            {% set tem_saude = (current_user.empresa.modulo_atendimentos and (current_user.nivel_acesso in ['admin', 'master'] or current_user.perm_servicos)) or current_user.nivel_acesso == 'master' %}
+
+            {% if tem_saude %}
+            <div class="nav-item">
+                <a class="nav-link-custom d-flex justify-content-between align-items-center {% if request.endpoint in ['listar_atendimentos', 'novo_agendamento_clinico', 'gestao_corpo_clinico'] %}active{% endif %}" 
+                   data-bs-toggle="collapse" href="#submenuClinica" role="button">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-heart-pulse-fill text-danger"></i>
+                        <span>Clínica & Consultas</span>
+                    </div>
+                    <i class="bi bi-chevron-down small opacity-75"></i>
+                </a>
+                <div class="collapse {% if request.endpoint in ['listar_atendimentos', 'novo_agendamento_clinico', 'gestao_corpo_clinico'] %}show{% endif %}" id="submenuClinica">
+                    <div class="ps-3 py-1 d-flex flex-column gap-1">
+                        <a href="{{ url_for('listar_atendimentos') }}" class="nav-link-custom py-1 small {% if request.endpoint in ['listar_atendimentos', 'novo_agendamento_clinico'] %}active fw-bold text-primary{% endif %}">
+                            <i class="bi bi-calendar-check"></i><span>Atendimentos & Prontuários</span>
+                        </a>
+                        <a href="{{ url_for('gestao_corpo_clinico') }}" class="nav-link-custom py-1 small {% if request.endpoint == 'gestao_corpo_clinico' %}active fw-bold text-primary{% endif %}">
+                            <i class="bi bi-person-badge"></i><span>Corpo Clínico & Horários</span>
+                        </a>
                     </div>
                 </div>
             </div>
