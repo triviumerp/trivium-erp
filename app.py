@@ -3115,7 +3115,11 @@ def atualizar_cobranca_fatura(id):
                 registro = f"[{datetime.now().strftime('%d/%m/%Y %H:%M')}] {nova_obs}\n"
                 p.historico_cobranca = (p.historico_cobranca or "") + registro
 
+    # -------------------------------------------------------------
+    # GATILHO: SE A FATURA FOR QUITADA, LIBERA SERVIÇOS E PEDIDOS!
+    # -------------------------------------------------------------
     if novo_status == 'Pago':
+        # Libera Ordens de Serviço
         servicos_bloqueados = ServicoCliente.query.filter_by(
             fatura_id=fatura.id, 
             empresa_id=current_user.empresa_id
@@ -3123,6 +3127,16 @@ def atualizar_cobranca_fatura(id):
         for sc in servicos_bloqueados:
             sc.status = 'Em Andamento'
             sc.observacoes = (sc.observacoes or "") + " | [Pagamento Confirmado: Execução Liberada]"
+
+        # Libera Pedidos de Venda Bloqueados por Sinal/Faturamento
+        pedidos_bloqueados = PedidoRequisicao.query.filter_by(
+            fatura_id=fatura.id,
+            empresa_id=current_user.empresa_id,
+            status='bloqueado_pagamento'
+        ).all()
+        for ped in pedidos_bloqueados:
+            ped.status = 'em_separacao'
+            ped.observacoes = (ped.observacoes or "") + " | [Pagamento Confirmado: Liberado p/ Expedição]"
 
     db.session.commit()
     flash(f'Fatura "{fatura.descricao}" atualizada com sucesso!', 'success')
@@ -3158,11 +3172,11 @@ def atualizar_cobranca_parcela(id):
         registro = f"[{datetime.now().strftime('%d/%m/%Y %H:%M')}] {nova_obs}\n"
         parcela.historico_cobranca = (parcela.historico_cobranca or "") + registro
 
-    # GATILHO AUTOMÁTICO DE BAIXA DE SINAL / ENTRADA
-    if parcela.is_entrada and novo_status == 'Pago' and status_anterior != 'Pago':
+    # GATILHO AUTOMÁTICO DE BAIXA DE SINAL / ENTRADA NA PARCELA
+    if parcela.is_entrada and novo_status == 'Pago':
         fatura = parcela.fatura
         
-        # 1. Desbloqueia Ordens de Serviço (caso venha de propostas)
+        # 1. Desbloqueia Ordens de Serviço
         servicos_bloqueados = ServicoCliente.query.filter_by(
             fatura_id=fatura.id, 
             empresa_id=current_user.empresa_id, 
@@ -3172,7 +3186,7 @@ def atualizar_cobranca_parcela(id):
             sc.status = 'Em Andamento'
             sc.observacoes = (sc.observacoes or "") + " | [Sinal Confirmado: Execução Liberada]"
 
-        # 2. Desbloqueia Pedidos de Venda de Produtos e envia para Expedição
+        # 2. Desbloqueia Pedidos de Venda e envia para Expedição/Separação
         pedidos_bloqueados = PedidoRequisicao.query.filter_by(
             fatura_id=fatura.id,
             empresa_id=current_user.empresa_id,
@@ -3182,7 +3196,7 @@ def atualizar_cobranca_parcela(id):
             ped.status = 'em_separacao'
             ped.observacoes = (ped.observacoes or "") + " | [Sinal Pago: Liberado para Expedição]"
 
-        flash(f'Sinal de Entrada quitado! {len(servicos_bloqueados)} serviço(s) e {len(pedidos_bloqueados)} pedido(s) liberados para a expedição.', 'success')
+        flash(f'Sinal de Entrada quitado! {len(pedidos_bloqueados)} pedido(s) liberado(s) para a expedição.', 'success')
 
     db.session.commit()
     flash(f'{parcela.descricao_parcela} atualizada com sucesso!', 'info')
@@ -4924,12 +4938,48 @@ def listar_vendas():
 @login_required
 def criar_venda_produto():
     try:
+        produtos_ids = request.form.getlist('produto_id[]')
+        quantidades = request.form.getlist('quantidade[]')
+        valores = request.form.getlist('valor_unitario[]')
+
+        if not produtos_ids or not any(p_id and q and float(q) > 0 for p_id, q in zip(produtos_ids, quantidades)):
+            flash('Selecione pelo menos um produto com quantidade maior que zero.', 'warning')
+            return redirect(url_for('listar_vendas'))
+
+        # ---------------------------------------------------------------------
+        # 1. VALIDAÇÃO PRÉVIA E RÍGIDA DE ESTOQUE (NÃO DEIXA FECHAR SEM SALDO)
+        # ---------------------------------------------------------------------
+        itens_para_venda = []
+        for p_id, q_str, v_str in zip(produtos_ids, quantidades, valores):
+            if p_id and q_str and float(q_str) > 0:
+                prod = ProdutoEstoque.query.filter_by(id=int(p_id), empresa_id=current_user.empresa_id).first()
+                if not prod:
+                    flash(f'Produto ID {p_id} não localizado no sistema.', 'danger')
+                    return redirect(url_for('listar_vendas'))
+                
+                qtd_pedida = float(q_str)
+                saldo_disponivel = float(prod.quantidade_atual or 0.0)
+
+                if saldo_disponivel < qtd_pedida:
+                    flash(f'Venda cancelada! Estoque insuficiente para "{prod.nome}". Saldo atual: {saldo_disponivel} {prod.unidade_medida}, Solicitado: {qtd_pedida}.', 'danger')
+                    return redirect(url_for('listar_vendas'))
+
+                unit = float(v_str or (prod.preco_venda_sugerido or 0.0))
+                itens_para_venda.append({
+                    'produto': prod,
+                    'quantidade': qtd_pedida,
+                    'preco_unitario': unit,
+                    'subtotal': round(qtd_pedida * unit, 2)
+                })
+
+        # ---------------------------------------------------------------------
+        # 2. IDENTIFICAÇÃO DO CLIENTE / COMPRADOR
+        # ---------------------------------------------------------------------
         cliente_id = request.form.get('cliente_id')
         cli_obj = None
         if cliente_id and cliente_id.isdigit():
             cli_obj = Cliente.query.filter_by(id=int(cliente_id), empresa_id=current_user.empresa_id).first()
         
-        # Garante que se for venda balcão avulsa, cria/vincula um cliente para não violar not-null em faturas
         if not cli_obj:
             nome_digitado = request.form.get('nome_solicitante', '').strip() or 'Consumidor Final (Balcão)'
             contato_digitado = request.form.get('contato_solicitante', '').strip() or '(00) 00000-0000'
@@ -4946,37 +4996,30 @@ def criar_venda_produto():
                 db.session.add(cli_obj)
                 db.session.flush()
 
-        nome_comprador = cli_obj.nome
-        contato = cli_obj.telefone or request.form.get('contato_solicitante', '').strip()
         endereco_entrega = request.form.get('endereco_entrega', '').strip() or 'Retirada no Balcão'
         obs = request.form.get('observacoes', '').strip()
         
-        # Regras Financeiras e Condições de Pagamento
         gerar_financeiro = bool(request.form.get('gerar_financeiro'))
         exige_entrada = request.form.get('exige_entrada') in ['1', 'true', 'on']
         valor_entrada = float(request.form.get('valor_entrada') or 0.0) if exige_entrada else 0.0
         forma_pagamento_entrada = request.form.get('forma_pagamento_entrada', 'PIX')
-        qtd_parcelas = int(request.form.get('qtd_parcelas') or 1)
+        qtd_parcelas = max(1, int(request.form.get('qtd_parcelas') or 1))
         forma_pagamento_parcelas = request.form.get('forma_pagamento_parcelas', 'Boleto Bancário')
-        intervalo_dias = int(request.form.get('intervalo_dias') or 30)
-
-        produtos_ids = request.form.getlist('produto_id[]')
-        quantidades = request.form.getlist('quantidade[]')
-        valores = request.form.getlist('valor_unitario[]')
+        intervalo_dias = max(1, int(request.form.get('intervalo_dias') or 30))
 
         total_existentes = PedidoRequisicao.query.filter_by(empresa_id=current_user.empresa_id).count() + 1
         num_pedido = f"PED-{datetime.now().year}-{total_existentes:04d}"
 
-        # Se exigir entrada maior que zero, nasce bloqueado aguardando o pagamento do sinal
+        # Se exigir entrada maior que zero, nasce bloqueado aguardando o sinal
         status_inicial_pedido = 'bloqueado_pagamento' if (exige_entrada and valor_entrada > 0) else 'em_separacao'
 
         novo_pedido = PedidoRequisicao(
             empresa_id=current_user.empresa_id,
-            cliente_id=cli_obj.id if cli_obj else None,
+            cliente_id=cli_obj.id,
             numero_pedido=num_pedido,
             tipo_origem='venda_balcao',
-            nome_solicitante=nome_comprador,
-            contato_solicitante=contato,
+            nome_solicitante=cli_obj.nome,
+            contato_solicitante=cli_obj.telefone or request.form.get('contato_solicitante', '').strip(),
             setor_obra_destino=endereco_entrega,
             observacoes=obs,
             status=status_inicial_pedido,
@@ -4992,45 +5035,41 @@ def criar_venda_produto():
         db.session.flush()
 
         valor_total_pedido = 0.0
-
-        for p_id, q_str, v_str in zip(produtos_ids, quantidades, valores):
-            if p_id and q_str and float(q_str) > 0:
-                prod = ProdutoEstoque.query.get(int(p_id))
-                qtd = float(q_str)
-                unit = float(v_str or (prod.preco_venda_sugerido if prod else 0.0))
-                subtotal = round(qtd * unit, 2)
-                valor_total_pedido += subtotal
-
-                item = ItemPedidoRequisicao(
-                    pedido_id=novo_pedido.id,
-                    produto_id=int(p_id),
-                    quantidade_solicitada=qtd,
-                    preco_unitario=unit,
-                    valor_total=subtotal
-                )
-                db.session.add(item)
+        for item_data in itens_para_venda:
+            novo_item = ItemPedidoRequisicao(
+                pedido_id=novo_pedido.id,
+                produto_id=item_data['produto'].id,
+                quantidade_solicitada=item_data['quantidade'],
+                preco_unitario=item_data['preco_unitario'],
+                valor_total=item_data['subtotal']
+            )
+            db.session.add(novo_item)
+            valor_total_pedido += item_data['subtotal']
 
         novo_pedido.valor_total = round(valor_total_pedido, 2)
 
-        # GERAÇÃO INTEGRADA NO MÓDULO FINANCEIRO (PARCELAS E ENTRADA)
+        # ---------------------------------------------------------------------
+        # 3. GERAÇÃO DA FATURA NO FINANCEIRO (GARANTE VÍNCULO BIUNÍVOCO)
+        # ---------------------------------------------------------------------
         if gerar_financeiro and valor_total_pedido > 0:
             hoje = date.today()
             fatura = Fatura(
                 empresa_id=current_user.empresa_id,
-                cliente_id=cli_obj.id if cli_obj else None,
+                cliente_id=cli_obj.id,
                 descricao=f"Venda de Mercadorias - Pedido #{novo_pedido.numero_pedido}",
-                valor_total=valor_total_pedido,
+                valor_total=round(valor_total_pedido, 2),
                 data_emissao=hoje
             )
             db.session.add(fatura)
             db.session.flush()
+            
+            # Vincula o ID da fatura no pedido
             novo_pedido.fatura_id = fatura.id
 
             saldo_parcelar = max(0.0, valor_total_pedido - valor_entrada)
             total_titulos = (1 if (exige_entrada and valor_entrada > 0) else 0) + (qtd_parcelas if saldo_parcelar > 0 else 0)
             num_seq = 1
 
-            # 1. Parcela de Entrada
             if exige_entrada and valor_entrada > 0:
                 p_entrada = ParcelaFatura(
                     empresa_id=current_user.empresa_id,
@@ -5047,7 +5086,6 @@ def criar_venda_produto():
                 db.session.add(p_entrada)
                 num_seq += 1
 
-            # 2. Saldo Parcelado
             if saldo_parcelar > 0:
                 valor_cada_parcela = round(saldo_parcelar / qtd_parcelas, 2)
                 for i in range(1, qtd_parcelas + 1):
@@ -5069,9 +5107,9 @@ def criar_venda_produto():
         db.session.commit()
         
         if status_inicial_pedido == 'bloqueado_pagamento':
-            flash(f'Pedido #{novo_pedido.numero_pedido} criado! Status: BLOQUEADO aguardando o pagamento do sinal de R$ {valor_entrada:,.2f}.', 'warning')
+            flash(f'Pedido #{novo_pedido.numero_pedido} registrado! Status: BLOQUEADO aguardando baixa do sinal de R$ {valor_entrada:,.2f} no Financeiro.', 'warning')
         else:
-            flash(f'Pedido #{novo_pedido.numero_pedido} criado e liberado para a esteira de expedição!', 'success')
+            flash(f'Pedido #{novo_pedido.numero_pedido} criado com estoque reservado e liberado para Expedição!', 'success')
 
     except Exception as e:
         db.session.rollback()
@@ -6312,7 +6350,6 @@ def relatorio_contabil():
     empresa_id = current_user.empresa_id
     hoje = date.today()
 
-    # Filtros de Período (Padrão: Mês atual)
     data_inicio_str = request.args.get('data_inicio')
     data_fim_str = request.args.get('data_fim')
 
@@ -6338,11 +6375,15 @@ def relatorio_contabil():
     for p in parcelas_pagas:
         fat = p.fatura
         cli = fat.cliente
-        origem_tipo = 'Venda de Mercadoria' if fat.pedido_venda else 'Prestação de Serviços'
+        
+        # Identificação robusta de venda vs serviço
+        is_venda = bool(fat.pedido_venda or (fat.descricao and 'Venda de Mercadorias' in fat.descricao))
 
-        if fat.pedido_venda:
+        if is_venda:
+            origem_tipo = 'Venda de Mercadoria'
             total_vendas_recebido += p.valor
         else:
+            origem_tipo = 'Prestação de Serviços'
             total_servicos_recebido += p.valor
 
         recebimentos_consolidados.append({
@@ -6358,9 +6399,8 @@ def relatorio_contabil():
         })
 
     # 2. APURAÇÃO DE CUSTOS DIRETOS (CMV VENDAS + CUSTOS SERVIÇOS)
-    # Custos de Vendas (CMV) concluídas no período
     vendas_periodo = PedidoRequisicao.query.filter_by(empresa_id=empresa_id).filter(
-        PedidoRequisicao.status == 'entregue',
+        PedidoRequisicao.status.in_(['entregue', 'concluido']),
         PedidoRequisicao.data_solicitacao >= datetime.combine(dt_inicio, datetime.min.time()),
         PedidoRequisicao.data_solicitacao <= datetime.combine(dt_fim, datetime.max.time())
     ).all()
@@ -6370,7 +6410,6 @@ def relatorio_contabil():
         for v in vendas_periodo for it in v.itens if it.produto
     )
 
-    # Custos Analíticos de Serviços de Propostas Aprovadas no período
     propostas_periodo = Proposta.query.filter_by(empresa_id=empresa_id, status='Aprovado').filter(
         Proposta.data_criacao >= dt_inicio,
         Proposta.data_criacao <= dt_fim
@@ -6395,7 +6434,6 @@ def relatorio_contabil():
         total_custos=total_custos,
         resultado_liquido=resultado_liquido
     )
-
 # -----------------------------------------------------------------------------
 # EXPORTAÇÃO CSV PARA O SOFTWARE DO CONTADOR (DOMÍNIO / ALTERDATA / CONTMATIC)
 # -----------------------------------------------------------------------------
