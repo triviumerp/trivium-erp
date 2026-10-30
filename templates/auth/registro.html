@@ -1,947 +1,1049 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configuração do Ambiente - Trivium ERP</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logofav.png') }}">
-    
-    <!-- Google Fonts & Bootstrap -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<!-- Google Fonts & Bootstrap -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
-    <style>
-        * { box-sizing: border-box; }
-        html, body {
-            height: 100%;
-            margin: 0;
-            overflow-x: hidden;
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: #0b0f19;
-            color: #f8fafc;
-        }
+<style>
+    * { box-sizing: border-box; }
+    html, body {
+        height: 100%;
+        margin: 0;
+        overflow-x: hidden;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        background-color: #0b0f19;
+        color: #f8fafc;
+    }
 
-        body {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 1rem;
-        }
+    body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
 
-        /* FUNDO DINÂMICO AURORA MESH */
-        .aurora-bg {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: 0;
-            overflow: hidden;
-            pointer-events: none;
-        }
+    /* FUNDO DINÂMICO AURORA MESH */
+    .aurora-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 0;
+        overflow: hidden;
+        pointer-events: none;
+    }
 
-        .orb {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(100px);
-            opacity: 0.45;
-            animation: orbFloat 22s infinite alternate ease-in-out;
-        }
+    .orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(100px);
+        opacity: 0.45;
+        animation: orbFloat 22s infinite alternate ease-in-out;
+    }
 
-        .orb-1 {
-            width: 500px;
-            height: 500px;
-            background: radial-gradient(circle, #2563eb 0%, transparent 70%);
-            top: -100px;
-            left: -100px;
-        }
+    .orb-1 {
+        width: 500px;
+        height: 500px;
+        background: radial-gradient(circle, #2563eb 0%, transparent 70%);
+        top: -100px;
+        left: -100px;
+    }
 
-        .orb-2 {
-            width: 550px;
-            height: 550px;
-            background: radial-gradient(circle, #059669 0%, transparent 70%);
-            bottom: -100px;
-            right: -100px;
-            animation-delay: -7s;
-            animation-duration: 26s;
-        }
+    .orb-2 {
+        width: 550px;
+        height: 550px;
+        background: radial-gradient(circle, #059669 0%, transparent 70%);
+        bottom: -100px;
+        right: -100px;
+        animation-delay: -7s;
+        animation-duration: 26s;
+    }
 
-        .orb-3 {
-            width: 400px;
-            height: 400px;
-            background: radial-gradient(circle, #6366f1 0%, transparent 70%);
-            top: 40%;
-            left: 35%;
-            animation-delay: -12s;
-            animation-duration: 18s;
-        }
+    .orb-3 {
+        width: 400px;
+        height: 400px;
+        background: radial-gradient(circle, #6366f1 0%, transparent 70%);
+        top: 40%;
+        left: 35%;
+        animation-delay: -12s;
+        animation-duration: 18s;
+    }
 
-        @keyframes orbFloat {
-            0% { transform: translate(0, 0) scale(1); }
-            50% { transform: translate(60px, 40px) scale(1.1); }
-            100% { transform: translate(-40px, 70px) scale(0.95); }
-        }
+    @keyframes orbFloat {
+        0% { transform: translate(0, 0) scale(1); }
+        50% { transform: translate(60px, 40px) scale(1.1); }
+        100% { transform: translate(-40px, 70px) scale(0.95); }
+    }
 
-        /* QUADRO PRINCIPAL COM O LED AZUL GIRANDO NA BORDA */
-        .glass-card-panoramic {
-            position: relative;
-            max-width: 1050px;
-            width: 100%;
-            padding: 2rem 2.5rem;
-            border-radius: 26px;
-            overflow: hidden;
-            z-index: 10;
-            box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 30px rgba(37, 99, 235, 0.2);
-        }
+    /* QUADRO PRINCIPAL COM O LED AZUL GIRANDO NA BORDA */
+    .glass-card-panoramic {
+        position: relative;
+        max-width: 1050px;
+        width: 100%;
+        padding: 2rem 2.5rem;
+        border-radius: 26px;
+        overflow: hidden;
+        z-index: 10;
+        box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 30px rgba(37, 99, 235, 0.2);
+    }
 
-        .glass-card-panoramic::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: conic-gradient(
-                transparent,
-                transparent 65%,
-                rgba(37, 99, 235, 0.5) 80%,
-                #38bdf8 92%,
-                #ffffff 100%
-            );
-            animation: girarLed 4.5s linear infinite;
-            z-index: -2;
-        }
+    .glass-card-panoramic::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: conic-gradient(
+            transparent,
+            transparent 65%,
+            rgba(37, 99, 235, 0.5) 80%,
+            #38bdf8 92%,
+            #ffffff 100%
+        );
+        animation: girarLed 4.5s linear infinite;
+        z-index: -2;
+    }
 
-        .glass-card-panoramic::after {
-            content: '';
-            position: absolute;
-            inset: 1.5px;
-            background: rgba(17, 24, 39, 0.94);
-            backdrop-filter: blur(25px);
-            -webkit-backdrop-filter: blur(25px);
-            border-radius: 24.5px;
-            z-index: -1;
-        }
+    .glass-card-panoramic::after {
+        content: '';
+        position: absolute;
+        inset: 1.5px;
+        background: rgba(17, 24, 39, 0.94);
+        backdrop-filter: blur(25px);
+        -webkit-backdrop-filter: blur(25px);
+        border-radius: 24.5px;
+        z-index: -1;
+    }
 
-        .glass-card-panoramic > * {
-            position: relative;
-            z-index: 1;
-        }
+    .glass-card-panoramic > * {
+        position: relative;
+        z-index: 1;
+    }
 
-        @keyframes girarLed {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
+    @keyframes girarLed {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
 
-        /* CARDS DE SELEÇÃO INTERNOS */
-        .grid-cards-5 {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 12px;
-        }
+    /* CARDS DE SELEÇÃO INTERNOS */
+    .grid-cards-5 {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+    }
 
-        .grid-cards-3 {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-        }
+    .grid-cards-3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
 
-        .grid-cards-2 {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-        }
+    .grid-cards-2 {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
 
-        @media (max-width: 991px) {
-            .grid-cards-5 { grid-template-columns: repeat(2, 1fr); }
-            .grid-cards-3, .grid-cards-2 { grid-template-columns: 1fr; }
-            .glass-card-panoramic { padding: 1.5rem; }
-        }
+    @media (max-width: 991px) {
+        .grid-cards-5 { grid-template-columns: repeat(2, 1fr); }
+        .grid-cards-3, .grid-cards-2 { grid-template-columns: 1fr; }
+        .glass-card-panoramic { padding: 1.5rem; }
+    }
 
-        .card-square-option {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1.5px solid rgba(255, 255, 255, 0.08);
-            border-radius: 18px;
-            padding: 1.1rem 0.9rem;
-            cursor: pointer;
-            transition: all 0.22s ease;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            justify-content: flex-start;
-            min-height: 185px;
-        }
+    .card-square-option {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1.5px solid rgba(255, 255, 255, 0.08);
+        border-radius: 18px;
+        padding: 1.1rem 0.9rem;
+        cursor: pointer;
+        transition: all 0.22s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        justify-content: flex-start;
+        min-height: 185px;
+    }
 
-        .card-square-option:hover {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(37, 99, 235, 0.5);
-            transform: translateY(-3px);
-        }
+    .card-square-option:hover {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(37, 99, 235, 0.5);
+        transform: translateY(-3px);
+    }
 
-        .card-square-option.selected {
-            background: rgba(37, 99, 235, 0.18);
-            border-color: #3b82f6;
-            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
-        }
+    .card-square-option.selected {
+        background: rgba(37, 99, 235, 0.18);
+        border-color: #3b82f6;
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+    }
 
-        .card-square-option .option-icon-square {
-            width: 48px;
-            height: 48px;
-            border-radius: 14px;
-            background: rgba(255, 255, 255, 0.08);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.45rem;
-            color: #60a5fa;
-            margin-bottom: 0.75rem;
-            flex-shrink: 0;
-            transition: all 0.2s ease;
-        }
+    .card-square-option .option-icon-square {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.08);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.45rem;
+        color: #60a5fa;
+        margin-bottom: 0.75rem;
+        flex-shrink: 0;
+        transition: all 0.2s ease;
+    }
 
-        .card-square-option.selected .option-icon-square {
-            background: #2563eb;
-            color: #ffffff;
-        }
+    .card-square-option.selected .option-icon-square {
+        background: #2563eb;
+        color: #ffffff;
+    }
 
-        .card-square-option strong {
-            font-size: 0.88rem;
-            line-height: 1.25;
-            color: #ffffff;
-            margin-bottom: 0.35rem;
-        }
+    .card-square-option strong {
+        font-size: 0.88rem;
+        line-height: 1.25;
+        color: #ffffff;
+        margin-bottom: 0.35rem;
+    }
 
-        .card-square-option small {
-            font-size: 0.72rem;
-            line-height: 1.35;
-            color: rgba(255, 255, 255, 0.55);
-        }
+    .card-square-option small {
+        font-size: 0.72rem;
+        line-height: 1.35;
+        color: rgba(255, 255, 255, 0.55);
+    }
 
-        /* TOAST E PROGRESS */
-        .toast-floating-container {
-            position: fixed;
-            top: 24px;
-            right: 24px;
-            z-index: 1050;
-            max-width: 450px;
-        }
+    /* TOAST E PROGRESS */
+    .toast-floating-container {
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        z-index: 1050;
+        max-width: 450px;
+    }
 
-        .toast-error-box {
-            background: #7f1d1d;
-            border: 1.5px solid #ef4444;
-            color: #ffffff;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            border-radius: 14px;
-            padding: 0.9rem 1.2rem;
-            animation: slideInDown 0.3s ease forwards;
-            transition: opacity 0.5s ease, transform 0.5s ease;
-        }
+    .toast-error-box {
+        background: #7f1d1d;
+        border: 1.5px solid #ef4444;
+        color: #ffffff;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        border-radius: 14px;
+        padding: 0.9rem 1.2rem;
+        animation: slideInDown 0.3s ease forwards;
+        transition: opacity 0.5s ease, transform 0.5s ease;
+    }
 
-        @keyframes slideInDown {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+    @keyframes slideInDown {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
 
-        .progress-pill {
-            height: 5px;
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.1);
-            overflow: hidden;
-            margin-bottom: 1.5rem;
-        }
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #2563eb, #10b981);
-            transition: width 0.35s ease;
-        }
+    .progress-pill {
+        height: 5px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.1);
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #2563eb, #10b981);
+        transition: width 0.35s ease;
+    }
 
-        .btn-brand {
-            background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-            border: none;
-            color: #ffffff;
-            font-weight: 700;
-            border-radius: 12px;
-            padding: 0.8rem 1.6rem;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
-        }
-        .btn-brand:hover {
-            filter: brightness(1.1);
-            color: #ffffff;
-        }
+    .btn-brand {
+        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+        border: none;
+        color: #ffffff;
+        font-weight: 700;
+        border-radius: 12px;
+        padding: 0.8rem 1.6rem;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    }
+    .btn-brand:hover {
+        filter: brightness(1.1);
+        color: #ffffff;
+    }
 
-        .form-control-dark {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            color: #ffffff;
-            border-radius: 10px;
-            padding: 0.65rem 0.9rem;
-            font-size: 0.9rem;
-        }
-        .form-control-dark:focus {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: #3b82f6;
-            color: #ffffff;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
-        }
+    .form-control-dark {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        color: #ffffff;
+        border-radius: 10px;
+        padding: 0.65rem 0.9rem;
+        font-size: 0.9rem;
+    }
+    .form-control-dark:focus {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: #3b82f6;
+        color: #ffffff;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+    }
 
-        .badge-trial {
-            background: rgba(16, 185, 129, 0.15);
-            border: 1px solid #10b981;
-            color: #34d399;
-            font-weight: 700;
-            padding: 0.35rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.76rem;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
+    .badge-trial {
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid #10b981;
+        color: #34d399;
+        font-weight: 700;
+        padding: 0.35rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.76rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
 
-        .password-meter {
-            height: 4px;
-            border-radius: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            margin-top: 5px;
-            overflow: hidden;
-        }
-        .password-meter-fill {
-            height: 100%;
-            width: 0%;
-            transition: width 0.3s ease, background-color 0.3s ease;
-        }
+    .password-meter {
+        height: 4px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.1);
+        margin-top: 5px;
+        overflow: hidden;
+    }
+    .password-meter-fill {
+        height: 100%;
+        width: 0%;
+        transition: width 0.3s ease, background-color 0.3s ease;
+    }
 
-        .modal-glass {
-            background: rgba(15, 23, 42, 0.96);
-            backdrop-filter: blur(25px);
-            border: 1px solid rgba(255, 255, 255, 0.18);
-            color: #f8fafc;
-            border-radius: 24px;
-        }
+    .modal-glass {
+        background: rgba(15, 23, 42, 0.96);
+        backdrop-filter: blur(25px);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        color: #f8fafc;
+        border-radius: 24px;
+    }
 
-        .pulse-loader {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            border: 3px solid rgba(59, 130, 246, 0.2);
-            border-top-color: #3b82f6;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-    </style>
-</head>
-<body>
+    .pulse-loader {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        border: 3px solid rgba(59, 130, 246, 0.2);
+        border-top-color: #3b82f6;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
 
-    <!-- FUNDO DINÂMICO AURORA -->
-    <div class="aurora-bg">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="orb orb-3"></div>
+    .termos-scroll-area::-webkit-scrollbar {
+        width: 6px;
+    }
+    .termos-scroll-area::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.25);
+        border-radius: 4px;
+    }
+</style>
+
+
+<!-- FUNDO DINÂMICO AURORA -->
+<div class="aurora-bg">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+</div>
+
+<!-- MENSAGENS FLASH (AUTO-DISMISS EM 5S) -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div class="toast-floating-container" id="floatingAlerts">
+            {% for category, message in messages %}
+                <div class="toast-error-box d-flex justify-content-between align-items-center mb-2">
+                    <div class="d-flex align-items-center gap-2 small">
+                        <i class="bi bi-exclamation-triangle-fill fs-5 text-warning"></i>
+                        <span>{{ message }}</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 ms-2">
+                        {% if email_duplicado %}
+                            <a href="{{ url_for('auth.login') }}" class="btn btn-xs btn-light fw-bold py-1 px-2 text-nowrap" style="font-size: 0.75rem;">
+                                Entrar
+                            </a>
+                        {% endif %}
+                        <button type="button" class="btn-close btn-close-white btn-sm" onclick="closeToast(this.parentElement.parentElement)"></button>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+<div class="glass-card-panoramic">
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h4 class="fw-bold mb-0 text-white">
+            Trivium <span class="text-primary">ERP</span>
+        </h4>
+        <span class="badge-trial">
+            <i class="bi bi-shield-check"></i> 14 Dias Grátis • Sem Cartão
+        </span>
     </div>
 
-    <!-- MENSAGENS FLASH (AUTO-DISMISS EM 5S) -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            <div class="toast-floating-container" id="floatingAlerts">
-                {% for category, message in messages %}
-                    <div class="toast-error-box d-flex justify-content-between align-items-center mb-2">
-                        <div class="d-flex align-items-center gap-2 small">
-                            <i class="bi bi-exclamation-triangle-fill fs-5 text-warning"></i>
-                            <span>{{ message }}</span>
-                        </div>
-                        <div class="d-flex align-items-center gap-2 ms-2">
-                            {% if email_duplicado %}
-                                <a href="{{ url_for('auth.login') }}" class="btn btn-xs btn-light fw-bold py-1 px-2 text-nowrap" style="font-size: 0.75rem;">
-                                    Entrar
-                                </a>
-                            {% endif %}
-                            <button type="button" class="btn-close btn-close-white btn-sm" onclick="closeToast(this.parentElement.parentElement)"></button>
-                        </div>
-                    </div>
-                {% endfor %}
-            </div>
-        {% endif %}
-    {% endwith %}
-
-    <div class="glass-card-panoramic">
-        <!-- HEADER -->
-        <div class="d-flex justify-content-between align-items-center mb-2">
-            <h4 class="fw-bold mb-0 text-white">
-                Trivium <span class="text-primary">ERP</span>
-            </h4>
-            <span class="badge-trial">
-                <i class="bi bi-shield-check"></i> 14 Dias Grátis • Sem Cartão
-            </span>
-        </div>
-
-        <!-- PROGRESS BAR -->
-        <div class="progress-pill">
-            <div class="progress-fill" id="progressFill" style="width: {% if abrir_step3 %}100%{% else %}33%{% endif %};"></div>
-        </div>
-
-        <form method="POST" action="{{ url_for('auth.registro') }}" id="formOnboarding">
-            <input type="hidden" name="perfil_operacao" id="inputPerfilOperacao" value="{{ perfil_operacao or 'servicos_campo' }}">
-            <input type="hidden" name="equipe_porte" id="inputEquipePorte" value="{{ equipe_porte or '1' }}">
-            <input type="hidden" name="usar_financeiro" id="inputUsarFinanceiro" value="{% if usar_financeiro is defined %}{{ 1 if usar_financeiro else 0 }}{% else %}1{% endif %}">
-            <input type="hidden" name="cupom_indicacao" value="{{ cupom_ref or '' }}">
-
-            <!-- ============================================================== -->
-            <!-- ETAPA 1: ESCOPO DO NEGÓCIO (5 CARDS HORIZONTAIS)               -->
-            <!-- ============================================================== -->
-            <div id="step1" class="step-pane {% if abrir_step3 %}d-none{% endif %}">
-                <div class="mb-3">
-                    <h5 class="fw-bold text-white mb-0">Qual é o foco principal da sua operação?</h5>
-                    <small class="text-white-50">Selecione o modelo para personalizarmos os módulos na tela.</small>
-                </div>
-
-                <div class="grid-cards-5 mb-4">
-                    <div class="card-square-option {% if (perfil_operacao or 'servicos_campo') == 'servicos_campo' %}selected{% endif %}" onclick="selectOption('perfil', 'servicos_campo', this)">
-                        <div class="option-icon-square"><i class="bi bi-tools"></i></div>
-                        <strong>Serviços & Manutenção</strong>
-                        <small>Empreiteiras, ordens de serviço e vistorias em campo.</small>
-                    </div>
-
-                    <div class="card-square-option {% if perfil_operacao == 'saude' %}selected{% endif %}" onclick="selectOption('perfil', 'saude', this)">
-                        <div class="option-icon-square"><i class="bi bi-heart-pulse"></i></div>
-                        <strong>Saúde & Terapias</strong>
-                        <small>Psicólogos, clínicas e prontuários SOAP.</small>
-                    </div>
-
-                    <div class="card-square-option {% if perfil_operacao == 'distribuidora' %}selected{% endif %}" onclick="selectOption('perfil', 'distribuidora', this)">
-                        <div class="option-icon-square"><i class="bi bi-boxes"></i></div>
-                        <strong>Vendas & Expedição</strong>
-                        <small>Distribuição, catálogo com imagens e motoristas.</small>
-                    </div>
-
-                    <div class="card-square-option {% if perfil_operacao == 'estoque_interno' %}selected{% endif %}" onclick="selectOption('perfil', 'estoque_interno', this)">
-                        <div class="option-icon-square"><i class="bi bi-box-seam"></i></div>
-                        <strong>Estoque Puro</strong>
-                        <small>Almoxarifado e requisições (sem foco comercial).</small>
-                    </div>
-
-                    <div class="card-square-option {% if perfil_operacao == 'documentos' %}selected{% endif %}" onclick="selectOption('perfil', 'documentos', this)">
-                        <div class="option-icon-square"><i class="bi bi-file-earmark-text"></i></div>
-                        <strong>Contratos & Minutas</strong>
-                        <small>Gestão de clientes e geração de documentos PDF.</small>
-                    </div>
-                </div>
-
-                <div class="d-flex justify-content-end align-items-center">
-                    <button type="button" class="btn btn-brand" onclick="goToStep(2)">
-                        Avançar <i class="bi bi-arrow-right ms-1"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- ============================================================== -->
-            <!-- ETAPA 2: EQUIPE & FINANCEIRO (CARDS EXCLUSIVOS SEM SELEÇÃO DUPLA) -->
-            <!-- ============================================================== -->
-            <div id="step2" class="step-pane d-none">
-                <div class="mb-3">
-                    <h5 class="fw-bold text-white mb-0">Como sua estrutura está organizada?</h5>
-                    <small class="text-white-50">Definiremos os limites e a presença dos recursos financeiros.</small>
-                </div>
-
-                <label class="form-label small fw-bold text-white-50 mb-2">Quem utilizará o sistema?</label>
-                <div class="grid-cards-3 mb-4">
-                    <div class="card-square-option {% if (equipe_porte or '1') == '1' %}selected{% endif %}" onclick="selectOption('equipe', '1', this)" style="min-height: 140px;">
-                        <div class="option-icon-square"><i class="bi bi-person"></i></div>
-                        <strong>Apenas Eu (Individual)</strong>
-                        <small>Autônomo ou uso próprio.</small>
-                    </div>
-
-                    <div class="card-square-option {% if equipe_porte == '2_5' %}selected{% endif %}" onclick="selectOption('equipe', '2_5', this)" style="min-height: 140px;">
-                        <div class="option-icon-square"><i class="bi bi-people"></i></div>
-                        <strong>Pequena Equipe (2 a 5)</strong>
-                        <small>Colaboradores ou técnicos.</small>
-                    </div>
-
-                    <div class="card-square-option {% if equipe_porte == 'mais_5' %}selected{% endif %}" onclick="selectOption('equipe', 'mais_5', this)" style="min-height: 140px;">
-                        <div class="option-icon-square"><i class="bi bi-building"></i></div>
-                        <strong>Equipe Ampla (+5)</strong>
-                        <small>Múltiplos operadores e setores.</small>
-                    </div>
-                </div>
-
-                <!-- PERGUNTA DE FINANCEIRO / FATURAMENTO COM EXCLUSIVIDADE ABSOLUTA -->
-                <div class="mb-4">
-                    <label class="form-label small fw-bold text-white-50 mb-2">Deseja gerenciar faturamento e cobranças no ERP?</label>
-                    <div class="grid-cards-2">
-                        <div class="card-square-option {% if not usar_financeiro is defined or usar_financeiro or usar_financeiro == 1 or usar_financeiro == '1' %}selected{% endif %}" 
-                             onclick="selectOption('financeiro', '1', this)" style="min-height: 130px;">
-                            <div class="option-icon-square"><i class="bi bi-cash-coin"></i></div>
-                            <strong>Sim, preciso de financeiro</strong>
-                            <small>Faturas, boletos, PIX e controle de parcelas.</small>
-                        </div>
-
-                        <div class="card-square-option {% if usar_financeiro is defined and (not usar_financeiro or usar_financeiro == 0 or usar_financeiro == '0') %}selected{% endif %}" 
-                             onclick="selectOption('financeiro', '0', this)" style="min-height: 130px;">
-                            <div class="option-icon-square"><i class="bi bi-x-circle"></i></div>
-                            <strong>Não no momento</strong>
-                            <small>Interface enxuta com foco 100% operacional.</small>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="d-flex justify-content-between align-items-center">
-                    <button type="button" class="btn btn-outline-secondary text-white btn-sm px-3" onclick="goToStep(1)">
-                        <i class="bi bi-arrow-left me-1"></i> Voltar
-                    </button>
-                    <button type="button" class="btn btn-brand" onclick="goToStep(3)">
-                        Avançar para Cadastro <i class="bi bi-arrow-right ms-1"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- ============================================================== -->
-            <!-- ETAPA 3: FICHA DE CADASTRO                                      -->
-            <!-- ============================================================== -->
-            <div id="step3" class="step-pane {% if not abrir_step3 %}d-none{% endif %}">
-                <div class="p-2 px-3 rounded-3 mb-3 d-flex justify-content-between align-items-center" style="background: rgba(37, 99, 235, 0.12); border: 1px solid rgba(59, 130, 246, 0.3);">
-                    <div class="d-flex align-items-center gap-2">
-                        <i class="bi bi-check-circle-fill text-primary"></i>
-                        <div>
-                            <strong class="text-primary small text-uppercase" id="displayNomePlano">PERFIL CONFIGURADO</strong>
-                            <span class="text-white-50 small d-block" id="displayDescricaoPlano" style="font-size: 0.75rem;">Módulos moldados para sua atividade.</span>
-                        </div>
-                    </div>
-                    <div class="d-flex gap-1" id="displayTagsPlano"></div>
-                </div>
-
-                <div class="row g-2 mb-2">
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold text-white-50 mb-1">Nome Completo *</label>
-                        <input type="text" name="nome_usuario" id="inputNomeUsuario" class="form-control form-control-dark" placeholder="Ex: Sérgio Cavalcante" required>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <label class="form-label small fw-bold text-white-50 mb-0">Razão Social / Empresa</label>
-                            <div class="form-check form-switch mb-0">
-                                <input class="form-check-input" type="checkbox" id="checkPessoaFisica" name="is_pessoa_fisica" value="1" onchange="togglePessoaFisica(this)">
-                                <label class="form-check-label text-white-50 small" for="checkPessoaFisica" style="font-size: 0.72rem;">Sou Pessoa Física</label>
-                            </div>
-                        </div>
-                        <input type="text" name="razao_social" id="inputRazaoSocial" class="form-control form-control-dark" placeholder="Ex: Cavalcante Serviços Ltda">
-                    </div>
-                </div>
-
-                <div class="row g-2 mb-2">
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold text-white-50 mb-1">E-mail *</label>
-                        <input type="email" name="email" id="inputEmail" class="form-control form-control-dark" placeholder="nome@exemplo.com" required>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold text-white-50 mb-1">Confirme o E-mail *</label>
-                        <input type="email" name="confirma_email" class="form-control form-control-dark" placeholder="nome@exemplo.com" required>
-                    </div>
-                </div>
-
-                <div class="row g-2 mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold text-white-50 mb-1">Palavra-passe *</label>
-                        <input type="password" name="senha" id="inputSenha" class="form-control form-control-dark" oninput="validarForcaSenha(this.value); checarConferenciaSenha();" placeholder="••••••••" required>
-                        <div class="password-meter"><div class="password-meter-fill" id="meterFill"></div></div>
-                        <small class="text-white-50" style="font-size: 0.7rem;" id="meterTexto">Mínimo 8 caracteres, maiúscula, número e símbolo.</small>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold text-white-50 mb-1">Confirme a Palavra-passe *</label>
-                        <input type="password" name="confirma_senha" id="inputConfirmaSenha" class="form-control form-control-dark" oninput="checarConferenciaSenha();" placeholder="••••••••" required>
-                        <div id="alertaSenhaNaoConfere" class="small fw-bold text-danger d-none mt-1" style="font-size: 0.75rem;">
-                            <i class="bi bi-x-circle-fill me-1"></i> As palavras-passe não coincidem.
-                        </div>
-                        <div id="alertaSenhaConfere" class="small fw-bold text-success d-none mt-1" style="font-size: 0.75rem;">
-                            <i class="bi bi-check-circle-fill me-1"></i> As palavras-passe coincidem!
-                        </div>
-                    </div>
-                </div>
-
-                <div class="d-flex justify-content-between align-items-center mt-3">
-                    <button type="button" class="btn btn-outline-secondary text-white btn-sm px-3" onclick="goToStep(2)">
-                        <i class="bi bi-arrow-left me-1"></i> Voltar
-                    </button>
-                    <!-- BOTÃO QUE DISPARA A ANIMAÇÃO DE CÁLCULO E RECOMENDAÇÃO -->
-                    <button type="button" class="btn btn-brand" onclick="iniciarCalculoPlano()">
-                        Calcular Meu Plano Sob Medida <i class="bi bi-stars ms-1"></i>
-                    </button>
-                </div>
-            </div>
-        </form>
-
-        <div class="text-center mt-3 pt-2 border-top border-white border-opacity-10">
-            <small class="text-white-50">Já possui conta? <a href="{{ url_for('auth.login') }}" class="text-primary text-decoration-none fw-bold">Fazer login</a></small>
-        </div>
+    <!-- PROGRESS BAR -->
+    <div class="progress-pill">
+        <div class="progress-fill" id="progressFill" style="width: {% if abrir_step3 %}100%{% else %}33%{% endif %};"></div>
     </div>
 
-    <!-- MODAL 1: ANIMAÇÃO DE CÁLCULO E PROCESSAMENTO DO PLANO (LABOR ILLUSION) -->
-    <div class="modal fade" id="modalCalculandoPlano" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content modal-glass border-0 text-center p-4">
-                <div class="d-flex justify-content-center mb-3">
-                    <div class="pulse-loader"></div>
+    <form method="POST" action="{{ url_for('auth.registro') }}" id="formOnboarding">
+        <input type="hidden" name="perfil_operacao" id="inputPerfilOperacao" value="{{ perfil_operacao or 'servicos_campo' }}">
+        <input type="hidden" name="equipe_porte" id="inputEquipePorte" value="{{ equipe_porte or '1' }}">
+        <input type="hidden" name="usar_financeiro" id="inputUsarFinanceiro" value="{% if usar_financeiro is defined %}{{ 1 if usar_financeiro else 0 }}{% else %}1{% endif %}">
+        <input type="hidden" name="cupom_indicacao" value="{{ cupom_ref or '' }}">
+
+        <!-- ============================================================== -->
+        <!-- ETAPA 1: ESCOPO DO NEGÓCIO (5 CARDS HORIZONTAIS)               -->
+        <!-- ============================================================== -->
+        <div id="step1" class="step-pane {% if abrir_step3 %}d-none{% endif %}">
+            <div class="mb-3">
+                <h5 class="fw-bold text-white mb-0">Qual é o foco principal da sua operação?</h5>
+                <small class="text-white-50">Selecione o modelo para personalizarmos os módulos na tela.</small>
+            </div>
+
+            <div class="grid-cards-5 mb-4">
+                <div class="card-square-option {% if (perfil_operacao or 'servicos_campo') == 'servicos_campo' %}selected{% endif %}" onclick="selectOption('perfil', 'servicos_campo', this)">
+                    <div class="option-icon-square"><i class="bi bi-tools"></i></div>
+                    <strong>Serviços & Manutenção</strong>
+                    <small>Empreiteiras, ordens de serviço e vistorias em campo.</small>
                 </div>
-                <h5 class="fw-bold text-white mb-2" id="textoCarregandoTitulo">Analisando suas respostas...</h5>
-                <p class="small text-white-50 mb-3" id="textoCarregandoDescricao">Mapeando ferramentas e calibrando acessos operacionais.</p>
-                <div class="progress" style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px;">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" id="barraCalculoPlano" style="width: 15%; transition: width 0.4s ease;"></div>
+
+                <div class="card-square-option {% if perfil_operacao == 'saude' %}selected{% endif %}" onclick="selectOption('perfil', 'saude', this)">
+                    <div class="option-icon-square"><i class="bi bi-heart-pulse"></i></div>
+                    <strong>Saúde & Terapias</strong>
+                    <small>Psicólogos, clínicas e prontuários SOAP.</small>
+                </div>
+
+                <div class="card-square-option {% if perfil_operacao == 'distribuidora' %}selected{% endif %}" onclick="selectOption('perfil', 'distribuidora', this)">
+                    <div class="option-icon-square"><i class="bi bi-boxes"></i></div>
+                    <strong>Vendas & Expedição</strong>
+                    <small>Distribuição, catálogo com imagens e motoristas.</small>
+                </div>
+
+                <div class="card-square-option {% if perfil_operacao == 'estoque_interno' %}selected{% endif %}" onclick="selectOption('perfil', 'estoque_interno', this)">
+                    <div class="option-icon-square"><i class="bi bi-box-seam"></i></div>
+                    <strong>Estoque Puro</strong>
+                    <small>Almoxarifado e requisições (sem foco comercial).</small>
+                </div>
+
+                <div class="card-square-option {% if perfil_operacao == 'documentos' %}selected{% endif %}" onclick="selectOption('perfil', 'documentos', this)">
+                    <div class="option-icon-square"><i class="bi bi-file-earmark-text"></i></div>
+                    <strong>Contratos & Minutas</strong>
+                    <small>Gestão de clientes e geração de documentos PDF.</small>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- MODAL 2: APRESENTAÇÃO DO PLANO + CTA DE TESTE 14 DIAS COLADO AO PREÇO -->
-    <div class="modal fade" id="modalResultadoPlano" tabindex="-1" data-bs-backdrop="static">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content modal-glass border-0 shadow-lg p-3 p-md-4">
-                <div class="modal-header border-0 pt-0 px-0 pb-2">
+            <div class="d-flex justify-content-end align-items-center">
+                <button type="button" class="btn btn-brand" onclick="goToStep(2)">
+                    Avançar <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- ETAPA 2: EQUIPE & FINANCEIRO                                   -->
+        <!-- ============================================================== -->
+        <div id="step2" class="step-pane d-none">
+            <div class="mb-3">
+                <h5 class="fw-bold text-white mb-0">Como sua estrutura está organizada?</h5>
+                <small class="text-white-50">Definiremos os limites e a presença dos recursos financeiros.</small>
+            </div>
+
+            <label class="form-label small fw-bold text-white-50 mb-2">Quem utilizará o sistema?</label>
+            <div class="grid-cards-3 mb-4">
+                <div class="card-square-option {% if (equipe_porte or '1') == '1' %}selected{% endif %}" onclick="selectOption('equipe', '1', this)" style="min-height: 140px;">
+                    <div class="option-icon-square"><i class="bi bi-person"></i></div>
+                    <strong>Apenas Eu (Individual)</strong>
+                    <small>Autônomo ou uso próprio.</small>
+                </div>
+
+                <div class="card-square-option {% if equipe_porte == '2_5' %}selected{% endif %}" onclick="selectOption('equipe', '2_5', this)" style="min-height: 140px;">
+                    <div class="option-icon-square"><i class="bi bi-people"></i></div>
+                    <strong>Pequena Equipe (2 a 5)</strong>
+                    <small>Colaboradores ou técnicos.</small>
+                </div>
+
+                <div class="card-square-option {% if equipe_porte == 'mais_5' %}selected{% endif %}" onclick="selectOption('equipe', 'mais_5', this)" style="min-height: 140px;">
+                    <div class="option-icon-square"><i class="bi bi-building"></i></div>
+                    <strong>Equipe Ampla (+5)</strong>
+                    <small>Múltiplos operadores e setores.</small>
+                </div>
+            </div>
+
+            <!-- PERGUNTA DE FINANCEIRO / FATURAMENTO -->
+            <div class="mb-4">
+                <label class="form-label small fw-bold text-white-50 mb-2">Deseja gerenciar faturamento e cobranças no ERP?</label>
+                <div class="grid-cards-2">
+                    <div class="card-square-option {% if not usar_financeiro is defined or usar_financeiro or usar_financeiro == 1 or usar_financeiro == '1' %}selected{% endif %}" 
+                         onclick="selectOption('financeiro', '1', this)" style="min-height: 130px;">
+                        <div class="option-icon-square"><i class="bi bi-cash-coin"></i></div>
+                        <strong>Sim, preciso de financeiro</strong>
+                        <small>Faturas, boletos, PIX e controle de parcelas.</small>
+                    </div>
+
+                    <div class="card-square-option {% if usar_financeiro is defined and (not usar_financeiro or usar_financeiro == 0 or usar_financeiro == '0') %}selected{% endif %}" 
+                         onclick="selectOption('financeiro', '0', this)" style="min-height: 130px;">
+                        <div class="option-icon-square"><i class="bi bi-x-circle"></i></div>
+                        <strong>Não no momento</strong>
+                        <small>Interface enxuta com foco 100% operacional.</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center">
+                <button type="button" class="btn btn-outline-secondary text-white btn-sm px-3" onclick="goToStep(1)">
+                    <i class="bi bi-arrow-left me-1"></i> Voltar
+                </button>
+                <button type="button" class="btn btn-brand" onclick="goToStep(3)">
+                    Avançar para Cadastro <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- ETAPA 3: FICHA DE CADASTRO                                      -->
+        <!-- ============================================================== -->
+        <div id="step3" class="step-pane {% if not abrir_step3 %}d-none{% endif %}">
+            <div class="p-2 px-3 rounded-3 mb-3 d-flex justify-content-between align-items-center" style="background: rgba(37, 99, 235, 0.12); border: 1px solid rgba(59, 130, 246, 0.3);">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check-circle-fill text-primary"></i>
                     <div>
-                        <span class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-25 small mb-1">
-                            CONFIGURAÇÃO RECOMENDADA
+                        <strong class="text-primary small text-uppercase" id="displayNomePlano">PERFIL CONFIGURADO</strong>
+                        <span class="text-white-50 small d-block" id="displayDescricaoPlano" style="font-size: 0.75rem;">Módulos moldados para sua atividade.</span>
+                    </div>
+                </div>
+                <div class="d-flex gap-1" id="displayTagsPlano"></div>
+            </div>
+
+            <div class="row g-2 mb-2">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold text-white-50 mb-1">Nome Completo *</label>
+                    <input type="text" name="nome_usuario" id="inputNomeUsuario" class="form-control form-control-dark" placeholder="Ex: Sérgio Cavalcante" required>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label small fw-bold text-white-50 mb-0">Razão Social / Empresa</label>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="checkPessoaFisica" name="is_pessoa_fisica" value="1" onchange="togglePessoaFisica(this)">
+                            <label class="form-check-label text-white-50 small" for="checkPessoaFisica" style="font-size: 0.72rem;">Sou Pessoa Física</label>
+                        </div>
+                    </div>
+                    <input type="text" name="razao_social" id="inputRazaoSocial" class="form-control form-control-dark" placeholder="Ex: Cavalcante Serviços Ltda">
+                </div>
+            </div>
+
+            <div class="row g-2 mb-2">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold text-white-50 mb-1">E-mail *</label>
+                    <input type="email" name="email" id="inputEmail" class="form-control form-control-dark" placeholder="nome@exemplo.com" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold text-white-50 mb-1">Confirme o E-mail *</label>
+                    <input type="email" name="confirma_email" class="form-control form-control-dark" placeholder="nome@exemplo.com" required>
+                </div>
+            </div>
+
+            <div class="row g-2 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold text-white-50 mb-1">Palavra-passe *</label>
+                    <input type="password" name="senha" id="inputSenha" class="form-control form-control-dark" oninput="validarForcaSenha(this.value); checarConferenciaSenha();" placeholder="••••••••" required>
+                    <div class="password-meter"><div class="password-meter-fill" id="meterFill"></div></div>
+                    <small class="text-white-50" style="font-size: 0.7rem;" id="meterTexto">Mínimo 8 caracteres, maiúscula, número e símbolo.</small>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold text-white-50 mb-1">Confirme a Palavra-passe *</label>
+                    <input type="password" name="confirma_senha" id="inputConfirmaSenha" class="form-control form-control-dark" oninput="checarConferenciaSenha();" placeholder="••••••••" required>
+                    <div id="alertaSenhaNaoConfere" class="small fw-bold text-danger d-none mt-1" style="font-size: 0.75rem;">
+                        <i class="bi bi-x-circle-fill me-1"></i> As palavras-passe não coincidem.
+                    </div>
+                    <div id="alertaSenhaConfere" class="small fw-bold text-success d-none mt-1" style="font-size: 0.75rem;">
+                        <i class="bi bi-check-circle-fill me-1"></i> As palavras-passe coincidem!
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mt-3">
+                <button type="button" class="btn btn-outline-secondary text-white btn-sm px-3" onclick="goToStep(2)">
+                    <i class="bi bi-arrow-left me-1"></i> Voltar
+                </button>
+                <!-- BOTÃO QUE DISPARA A ANIMAÇÃO DE CÁLCULO -->
+                <button type="button" class="btn btn-brand" onclick="iniciarCalculoPlano()">
+                    Calcular Meu Plano Sob Medida <i class="bi bi-stars ms-1"></i>
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <div class="text-center mt-3 pt-2 border-top border-white border-opacity-10">
+        <small class="text-white-50">Já possui conta? <a href="{{ url_for('auth.login') }}" class="text-primary text-decoration-none fw-bold">Fazer login</a></small>
+    </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- MODAL 1: ANIMAÇÃO DE CÁLCULO E PROCESSAMENTO DO PLANO          -->
+<!-- ============================================================== -->
+<div class="modal fade" id="modalCalculandoPlano" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-glass border-0 text-center p-4">
+            <div class="d-flex justify-content-center mb-3">
+                <div class="pulse-loader"></div>
+            </div>
+            <h5 class="fw-bold text-white mb-2" id="textoCarregandoTitulo">Analisando suas respostas...</h5>
+            <p class="small text-white-50 mb-3" id="textoCarregandoDescricao">Mapeando ferramentas e calibrando acessos operacionais.</p>
+            <div class="progress" style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 10px;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" id="barraCalculoPlano" style="width: 15%; transition: width 0.4s ease;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- MODAL 2: APRESENTAÇÃO DO PLANO CALCULADO                       -->
+<!-- ============================================================== -->
+<div class="modal fade" id="modalResultadoPlano" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-glass border-0 shadow-lg p-3 p-md-4">
+            <div class="modal-header border-0 pt-0 px-0 pb-2">
+                <div>
+                    <span class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-25 small mb-1">
+                        CONFIGURAÇÃO RECOMENDADA
+                    </span>
+                    <h4 class="fw-bold text-white mb-0" id="modalNomePerfil">Perfil Especialista</h4>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body px-0 py-3">
+                <div class="p-3 rounded-4 mb-3" style="background: rgba(255, 255, 255, 0.04); border: 1.5px solid rgba(59, 130, 246, 0.35);">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <strong class="d-block text-white" id="modalTituloPlano">Plano Sob Medida</strong>
+                            <small class="text-white-50">Ambiente otimizado para sua demanda</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="fs-4 fw-bold text-primary" id="modalValorPlano">R$ 14,90</span>
+                            <small class="text-white-50 d-block" style="font-size: 0.72rem;">/mês após o teste</small>
+                        </div>
+                    </div>
+
+                    <!-- DESTAQUE: R$ 0,00 HOJE & 14 DIAS GRÁTIS -->
+                    <div class="p-2 px-3 rounded-3 d-flex align-items-center justify-content-between my-2" 
+                         style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4);">
+                        <span class="small fw-bold text-white d-flex align-items-center gap-1">
+                            <i class="bi bi-shield-check text-success"></i> A pagar hoje:
                         </span>
-                        <h4 class="fw-bold text-white mb-0" id="modalNomePerfil">Perfil Especialista</h4>
-                    </div>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-
-                <div class="modal-body px-0 py-3">
-                    <!-- CARD DO PLANO CALCULADO COM VALOR & DESTAQUE 14 DIAS GRÁTIS LADO A LADO -->
-                    <div class="p-3 rounded-4 mb-3" style="background: rgba(255, 255, 255, 0.04); border: 1.5px solid rgba(59, 130, 246, 0.35);">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <div>
-                                <strong class="d-block text-white" id="modalTituloPlano">Plano Sob Medida</strong>
-                                <small class="text-white-50">Ambiente otimizado para sua demanda</small>
-                            </div>
-                            <div class="text-end">
-                                <!-- VALOR REAL CALCULADO -->
-                                <span class="fs-4 fw-bold text-primary" id="modalValorPlano">R$ 14,90</span>
-                                <small class="text-white-50 d-block" style="font-size: 0.72rem;">/mês após o teste</small>
-                            </div>
-                        </div>
-
-                        <!-- DESTAQUE COLADO NO VALOR: R$ 0,00 HOJE & 14 DIAS GRÁTIS -->
-                        <div class="p-2 px-3 rounded-3 d-flex align-items-center justify-content-between my-2" 
-                             style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4);">
-                            <span class="small fw-bold text-white d-flex align-items-center gap-1">
-                                <i class="bi bi-shield-check text-success"></i> A pagar hoje:
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-success fw-bold px-2 py-1" style="font-size: 0.85rem;">R$ 0,00</span>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 fw-bold" style="font-size: 0.72rem;">
+                                14 DIAS GRÁTIS
                             </span>
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="badge bg-success fw-bold px-2 py-1" style="font-size: 0.85rem;">R$ 0,00</span>
-                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 fw-bold" style="font-size: 0.72rem;">
-                                    14 DIAS GRÁTIS
-                                </span>
-                            </div>
                         </div>
-
-                        <hr class="border-secondary border-opacity-25 my-2">
-
-                        <h6 class="small fw-bold text-primary mb-2"><i class="bi bi-check-all me-1"></i>O que este plano cobre:</h6>
-                        <ul class="list-unstyled small text-white-50 mb-0" id="modalListaCobertura" style="line-height: 1.6;">
-                            <!-- Injetado dinamicamente -->
-                        </ul>
                     </div>
 
-                    <!-- CAIXA DE REVERSÃO DE RISCO -->
-                    <div class="p-2.5 px-3 rounded-3 text-center mb-2" style="background: rgba(255, 255, 255, 0.03); border: 1px dashed rgba(255, 255, 255, 0.15);">
-                        <p class="text-white-50 small mb-0" style="font-size: 0.76rem;">
-                            Acesso completo a todas as funções por 14 dias sem taxas ocultas, sem cartão de crédito exigido e com cancelamento livre a qualquer momento.
-                        </p>
-                    </div>
+                    <hr class="border-secondary border-opacity-25 my-2">
+
+                    <h6 class="small fw-bold text-primary mb-2"><i class="bi bi-check-all me-1"></i>O que este plano cobre:</h6>
+                    <ul class="list-unstyled small text-white-50 mb-0" id="modalListaCobertura" style="line-height: 1.6;">
+                        <!-- Injetado dinamicamente -->
+                    </ul>
                 </div>
 
-                <div class="modal-footer border-0 p-0 d-flex flex-column gap-2">
-                    <!-- BOTÃO PRINCIPAL DE FECHAMENTO -->
-                    <button type="button" class="btn btn-brand w-100 py-2 fs-6 fw-bold shadow-lg" onclick="finalizarCadastroAprovado()">
-                        Ativar Meus 14 Dias Grátis Agora <i class="bi bi-arrow-right ms-1"></i>
-                    </button>
-                    <div class="d-flex justify-content-center gap-3 text-white-50" style="font-size: 0.72rem;">
-                        <span><i class="bi bi-lock-fill text-success me-1"></i>Dados Protegidos</span>
-                        <span><i class="bi bi-clock-history text-info me-1"></i>Acesso Imediato</span>
-                        <span><i class="bi bi-x-circle text-muted me-1"></i>Sem Fidelidade</span>
-                    </div>
+                <div class="p-2.5 px-3 rounded-3 text-center mb-2" style="background: rgba(255, 255, 255, 0.03); border: 1px dashed rgba(255, 255, 255, 0.15);">
+                    <p class="text-white-50 small mb-0" style="font-size: 0.76rem;">
+                        Acesso completo a todas as funções por 14 dias sem taxas ocultas, sem cartão de crédito exigido e com cancelamento livre a qualquer momento.
+                    </p>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0 p-0 d-flex flex-column gap-2">
+                <button type="button" class="btn btn-brand w-100 py-2 fs-6 fw-bold shadow-lg" onclick="abrirModalTermosUso()">
+                    Prosseguir para Termos & Ativação <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+                <div class="d-flex justify-content-center gap-3 text-white-50" style="font-size: 0.72rem;">
+                    <span><i class="bi bi-lock-fill text-success me-1"></i>Dados Protegidos</span>
+                    <span><i class="bi bi-clock-history text-info me-1"></i>Acesso Imediato</span>
+                    <span><i class="bi bi-x-circle text-muted me-1"></i>Sem Fidelidade</span>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        let modalCalculando = null;
-        let modalResultado = null;
+<!-- ================================================================= -->
+<!-- MODAL 3: TERMOS DE USO & CONDIÇÕES GERAIS DE ADESÃO               -->
+<!-- (Franquia de 5 GB, Teto de 5.000 Produtos com Fotos e Regras)     -->
+<!-- ================================================================= -->
+<div class="modal fade" id="modalTermosUso" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+        <div class="modal-content modal-glass border-0 shadow-lg p-3 p-md-4">
+            <div class="modal-header border-0 pt-0 px-0 pb-2">
+                <div>
+                    <span class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-25 small mb-1">
+                        ADESÃO & TRANSPARÊNCIA CONTRATUAL
+                    </span>
+                    <h4 class="fw-bold text-white mb-0">Termos de Uso e Licenciamento do Trivium ERP</h4>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
 
-        document.addEventListener('DOMContentLoaded', function() {
-            modalCalculando = new bootstrap.Modal(document.getElementById('modalCalculandoPlano'));
-            modalResultado = new bootstrap.Modal(document.getElementById('modalResultadoPlano'));
-            
-            {% if abrir_step3 %}
-                atualizarResumoPlano();
-            {% endif %}
+            <div class="modal-body px-0 py-2 termos-scroll-area" style="font-size: 0.84rem; line-height: 1.65; color: rgba(255, 255, 255, 0.78); max-height: 380px; overflow-y: auto;">
+                
+                <div class="p-3 rounded-3 mb-3" style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35);">
+                    <strong class="text-success d-block mb-1">
+                        <i class="bi bi-check-circle-fill me-1"></i> Avaliação Gratuita de 14 Dias Sem Compromisso
+                    </strong>
+                    Sua empresa conta com 14 dias corridos de teste com acesso integral aos recursos selecionados, sem exigência de cartão de crédito. Nenhuma cobrança é efetuada no ato do cadastro.
+                </div>
 
-            const floatingContainer = document.getElementById('floatingAlerts');
-            if (floatingContainer) {
-                setTimeout(() => {
-                    floatingContainer.style.opacity = '0';
-                    floatingContainer.style.transform = 'translateY(-20px)';
-                    setTimeout(() => floatingContainer.remove(), 500);
-                }, 5000);
-            }
-        });
+                <h6 class="text-white fw-bold mb-1">1. Objeto do Contrato & Modelo Sob Medida</h6>
+                <p class="mb-3">
+                    O <strong>Trivium ERP</strong> disponibiliza à empresa contratante uma licença de software em nuvem (SaaS), modular e escalável, abrangendo ferramentas para gestão de ordens de serviço em campo, prontuários clínicos, orçamentos timbrados, expedição e controle de estoque com suporte técnico e atualizações periódicas.
+                </p>
 
-        function closeToast(el) {
-            el.style.opacity = '0';
-            setTimeout(() => el.remove(), 300);
-        }
+                <h6 class="text-white fw-bold mb-1">2. Política de Armazenamento em Nuvem & Limite de Produtos</h6>
+                <div class="p-3 rounded-3 mb-3" style="background: rgba(59, 130, 246, 0.1); border: 1px dashed rgba(59, 130, 246, 0.35);">
+                    <strong class="text-primary d-block mb-1">
+                        <i class="bi bi-hdd-network-fill me-1"></i> Franquia Fixa de 5 GB & Capacidade Estimada:
+                    </strong>
+                    <ul class="mb-2 ps-3" style="line-height: 1.6;">
+                        <li>Cada conta possui uma franquia compartilhada de <strong>5 GB (cinco gigabytes)</strong> de armazenamento seguro para notas fiscais, fotos de comprovação de OS, prontuários e catálogo de mercadorias.</li>
+                        <li><strong>Capacidade do Catálogo:</strong> O sistema suporta até <strong>5.000 (cinco mil) produtos com imagens cadastradas</strong> dentro da referida franquia (considerando a compressão automática das imagens na plataforma).</li>
+                        <li><strong>Excesso de Franquia:</strong> Ao atingir o volume total de 5 GB, o upload de novas mídias e fotos será temporariamente travado pelo servidor em nuvem (Render). O CONTRATANTE poderá restabelecer o envio imediato mediante a exclusão de arquivos e fotos antigas ou efetuando a contratação de franquia adicional de armazenamento.</li>
+                    </ul>
+                </div>
 
-        function goToStep(step) {
-            document.querySelectorAll('.step-pane').forEach(el => el.classList.add('d-none'));
-            document.getElementById(`step${step}`).classList.remove('d-none');
+                <h6 class="text-white fw-bold mb-1">3. Privacidade e Proteção de Dados (LGPD)</h6>
+                <p class="mb-3">
+                    Todas as informações inseridas pela CONTRATANTE — incluindo registros de clientes, cadastros de pacientes, prontuários no método SOAP, tabelas de custos e histórico financeiro — são de sua propriedade exclusiva. O sistema adota criptografia de ponta a ponta e rotinas automatizadas de backup.
+                </p>
 
-            const progress = document.getElementById('progressFill');
-            if (step === 1) progress.style.width = '33%';
-            if (step === 2) progress.style.width = '66%';
-            if (step === 3) {
-                progress.style.width = '100%';
-                atualizarResumoPlano();
-            }
-        }
+                <h6 class="text-white fw-bold mb-1">4. Continuidade do Serviço & Cancelamento Livre</h6>
+                <p class="mb-3">
+                    Encerrado o período de teste de 14 dias, a manutenção dos acessos fica condicionada à escolha de um ciclo de renovação (Mensal, Semestral com 12% OFF ou Anual com 25% OFF). Na modalidade mensal, o cancelamento é livre, sem fidelidade e sem cobrança de multas rescisórias.
+                </p>
 
-        /* SELEÇÃO EXCLUSIVA DE CARDS - SEM SELEÇÃO DUPLA */
-        function selectOption(tipo, valor, el) {
-            const container = el.parentElement;
-            container.querySelectorAll('.card-square-option').forEach(c => c.classList.remove('selected'));
-            el.classList.add('selected');
+                <h6 class="text-white fw-bold mb-1">5. Responsabilidade pelo Uso</h6>
+                <p class="mb-2">
+                    A CONTRATANTE é a única responsável pela veracidade dos dados cadastrados e pela guarda das credenciais de acesso fornecidas aos membros e técnicos da sua equipe.
+                </p>
 
-            if (tipo === 'perfil') document.getElementById('inputPerfilOperacao').value = valor;
-            if (tipo === 'equipe') document.getElementById('inputEquipePorte').value = valor;
-            if (tipo === 'financeiro') document.getElementById('inputUsarFinanceiro').value = valor;
-        }
+                <!-- Checkbox de Aceite Obrigatório -->
+                <div class="p-3 rounded-3 mt-3" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2);">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="checkAceitoTermosRegistro" onchange="validarAceiteTermos()">
+                        <label class="form-check-label text-white fw-semibold small" for="checkAceitoTermosRegistro">
+                            Li, compreendi e concordo com os Termos de Uso, Regras de Armazenamento (5 GB / 5.000 produtos) e Política de Privacidade do Trivium ERP.
+                        </label>
+                    </div>
+                </div>
+            </div>
 
-        function togglePessoaFisica(checkbox) {
-            const inputEmpresa = document.getElementById('inputRazaoSocial');
-            if (checkbox.checked) {
-                inputEmpresa.disabled = true;
-                inputEmpresa.value = '';
-                inputEmpresa.placeholder = 'Nome pessoal será assumido';
-                inputEmpresa.style.opacity = '0.35';
-            } else {
-                inputEmpresa.disabled = false;
-                inputEmpresa.placeholder = 'Ex: Cavalcante Serviços Ltda';
-                inputEmpresa.style.opacity = '1';
-            }
-        }
+            <div class="modal-footer border-0 p-0 pt-3 d-flex flex-column gap-2">
+                <button type="button" id="btnConfirmarAtivacaoTermos" class="btn btn-brand w-100 py-2 fs-6 fw-bold shadow-lg disabled" onclick="finalizarCadastroAprovado()">
+                    Confirmar e Iniciar Meus 14 Dias Grátis <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+                <button type="button" class="btn btn-link text-white-50 text-decoration-none btn-sm" onclick="voltarParaResumoPlano()">
+                    <i class="bi bi-arrow-left me-1"></i> Voltar ao resumo do plano
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
-        function atualizarResumoPlano() {
-            const perfil = document.getElementById('inputPerfilOperacao').value;
-            const financeiro = document.getElementById('inputUsarFinanceiro').value === '1';
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let modalCalculando = null;
+    let modalResultado = null;
+    let modalTermos = null;
 
-            const nomeEl = document.getElementById('displayNomePlano');
-            const descEl = document.getElementById('displayDescricaoPlano');
-            const tagsEl = document.getElementById('displayTagsPlano');
+    document.addEventListener('DOMContentLoaded', function() {
+        modalCalculando = new bootstrap.Modal(document.getElementById('modalCalculandoPlano'));
+        modalResultado = new bootstrap.Modal(document.getElementById('modalResultadoPlano'));
+        modalTermos = new bootstrap.Modal(document.getElementById('modalTermosUso'));
+        
+        {% if abrir_step3 %}
+            atualizarResumoPlano();
+        {% endif %}
 
-            tagsEl.innerHTML = '';
-            const criarTag = (texto) => `<span class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-25" style="font-size: 0.72rem;">${texto}</span>`;
-
-            if (perfil === 'saude') {
-                nomeEl.innerText = 'CLÍNICAS & CONSULTAS';
-                descEl.innerText = 'Prontuários SOAP, agenda clínica e histórico.';
-                tagsEl.innerHTML = criarTag('Prontuários') + criarTag('Agenda');
-            } else if (perfil === 'servicos_campo') {
-                nomeEl.innerText = 'SERVIÇOS TÉCNICOS & ENGENHARIA';
-                descEl.innerText = 'Ordens de serviço, app de campo e propostas.';
-                tagsEl.innerHTML = criarTag('O.S.') + criarTag('Campo');
-            } else if (perfil === 'distribuidora') {
-                nomeEl.innerText = 'DISTRIBUIÇÃO & EXPEDIÇÃO';
-                descEl.innerText = 'Venda com imagens, portal B2B e motoristas.';
-                tagsEl.innerHTML = criarTag('Vendas B2B') + criarTag('Rotas');
-            } else if (perfil === 'estoque_interno') {
-                nomeEl.innerText = 'ALMOXARIFADO PURO';
-                descEl.innerText = 'Controle físico de saldo e requisições internas.';
-                tagsEl.innerHTML = criarTag('Saldo Kardex') + criarTag('Requisições');
-            } else {
-                nomeEl.innerText = 'DOCUMENTOS & MINUTAS';
-                descEl.innerText = 'Cadastro de clientes e minutas contratuais PDF.';
-                tagsEl.innerHTML = criarTag('Minutas PDF') + criarTag('Clientes');
-            }
-
-            if (financeiro) {
-                tagsEl.innerHTML += criarTag('Financeiro Ativo');
-            }
-        }
-
-        function validarForcaSenha(senha) {
-            const meter = document.getElementById('meterFill');
-            const texto = document.getElementById('meterTexto');
-            let pontos = 0;
-
-            if (senha.length >= 8) pontos += 25;
-            if (/[A-Z]/.test(senha)) pontos += 25;
-            if (/[0-9]/.test(senha)) pontos += 25;
-            if (/[!@#$%^&*(),.?":{}|<>_\-\\\/\[\]~+=\`]/.test(senha)) pontos += 25;
-
-            meter.style.width = `${pontos}%`;
-
-            if (pontos <= 25) {
-                meter.style.backgroundColor = '#ef4444';
-                texto.innerText = 'Fraca: adicione maiúsculas, números e símbolos.';
-                texto.style.color = '#ef4444';
-            } else if (pontos <= 75) {
-                meter.style.backgroundColor = '#f59e0b';
-                texto.innerText = 'Média: quase pronta.';
-                texto.style.color = '#fbbf24';
-            } else {
-                meter.style.backgroundColor = '#10b981';
-                texto.innerText = 'Excelente! Palavra-passe segura.';
-                texto.style.color = '#34d399';
-            }
-        }
-
-        function checarConferenciaSenha() {
-            const senha = document.getElementById('inputSenha').value;
-            const confirma = document.getElementById('inputConfirmaSenha').value;
-            const alertaErro = document.getElementById('alertaSenhaNaoConfere');
-            const alertaOk = document.getElementById('alertaSenhaConfere');
-
-            if (!confirma) {
-                alertaErro.classList.add('d-none');
-                alertaOk.classList.add('d-none');
-                return;
-            }
-
-            if (senha !== confirma) {
-                alertaErro.classList.remove('d-none');
-                alertaOk.classList.add('d-none');
-            } else {
-                alertaErro.classList.add('d-none');
-                alertaOk.classList.remove('d-none');
-            }
-        }
-
-        /* ANIMAÇÃO DE CÁLCULO E RECOMENDAÇÃO (LABOR ILLUSION) */
-        function iniciarCalculoPlano() {
-            const form = document.getElementById('formOnboarding');
-            const senha = document.getElementById('inputSenha').value;
-            const confirma = document.getElementById('inputConfirmaSenha').value;
-
-            if (!form.checkValidity()) {
-                form.reportValidity();
-                return;
-            }
-
-            if (senha !== confirma) {
-                document.getElementById('inputConfirmaSenha').focus();
-                checarConferenciaSenha();
-                return;
-            }
-
-            modalCalculando.show();
-
-            const barra = document.getElementById('barraCalculoPlano');
-            const titulo = document.getElementById('textoCarregandoTitulo');
-            const desc = document.getElementById('textoCarregandoDescricao');
-
-            barra.style.width = "25%";
-
+        const floatingContainer = document.getElementById('floatingAlerts');
+        if (floatingContainer) {
             setTimeout(() => {
-                barra.style.width = "55%";
-                titulo.innerText = "Dimensionando ferramentas e usuários...";
-                desc.innerText = "Eliminando telas e menus desnecessários.";
-            }, 800);
+                floatingContainer.style.opacity = '0';
+                floatingContainer.style.transform = 'translateY(-20px)';
+                setTimeout(() => floatingContainer.remove(), 500);
+            }, 5000);
+        }
+    });
 
-            setTimeout(() => {
-                barra.style.width = "85%";
-                titulo.innerText = "Calculando recomendação comercial...";
-                desc.innerText = "Liberando condições e período de 14 dias grátis.";
-            }, 1600);
+    function closeToast(el) {
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 300);
+    }
 
-            setTimeout(() => {
-                barra.style.width = "100%";
-                modalCalculando.hide();
-                montarApresentacaoPlano();
-                modalResultado.show();
-            }, 2400);
+    function goToStep(step) {
+        document.querySelectorAll('.step-pane').forEach(el => el.classList.add('d-none'));
+        document.getElementById(`step${step}`).classList.remove('d-none');
+
+        const progress = document.getElementById('progressFill');
+        if (step === 1) progress.style.width = '33%';
+        if (step === 2) progress.style.width = '66%';
+        if (step === 3) {
+            progress.style.width = '100%';
+            atualizarResumoPlano();
+        }
+    }
+
+    /* SELEÇÃO EXCLUSIVA DE CARDS */
+    function selectOption(tipo, valor, el) {
+        const container = el.parentElement;
+        container.querySelectorAll('.card-square-option').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+
+        if (tipo === 'perfil') document.getElementById('inputPerfilOperacao').value = valor;
+        if (tipo === 'equipe') document.getElementById('inputEquipePorte').value = valor;
+        if (tipo === 'financeiro') document.getElementById('inputUsarFinanceiro').value = valor;
+    }
+
+    function togglePessoaFisica(checkbox) {
+        const inputEmpresa = document.getElementById('inputRazaoSocial');
+        if (checkbox.checked) {
+            inputEmpresa.disabled = true;
+            inputEmpresa.value = '';
+            inputEmpresa.placeholder = 'Nome pessoal será assumido';
+            inputEmpresa.style.opacity = '0.35';
+        } else {
+            inputEmpresa.disabled = false;
+            inputEmpresa.placeholder = 'Ex: Cavalcante Serviços Ltda';
+            inputEmpresa.style.opacity = '1';
+        }
+    }
+
+    function atualizarResumoPlano() {
+        const perfil = document.getElementById('inputPerfilOperacao').value;
+        const financeiro = document.getElementById('inputUsarFinanceiro').value === '1';
+
+        const nomeEl = document.getElementById('displayNomePlano');
+        const descEl = document.getElementById('displayDescricaoPlano');
+        const tagsEl = document.getElementById('displayTagsPlano');
+
+        tagsEl.innerHTML = '';
+        const criarTag = (texto) => `<span class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-25" style="font-size: 0.72rem;">${texto}</span>`;
+
+        if (perfil === 'saude') {
+            nomeEl.innerText = 'CLÍNICAS & CONSULTAS';
+            descEl.innerText = 'Prontuários SOAP, agenda clínica e histórico.';
+            tagsEl.innerHTML = criarTag('Prontuários') + criarTag('Agenda');
+        } else if (perfil === 'servicos_campo') {
+            nomeEl.innerText = 'SERVIÇOS TÉCNICOS & ENGENHARIA';
+            descEl.innerText = 'Ordens de serviço, app de campo e propostas.';
+            tagsEl.innerHTML = criarTag('O.S.') + criarTag('Campo');
+        } else if (perfil === 'distribuidora') {
+            nomeEl.innerText = 'DISTRIBUIÇÃO & EXPEDIÇÃO';
+            descEl.innerText = 'Venda com imagens, portal B2B e motoristas.';
+            tagsEl.innerHTML = criarTag('Vendas B2B') + criarTag('Rotas');
+        } else if (perfil === 'estoque_interno') {
+            nomeEl.innerText = 'ALMOXARIFADO PURO';
+            descEl.innerText = 'Controle físico de saldo e requisições internas.';
+            tagsEl.innerHTML = criarTag('Saldo Kardex') + criarTag('Requisições');
+        } else {
+            nomeEl.innerText = 'DOCUMENTOS & MINUTAS';
+            descEl.innerText = 'Cadastro de clientes e minutas contratuais PDF.';
+            tagsEl.innerHTML = criarTag('Minutas PDF') + criarTag('Clientes');
         }
 
-        /* CÁLCULO DINÂMICO PRECISO CONFORME TABELA OFICIAL */
-        function montarApresentacaoPlano() {
-            const perfil = document.getElementById('inputPerfilOperacao').value;
-            const equipe = document.getElementById('inputEquipePorte').value;
-            const financeiro = document.getElementById('inputUsarFinanceiro').value === '1';
+        if (financeiro) {
+            tagsEl.innerHTML += criarTag('Financeiro Ativo');
+        }
+    }
 
-            const nomePerfil = document.getElementById('modalNomePerfil');
-            const tituloPlano = document.getElementById('modalTituloPlano');
-            const valorPlano = document.getElementById('modalValorPlano');
-            const lista = document.getElementById('modalListaCobertura');
+    function validarForcaSenha(senha) {
+        const meter = document.getElementById('meterFill');
+        const texto = document.getElementById('meterTexto');
+        let pontos = 0;
 
-            lista.innerHTML = '';
-            const addItem = (txt) => lista.innerHTML += `<li class="d-flex align-items-center gap-2 mb-1"><i class="bi bi-check-circle-fill text-success"></i> ${txt}</li>`;
+        if (senha.length >= 8) pontos += 25;
+        if (/[A-Z]/.test(senha)) pontos += 25;
+        if (/[0-9]/.test(senha)) pontos += 25;
+        if (/[!@#$%^&*(),.?":{}|<>_\-\\\/\[\]~+=\`]/.test(senha)) pontos += 25;
 
-            let valorTotal = 14.90; // Base com 5 acessos inclusos
+        meter.style.width = `${pontos}%`;
 
-            if (perfil === 'saude') {
-                nomePerfil.innerText = "Profissional Clínico / Saúde";
-                tituloPlano.innerText = "Plano Saúde & Bem-Estar";
-                valorTotal += 15.00; // Módulo Atendimentos
-                addItem("Prontuários SOAP com Queixa, Anamnese e Conduta");
-                addItem("Agenda técnica e histórico cronológico do paciente");
-                addItem("Emissão de declarações e relatórios clínicos");
-            } else if (perfil === 'servicos_campo') {
-                nomePerfil.innerText = "Empresas de Serviços & Campo";
-                tituloPlano.innerText = "Plano Operação Técnica";
-                if (equipe !== '1') {
-                    valorTotal += 15.00; // Gestão de Técnicos
-                }
-                addItem("Ordens de Serviço com cronograma Gantt");
-                addItem("App mobile sem login para técnicos colherem assinatura");
-                addItem("Propostas comerciais com ART e custos analíticos");
-            } else if (perfil === 'distribuidora') {
-                nomePerfil.innerText = "Comércio, Atacado & Distribuição";
-                tituloPlano.innerText = "Plano Logística & Vendas";
-                valorTotal += 20.00; // Estoque
-                valorTotal += 20.00; // Vendas B2B
-                addItem("Controle de estoque por SKU com imagens de produto");
-                addItem("Portal B2B de autoatendimento para clientes");
-                addItem("Painel de expedição e roteirização com motoristas");
-            } else if (perfil === 'estoque_interno') {
-                nomePerfil.innerText = "Almoxarifado & Controle Interno";
-                tituloPlano.innerText = "Plano Almoxarifado Puro";
-                valorTotal += 20.00; // Estoque
-                addItem("Controle de saldo físico e histórico Kardex");
-                addItem("Canal de requisição interna para setores/obras");
-                addItem("Interface enxuta (sem telas de vendas comerciais)");
-            } else {
-                nomePerfil.innerText = "Gestão de Clientes & Documentos";
-                tituloPlano.innerText = "Plano Gestão Documental";
-                addItem("Base centralizada de clientes PF e PJ");
-                addItem("Gerador de minutas e contratos em PDF");
-                addItem("Armazenamento seguro de arquivos anexos");
-            }
+        if (pontos <= 25) {
+            meter.style.backgroundColor = '#ef4444';
+            texto.innerText = 'Fraca: adicione maiúsculas, números e símbolos.';
+            texto.style.color = '#ef4444';
+        } else if (pontos <= 75) {
+            meter.style.backgroundColor = '#f59e0b';
+            texto.innerText = 'Média: quase pronta.';
+            texto.style.color = '#fbbf24';
+        } else {
+            meter.style.backgroundColor = '#10b981';
+            texto.innerText = 'Excelente! Palavra-passe segura.';
+            texto.style.color = '#34d399';
+        }
+    }
 
-            if (equipe === '1') {
-                addItem("Licença individual com 5 acessos inclusos");
-            } else if (equipe === '2_5') {
-                addItem("Até 5 colaboradores e operadores conectados");
-            } else {
-                valorTotal += (5 * 4.00); // 5 usuários adicionais a R$ 4,00 cada
-                addItem("Estrutura corporativa com 10 usuários simultâneos");
-            }
+    function checarConferenciaSenha() {
+        const senha = document.getElementById('inputSenha').value;
+        const confirma = document.getElementById('inputConfirmaSenha').value;
+        const alertaErro = document.getElementById('alertaSenhaNaoConfere');
+        const alertaOk = document.getElementById('alertaSenhaConfere');
 
-            if (financeiro) {
-                addItem("Controle de faturas, parcelas a receber e sinal de entrada");
-            } else {
-                addItem("Interface enxuta sem rotinas financeiras (foco 100% operacional)");
-            }
-
-            // ATUALIZAÇÃO DO VALOR NA TELA COM FORMATAÇÃO EM REAIS
-            const valorFormatado = valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            valorPlano.innerText = `R$ ${valorFormatado}`;
+        if (!confirma) {
+            alertaErro.classList.add('d-none');
+            alertaOk.classList.add('d-none');
+            return;
         }
 
-        function finalizarCadastroAprovado() {
-            modalResultado.hide();
-            document.getElementById('formOnboarding').submit();
+        if (senha !== confirma) {
+            alertaErro.classList.remove('d-none');
+            alertaOk.classList.add('d-none');
+        } else {
+            alertaErro.classList.add('d-none');
+            alertaOk.classList.remove('d-none');
         }
-    </script>
-</body>
-</html>
+    }
+
+    /* ANIMAÇÃO DE CÁLCULO E RECOMENDAÇÃO (LABOR ILLUSION) */
+    function iniciarCalculoPlano() {
+        const form = document.getElementById('formOnboarding');
+        const senha = document.getElementById('inputSenha').value;
+        const confirma = document.getElementById('inputConfirmaSenha').value;
+
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
+        if (senha !== confirma) {
+            document.getElementById('inputConfirmaSenha').focus();
+            checarConferenciaSenha();
+            return;
+        }
+
+        modalCalculando.show();
+
+        const barra = document.getElementById('barraCalculoPlano');
+        const titulo = document.getElementById('textoCarregandoTitulo');
+        const desc = document.getElementById('textoCarregandoDescricao');
+
+        barra.style.width = "25%";
+
+        setTimeout(() => {
+            barra.style.width = "55%";
+            titulo.innerText = "Dimensionando ferramentas e usuários...";
+            desc.innerText = "Eliminando telas e menus desnecessários.";
+        }, 800);
+
+        setTimeout(() => {
+            barra.style.width = "85%";
+            titulo.innerText = "Calculando recomendação comercial...";
+            desc.innerText = "Liberando condições e período de 14 dias grátis.";
+        }, 1600);
+
+        setTimeout(() => {
+            barra.style.width = "100%";
+            modalCalculando.hide();
+            montarApresentacaoPlano();
+            modalResultado.show();
+        }, 2400);
+    }
+
+    /* CÁLCULO DINÂMICO PRECISO CONFORME TABELA OFICIAL */
+    function montarApresentacaoPlano() {
+        const perfil = document.getElementById('inputPerfilOperacao').value;
+        const equipe = document.getElementById('inputEquipePorte').value;
+        const financeiro = document.getElementById('inputUsarFinanceiro').value === '1';
+
+        const nomePerfil = document.getElementById('modalNomePerfil');
+        const tituloPlano = document.getElementById('modalTituloPlano');
+        const valorPlano = document.getElementById('modalValorPlano');
+        const lista = document.getElementById('modalListaCobertura');
+
+        lista.innerHTML = '';
+        const addItem = (txt) => lista.innerHTML += `<li class="d-flex align-items-center gap-2 mb-1"><i class="bi bi-check-circle-fill text-success"></i> ${txt}</li>`;
+
+        let valorTotal = 14.90; // Base com 5 acessos inclusos
+
+        if (perfil === 'saude') {
+            nomePerfil.innerText = "Profissional Clínico / Saúde";
+            tituloPlano.innerText = "Plano Saúde & Bem-Estar";
+            valorTotal += 15.00;
+            addItem("Prontuários SOAP com Queixa, Anamnese e Conduta");
+            addItem("Agenda técnica e histórico cronológico do paciente");
+            addItem("Emissão de declarações e relatórios clínicos");
+        } else if (perfil === 'servicos_campo') {
+            nomePerfil.innerText = "Empresas de Serviços & Campo";
+            tituloPlano.innerText = "Plano Operação Técnica";
+            if (equipe !== '1') {
+                valorTotal += 15.00;
+            }
+            addItem("Ordens de Serviço com cronograma Gantt");
+            addItem("App mobile sem login para técnicos colherem assinatura");
+            addItem("Propostas comerciais com ART e custos analíticos");
+        } else if (perfil === 'distribuidora') {
+            nomePerfil.innerText = "Comércio, Atacado & Distribuição";
+            tituloPlano.innerText = "Plano Logística & Vendas";
+            valorTotal += 20.00;
+            valorTotal += 20.00;
+            addItem("Controle de estoque por SKU com imagens de produto");
+            addItem("Capacidade de até 5.000 produtos com fotos na franquia de 5 GB");
+            addItem("Portal B2B de autoatendimento para clientes");
+            addItem("Painel de expedição e roteirização com motoristas");
+        } else if (perfil === 'estoque_interno') {
+            nomePerfil.innerText = "Almoxarifado & Controle Interno";
+            tituloPlano.innerText = "Plano Almoxarifado Puro";
+            valorTotal += 20.00;
+            addItem("Controle de saldo físico e histórico Kardex");
+            addItem("Até 5.000 itens com fotos no catálogo seguro");
+            addItem("Canal de requisição interna para setores/obras");
+            addItem("Interface enxuta (sem telas de vendas comerciais)");
+        } else {
+            nomePerfil.innerText = "Gestão de Clientes & Documentos";
+            tituloPlano.innerText = "Plano Gestão Documental";
+            addItem("Base centralizada de clientes PF e PJ");
+            addItem("Gerador de minutas e contratos em PDF");
+            addItem("Armazenamento seguro de arquivos anexos");
+        }
+
+        if (equipe === '1') {
+            addItem("Licença com 5 acessos completos inclusos");
+        } else if (equipe === '2_5') {
+            addItem("Até 5 colaboradores e operadores conectados");
+        } else {
+            valorTotal += (5 * 4.00);
+            addItem("Estrutura corporativa com 10 usuários simultâneos");
+        }
+
+        if (financeiro) {
+            addItem("Controle de faturas, parcelas a receber e sinal de entrada");
+        } else {
+            addItem("Interface enxuta sem rotinas financeiras (foco 100% operacional)");
+        }
+
+        const valorFormatado = valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        valorPlano.innerText = `R$ ${valorFormatado}`;
+    }
+
+    /* FLUXO PARA O MODAL DE TERMOS DE USO */
+    function abrirModalTermosUso() {
+        modalResultado.hide();
+        modalTermos.show();
+    }
+
+    function voltarParaResumoPlano() {
+        modalTermos.hide();
+        modalResultado.show();
+    }
+
+    function validarAceiteTermos() {
+        const check = document.getElementById('checkAceitoTermosRegistro');
+        const btn = document.getElementById('btnConfirmarAtivacaoTermos');
+        if (check.checked) {
+            btn.classList.remove('disabled');
+        } else {
+            btn.classList.add('disabled');
+        }
+    }
+
+    function finalizarCadastroAprovado() {
+        modalTermos.hide();
+        document.getElementById('formOnboarding').submit();
+    }
+</script>

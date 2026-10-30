@@ -497,6 +497,24 @@ def interceptar_bloqueio_assinatura():
     if current_user.is_authenticated and current_user.nivel_acesso == 'afiliado':
         return None
 
+    # ISENÇÃO E LIBERAÇÃO COMPLETA DO CORPO CLÍNICO:
+    if current_user.is_authenticated and current_user.nivel_acesso == 'clinico':
+        rotas_permitidas_clinico = [
+            'painel_meus_atendimentos',
+            'salvar_evolucao_atendimento',
+            'emitir_documento_clinico',     # <-- ADICIONADO: Libera geração de Atestado, Receita e Ficha
+            'api_trocar_primeira_senha',
+            'suporte',
+            'detalhe_chamado',
+            'novo_chamado',
+            'auth.logout',
+            'static',
+            'download_file'
+        ]
+        if request.endpoint and not any(request.endpoint.startswith(r) for r in rotas_permitidas_clinico):
+            return redirect(url_for('painel_meus_atendimentos'))
+        return None  # <-- IMPORTANTE: Não deixa cair no bloqueio de pagamento/trial da empresa abaixo
+
     if current_user.is_authenticated:
         if current_user.nivel_acesso == 'master':
             return None
@@ -2017,10 +2035,11 @@ def gestao_corpo_clinico():
         h_alm_ini = request.form.get('hora_inicio_almoco')
         h_alm_fim = request.form.get('hora_fim_almoco')
 
-        if not nome or not telefone:
-            flash('Nome e WhatsApp são obrigatórios.', 'warning')
+        if not nome or not telefone or not email:
+            flash('Nome, WhatsApp e E-mail são obrigatórios para habilitar o acesso do profissional.', 'warning')
             return redirect(url_for('gestao_corpo_clinico'))
 
+        # 1. Cria o registro do profissional
         novo_prof = OperadorCampo(
             empresa_id=empresa_id,
             nome=nome,
@@ -2029,7 +2048,7 @@ def gestao_corpo_clinico():
             documento_registro=doc_registro or None,
             email=email or None,
             tipo_operador='tecnico',
-            funcao_clinica='profissional',  # Marcação exclusiva para a área clínica
+            funcao_clinica='profissional',
             duracao_padrao_minutos=duracao,
             hora_inicio_trabalho=datetime.strptime(h_ini, '%H:%M').time() if h_ini else dt_time(8, 0),
             hora_fim_trabalho=datetime.strptime(h_fim, '%H:%M').time() if h_fim else dt_time(18, 0),
@@ -2038,12 +2057,37 @@ def gestao_corpo_clinico():
         )
         novo_prof.gerar_token_se_necessario()
         db.session.add(novo_prof)
-        db.session.commit()
+        db.session.flush()
 
-        flash(f'Profissional "{nome}" adicionado com sucesso ao corpo clínico!', 'success')
+        # 2. Cria ou vincula o Usuário com a senha padrão Mudar@123
+        user_existente = Usuario.query.filter_by(email=email).first()
+        if not user_existente:
+            novo_usuario = Usuario(
+                empresa_id=empresa_id,
+                nome=nome,
+                email=email,
+                cargo=cargo,
+                nivel_acesso='clinico',
+                operador_id=novo_prof.id,
+                ativo=True,
+                precisa_trocar_senha=True,  # Dispara o modal no 1º login
+                perm_clientes=False,
+                perm_propostas=False,
+                perm_servicos=False,
+                perm_financeiro=False,
+                perm_configuracoes=False
+            )
+            novo_usuario.set_senha('Mudar@123')
+            db.session.add(novo_usuario)
+            flash(f'Profissional "{nome}" cadastrado! Acesso gerado com senha padrão: Mudar@123', 'success')
+        else:
+            user_existente.operador_id = novo_prof.id
+            user_existente.nivel_acesso = 'clinico'
+            flash(f'Profissional "{nome}" cadastrado e vinculado ao usuário existente "{email}".', 'info')
+
+        db.session.commit()
         return redirect(url_for('gestao_corpo_clinico'))
 
-    # Filtra exclusivamente quem faz parte do corpo clínico
     profissionais = OperadorCampo.query.filter_by(
         empresa_id=empresa_id,
         funcao_clinica='profissional'
@@ -2067,6 +2111,70 @@ def gestao_corpo_clinico():
         total_concluidas=total_concluidas
     )
 
+@app.route('/clinica/meus-atendimentos')
+@login_required
+def painel_meus_atendimentos():
+    empresa_id = current_user.empresa_id
+    
+    # Se for admin, pode escolher o profissional; se for clinico, fixa no seu ID
+    if current_user.nivel_acesso == 'clinico':
+        prof_id = current_user.operador_id
+        if not prof_id:
+            flash('Seu usuário não possui um perfil profissional vinculado.', 'danger')
+            return redirect(url_for('auth.logout'))
+        profissional = OperadorCampo.query.get(prof_id)
+    else:
+        prof_id_arg = request.args.get('operador_id')
+        profissional = OperadorCampo.query.filter_by(id=int(prof_id_arg), empresa_id=empresa_id).first() if prof_id_arg else OperadorCampo.query.filter_by(empresa_id=empresa_id, funcao_clinica='profissional').first()
+        prof_id = profissional.id if profissional else None
+
+    data_selecionada_str = request.args.get('data', date.today().strftime('%Y-%m-%d'))
+    try:
+        data_selecionada = datetime.strptime(data_selecionada_str, '%Y-%m-%d').date()
+    except Exception:
+        data_selecionada = date.today()
+
+    # 1. Atendimentos específicos da data clicada para exibição detalhada
+    atendimentos_dia = ServicoCliente.query.filter_by(
+        empresa_id=empresa_id,
+        tipo_ficha='atendimento',
+        operador_id=prof_id,
+        data_previsao=data_selecionada
+    ).order_by(ServicoCliente.hora_inicio_agendada.asc().nullslast()).all()
+
+    # 2. Resumo de todos os atendimentos do mês para pintar os dias no calendário
+    inicio_mes = date(data_selecionada.year, data_selecionada.month, 1)
+    fim_mes = (inicio_mes + relativedelta(months=1)) - timedelta(days=1)
+    
+    todos_mes = ServicoCliente.query.filter_by(
+        empresa_id=empresa_id,
+        tipo_ficha='atendimento',
+        operador_id=prof_id
+    ).filter(
+        ServicoCliente.data_previsao >= inicio_mes,
+        ServicoCliente.data_previsao <= fim_mes
+    ).all()
+
+    # Mapeia quais datas possuem agendamento para marcar com badge
+    dias_com_atendimento = {}
+    for a in todos_mes:
+        if a.data_previsao:
+            d_str = a.data_previsao.strftime('%Y-%m-%d')
+            dias_com_atendimento[d_str] = dias_com_atendimento.get(d_str, 0) + 1
+
+    total_pendentes = len([a for a in atendimentos_dia if a.status in ['Pendente', 'Em Andamento']])
+    total_concluidos = len([a for a in atendimentos_dia if a.status == 'Concluido'])
+
+    return render_template(
+        'painel_clinico.html',
+        profissional=profissional,
+        data_selecionada=data_selecionada,
+        atendimentos_dia=atendimentos_dia,
+        dias_com_atendimento=dias_com_atendimento,
+        total_pendentes=total_pendentes,
+        total_concluidos=total_concluidos,
+        hoje=date.today()
+    )
 
 @app.route('/clinica/profissionais/<int:id>/editar', methods=['POST'])
 @login_required
@@ -2276,6 +2384,219 @@ def api_horarios_disponiveis_clinica():
         'data': data_str,
         'slots': slots
     })
+
+# app.py -> Módulo Clínico: Emissão de Atestados e Receituários
+
+@app.route('/clinica/atendimento/<int:id>/emitir-documento', methods=['POST'])
+@login_required
+def emitir_documento_clinico(id):
+    atendimento = ServicoCliente.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
+    tipo_doc = request.form.get('tipo_documento')  # 'atestado', 'comparecimento', 'receituario', 'encaminhamento'
+    empresa = current_user.empresa
+    paciente = atendimento.cliente
+
+    prof_nome = _limpar_texto(request.form.get('responsavel_tecnico') or atendimento.responsavel_tecnico or current_user.nome)
+    doc_conselho = _limpar_texto(request.form.get('documento_responsavel') or atendimento.documento_responsavel or '')
+    dt_emissao = date.today().strftime('%d/%m/%Y')
+    cidade_uf = f"{_limpar_texto(empresa.cidade or 'São Paulo')}/{_limpar_texto(empresa.estado or 'SP')}"
+
+    # Buffer em memória para geração do PDF via ReportLab
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=40,
+        leftMargin=40,
+        topMargin=36,
+        bottomMargin=36
+    )
+
+    elementos = []
+    styles = getSampleStyleSheet()
+
+    cor_hex = empresa.cor_primaria if empresa.cor_primaria and empresa.cor_primaria.startswith('#') else "#1e3a8a"
+    cor_marca = colors.HexColor(cor_hex)
+
+    # Estilos padronizados
+    estilo_emp_sub = ParagraphStyle('DocEmpSub', parent=styles['Normal'], fontName='Helvetica', fontSize=8, leading=11, textColor=colors.HexColor("#475569"), alignment=2)
+    estilo_titulo = ParagraphStyle('DocTit', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=14, leading=18, textColor=cor_marca, alignment=1)
+    estilo_secao = ParagraphStyle('DocSec', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=14, textColor=cor_marca)
+    estilo_corpo = ParagraphStyle('DocCorpo', parent=styles['Normal'], fontName='Helvetica', fontSize=9.5, leading=15, textColor=colors.HexColor("#1e293b"))
+    estilo_corpo_bold = ParagraphStyle('DocCorpoB', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=14, textColor=colors.HexColor("#0f172a"))
+    estilo_texto_atestado = ParagraphStyle('DocAtestadoTxt', parent=styles['Normal'], fontName='Helvetica', fontSize=11, leading=20, alignment=4, textColor=colors.HexColor("#0f172a"))
+    estilo_mono = ParagraphStyle('DocMono', parent=styles['Normal'], fontName='Courier-Bold', fontSize=10, leading=16, textColor=colors.HexColor("#0f172a"))
+
+    # 1. CABEÇALHO TIMBRADO DA CLÍNICA
+    logo_elemento = _obter_logo_reportlab(empresa.logo_filename, width=1.5*inch, height=0.6*inch)
+    info_emp = f"<b>{_limpar_texto(empresa.razao_social).upper()}</b><br/>CNPJ/CPF: {_limpar_texto(empresa.cnpj or '--')} | Tel: {_limpar_texto(empresa.telefone or '--')}<br/>{_limpar_texto(empresa.endereco_completo or '')}"
+
+    if logo_elemento:
+        tab_topo = Table([[logo_elemento, Paragraph(info_emp, estilo_emp_sub)]], colWidths=[1.8*inch, 5.7*inch])
+    else:
+        estilo_emp_nome = ParagraphStyle('DocEmpNome', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=cor_marca)
+        tab_topo = Table([[Paragraph(f"<b>{_limpar_texto(empresa.razao_social).upper()}</b>", estilo_emp_nome), Paragraph(info_emp, estilo_emp_sub)]], colWidths=[2.8*inch, 4.7*inch])
+
+    tab_topo.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('ALIGN', (1,0), (1,0), 'RIGHT')]))
+    elementos.append(tab_topo)
+    elementos.append(Spacer(1, 4))
+    elementos.append(HRFlowable(width="100%", thickness=1.5, color=cor_marca, spaceAfter=14))
+
+    # 2. DADOS DO PACIENTE
+    nome_pac = _limpar_texto(paciente.nome or 'Paciente')
+    doc_pac = _limpar_texto(paciente.cnpj_cpf or '--')
+    tel_pac = _limpar_texto(paciente.telefone or '--')
+
+    dados_painel_paciente = [
+        [
+            Paragraph(f"<b>PACIENTE:</b> {nome_pac}", estilo_corpo_bold),
+            Paragraph(f"<b>DATA DE EMISSÃO:</b> {dt_emissao}", estilo_corpo)
+        ],
+        [
+            Paragraph(f"<b>DOCUMENTO (CPF/RG):</b> {doc_pac}", estilo_corpo),
+            Paragraph(f"<b>CONTATO:</b> {tel_pac}", estilo_corpo)
+        ]
+    ]
+    tab_pac = Table(dados_painel_paciente, colWidths=[4.8*inch, 2.7*inch], style=[
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f8fafc")),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor("#f1f5f9")),
+        ('PADDING', (0,0), (-1,-1), 5)
+    ])
+    elementos.append(tab_pac)
+    elementos.append(Spacer(1, 14))
+
+    # 3. CONTEÚDO ESPECÍFICO POR TIPO DE DOCUMENTO
+    nome_arquivo_pdf = f"Documento_Clinico_{atendimento.id}.pdf"
+
+    if tipo_doc in ['atestado', 'comparecimento']:
+        is_afastamento = (tipo_doc == 'atestado')
+        tit_texto = "ATESTADO MÉDICO DE AFASTAMENTO" if is_afastamento else "DECLARAÇÃO DE COMPARECIMENTO"
+        elementos.append(Paragraph(f"<b>{tit_texto}</b>", estilo_titulo))
+        elementos.append(Spacer(1, 18))
+
+        if is_afastamento:
+            dias_rep = request.form.get('dias_repouso') or '1'
+            dias_ext = request.form.get('dias_extenso') or f"{dias_rep} dias"
+            corpo_txt = (
+                f"Atesto, para os devidos fins legais e trabalhistas, que o(a) Sr.(a) <b>{nome_pac}</b>, "
+                f"portador(a) do documento nº <b>{doc_pac}</b>, esteve sob atendimento e cuidados profissionais nesta data, "
+                f"necessitando de <b>{dias_rep} ({dias_ext})</b> de repouso e afastamento das suas atividades habituais e laborais, "
+                f"a partir de hoje, para a sua plena recuperação clínica."
+            )
+            autorizou_cid = bool(request.form.get('autorizou_cid'))
+            cod_cid = _limpar_texto(request.form.get('codigo_cid') or '')
+            if autorizou_cid and cod_cid:
+                corpo_txt += f"<br/><br/><b>Diagnóstico / CID-10:</b> {cod_cid} (Autorizado formalmente pelo paciente conforme Res. CFM nº 1.658/2002)."
+
+            obs = _limpar_texto(request.form.get('observacoes_clinicas') or '')
+            if obs:
+                corpo_txt += f"<br/><br/><b>Recomendações Clínicas:</b> {obs}."
+        else:
+            h_ini = _limpar_texto(request.form.get('hora_inicio_comparecimento') or '08:00')
+            h_fim = _limpar_texto(request.form.get('hora_fim_comparecimento') or '09:00')
+            corpo_txt = (
+                f"Declaro, para os devidos fins de comprovação, que o(a) Sr.(a) <b>{nome_pac}</b>, "
+                f"portador(a) do documento nº <b>{doc_pac}</b>, compareceu a esta unidade de atendimento "
+                f"no dia <b>{dt_emissao}</b>, permanecendo em consulta e procedimentos técnicos no período "
+                f"das <b>{h_ini}</b> às <b>{h_fim}</b>."
+            )
+
+        elementos.append(Paragraph(corpo_txt, estilo_texto_atestado))
+        nome_arquivo_pdf = f"Atestado_{nome_pac.replace(' ', '_')}_{dt_emissao.replace('/', '-')}.pdf"
+
+    elif tipo_doc == 'receituario':
+        elementos.append(Paragraph("<b>RECEITUÁRIO DE MEDICAMENTOS</b>", estilo_titulo))
+        elementos.append(Spacer(1, 14))
+
+        meds_raw = _limpar_texto(request.form.get('prescricao_medicamentos') or '').replace('\n', '<br/>')
+        tab_meds = Table([[Paragraph(meds_raw, estilo_mono)]], colWidths=[7.5*inch], style=[
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#ffffff")),
+            ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+            ('PADDING', (0,0), (-1,-1), 10)
+        ])
+        elementos.append(tab_meds)
+
+        instrucoes = _limpar_texto(request.form.get('instrucoes_gerais') or '')
+        if instrucoes:
+            elementos.append(Spacer(1, 8))
+            elementos.append(Paragraph(f"<b>Orientações Gerais / Cuidados:</b> {instrucoes}", estilo_corpo))
+
+        nome_arquivo_pdf = f"Receituario_{nome_pac.replace(' ', '_')}_{dt_emissao.replace('/', '-')}.pdf"
+
+    elif tipo_doc == 'encaminhamento':
+        elementos.append(Paragraph("<b>GUIA DE ENCAMINHAMENTO & REFERÊNCIA CLÍNICA</b>", estilo_titulo))
+        elementos.append(Spacer(1, 10))
+
+        dest_esp = _limpar_texto(request.form.get('destino_especialista') or 'Especialista')
+        dest_loc = _limpar_texto(request.form.get('destino_local') or '')
+        dest_texto = f"<b>Ao(À) Colega / Especialidade:</b> {dest_esp}"
+        if dest_loc:
+            dest_texto += f"<br/><b>Instituição / Unidade de Destino:</b> {dest_loc}"
+
+        tab_dest = Table([[Paragraph(dest_texto, estilo_corpo)]], colWidths=[7.5*inch], style=[
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f8fafc")),
+            ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+            ('PADDING', (0,0), (-1,-1), 6)
+        ])
+        elementos.append(tab_dest)
+        elementos.append(Spacer(1, 10))
+
+        motivo_enc = _limpar_texto(request.form.get('motivo_encaminhamento') or '').replace('\n', '<br/>')
+        elementos.append(Paragraph("<b>1. Motivo do Encaminhamento & Objetivos do Acompanhamento:</b>", estilo_secao))
+        elementos.append(Spacer(1, 3))
+        elementos.append(Paragraph(motivo_enc, estilo_corpo))
+
+        incluir_ev = bool(request.form.get('incluir_evolucao'))
+        if incluir_ev:
+            elementos.append(Spacer(1, 8))
+            queixa = _limpar_texto(request.form.get('queixa_paciente') or atendimento.observacoes or '')
+            anamnese = _limpar_texto(request.form.get('anamnese_paciente') or atendimento.anamnese_historico or '').replace('\n', '<br/>')
+            parecer = _limpar_texto(request.form.get('parecer_paciente') or atendimento.conclusao_parecer or '').replace('\n', '<br/>')
+
+            if queixa:
+                elementos.append(Paragraph("<b>2. Queixa Principal:</b>", estilo_secao))
+                elementos.append(Paragraph(queixa, estilo_corpo))
+                elementos.append(Spacer(1, 4))
+            if anamnese:
+                elementos.append(Paragraph("<b>3. Anamnese & Avaliação Técnica:</b>", estilo_secao))
+                elementos.append(Paragraph(anamnese, estilo_corpo))
+                elementos.append(Spacer(1, 4))
+            if parecer:
+                elementos.append(Paragraph("<b>4. Conduta Inicial & Parecer:</b>", estilo_secao))
+                elementos.append(Paragraph(parecer, estilo_corpo))
+
+        elementos.append(Spacer(1, 10))
+        elementos.append(Paragraph("<font size='8' color='#64748b'>Coloco-me à disposição para discussão do caso clínico e acompanhamento conjunto.</font>", estilo_corpo))
+        nome_arquivo_pdf = f"Encaminhamento_{nome_pac.replace(' ', '_')}_{dt_emissao.replace('/', '-')}.pdf"
+
+    # 4. RODAPÉ DE CIDADE/DATA E ASSINATURA
+    elementos.append(Spacer(1, 25))
+    elementos.append(Paragraph(f"{cidade_uf}, {dt_emissao}.", estilo_corpo))
+    elementos.append(Spacer(1, 35))
+
+    linha_assinatura = [
+        [
+            Paragraph(
+                f"____________________________________________<br/>"
+                f"<b>{prof_nome}</b><br/>"
+                f"<font size='8' color='#475569'>Registro Profissional: {doc_conselho or 'Não informado'}</font>",
+                estilo_corpo
+            )
+        ]
+    ]
+    tab_ass = Table(linha_assinatura, colWidths=[7.5*inch], style=[('ALIGN', (0,0), (-1,-1), 'CENTER')])
+    elementos.append(tab_ass)
+
+    # Constrói o PDF e envia com mimetype application/pdf
+    doc.build(elementos)
+    buffer.seek(0)
+
+    return send_file(
+        buffer,
+        as_attachment=False,  # Abre o visualizador nativo de PDF do navegador
+        download_name=nome_arquivo_pdf,
+        mimetype='application/pdf'
+    )
 
 @app.route('/catalogo', methods=['GET'])
 @login_required
@@ -3511,17 +3832,27 @@ def resetar_senha_equipe(id):
         return redirect(url_for('perfil_empresa'))
 
     usuario = Usuario.query.filter_by(id=id, empresa_id=current_user.empresa_id).first_or_404()
-    nova_senha = request.form.get('nova_senha', '')
+    
+    # Se clicar no botão de "Zerar para Padrão", aplica Mudar@123 e força troca
+    modo = request.form.get('modo_reset', 'manual')
+    if modo == 'padrao':
+        usuario.set_senha('Mudar@123')
+        usuario.precisa_trocar_senha = True
+        db.session.commit()
+        flash(f'Senha de "{usuario.nome}" zerada para o padrão Mudar@123! No próximo login ele deverá cadastrar uma nova.', 'success')
+        return redirect(url_for('perfil_empresa') + '#tab-equipe')
 
+    nova_senha = request.form.get('nova_senha', '')
     senha_valida, msg_erro = validar_senha_forte(nova_senha)
     if not senha_valida:
         flash(f'Não foi possível redefinir: {msg_erro}', 'warning')
-        return redirect(url_for('perfil_empresa'))
+        return redirect(url_for('perfil_empresa') + '#tab-equipe')
 
     usuario.set_senha(nova_senha)
+    usuario.precisa_trocar_senha = False
     db.session.commit()
     flash(f'Senha de "{usuario.email}" redefinida com sucesso!', 'success')
-    return redirect(url_for('perfil_empresa'))
+    return redirect(url_for('perfil_empresa') + '#tab-equipe')
 
 @app.route('/configuracoes/usuarios/editar/<int:id>', methods=['POST'])
 @login_required
@@ -6201,7 +6532,26 @@ def excluir_motorista(id):
     flash('Motorista removido da equipe com sucesso.', 'info')
     return redirect(url_for('gestao_motoristas'))
 
+@app.route('/api/usuario/definir-primeira-senha', methods=['POST'])
+@login_required
+def api_trocar_primeira_senha():
+    nova_senha = request.form.get('nova_senha', '').strip()
+    confirma_senha = request.form.get('confirma_senha', '').strip()
 
+    if len(nova_senha) < 6:
+        flash('A nova senha deve ter no mínimo 6 caracteres.', 'danger')
+        return redirect(url_for('painel_meus_atendimentos'))
+
+    if nova_senha != confirma_senha:
+        flash('As senhas digitadas não coincidem.', 'warning')
+        return redirect(url_for('painel_meus_atendimentos'))
+
+    current_user.set_senha(nova_senha)
+    current_user.precisa_trocar_senha = False
+    db.session.commit()
+
+    flash('Sua senha pessoal foi cadastrada com sucesso! Bem-vindo ao Trivium ERP.', 'success')
+    return redirect(url_for('painel_meus_atendimentos'))
 
 # =============================================================================
 # PORTAL DE AUTOATENDIMENTO B2B: REQUISIÇÃO DE COMPRA DO CLIENTE

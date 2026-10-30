@@ -1,0 +1,426 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <!-- CABEÇALHO DO PROFISSIONAL -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center bg-white p-3 rounded-4 shadow-sm border mb-4">
+        <div class="d-flex align-items-center gap-3">
+            <div class="rounded-circle bg-primary bg-opacity-10 text-primary p-3 d-flex align-items-center justify-content-center" style="width: 55px; height: 55px;">
+                <i class="bi bi-person-badge-fill fs-3"></i>
+            </div>
+            <div>
+                <span class="badge bg-primary-subtle text-primary fw-bold text-uppercase mb-1">Painel Especialista Clínico</span>
+                <h4 class="fw-bold mb-0 text-dark">{{ profissional.nome if profissional else current_user.nome }}</h4>
+                <small class="text-muted">{{ profissional.cargo if profissional else (current_user.cargo or 'Especialista') }} • Registro: {{ (profissional.documento_registro if profissional else '') or 'Não informado' }}</small>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-2 mt-md-0">
+            <span class="badge bg-warning-subtle text-warning border px-3 py-2 rounded-pill fw-bold d-flex align-items-center gap-1">
+                <i class="bi bi-clock-history"></i> {{ total_pendentes }} Pendente(s) hoje
+            </span>
+            <span class="badge bg-success-subtle text-success border px-3 py-2 rounded-pill fw-bold d-flex align-items-center gap-1">
+                <i class="bi bi-check-circle"></i> {{ total_concluidos }} Concluído(s)
+            </span>
+        </div>
+    </div>
+
+    <!-- CORPO: CALENDÁRIO À ESQUERDA & ATENDIMENTOS DO DIA À DIREITA -->
+    <div class="row g-4">
+        <!-- COLUNA 1: SELETOR DE DATA / CALENDÁRIO -->
+        <div class="col-lg-4 col-md-5">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white mb-3">
+                <h6 class="fw-bold text-dark mb-3 d-flex align-items-center gap-2">
+                    <i class="bi bi-calendar3 text-primary"></i> Selecionar Data
+                </h6>
+                
+                <input type="date" id="seletorDataAgenda" class="form-control form-control-lg border-primary fw-bold text-center mb-3" 
+                       value="{{ data_selecionada.strftime('%Y-%m-%d') }}" 
+                       onchange="window.location.href='{{ url_for('painel_meus_atendimentos') }}?data=' + this.value">
+
+                <div class="alert alert-light border small text-muted mb-0">
+                    <i class="bi bi-info-circle text-primary me-1"></i> Selecione qualquer dia para carregar os pacientes agendados.
+                </div>
+            </div>
+        </div>
+
+        <!-- COLUNA 2: LISTA DE ATENDIMENTOS DO DIA -->
+        <div class="col-lg-8 col-md-7">
+            <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
+                <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                    <h5 class="fw-bold mb-0 text-dark">
+                        Pacientes do Dia: <span class="text-primary">{{ data_selecionada.strftime('%d/%m/%Y') }}</span>
+                    </h5>
+                    <span class="badge bg-dark rounded-pill">{{ atendimentos_dia|length }} agendamento(s)</span>
+                </div>
+
+                {% if atendimentos_dia %}
+                    <div class="d-flex flex-column gap-3">
+                        {% for item in atendimentos_dia %}
+                        <div class="p-3 rounded-4 border {% if item.status == 'Concluido' %}border-success-subtle bg-success-subtle bg-opacity-10{% else %}border-light-subtle bg-light{% endif %} shadow-sm">
+                            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                                <div>
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <span class="badge bg-primary fw-bold px-2 py-1">
+                                            <i class="bi bi-clock me-1"></i>{{ item.hora_inicio_agendada.strftime('%H:%M') if item.hora_inicio_agendada else '--:--' }}
+                                        </span>
+                                        <h6 class="fw-bold text-dark mb-0">{{ item.cliente.nome }}</h6>
+                                        <span class="badge bg-secondary-subtle text-secondary small">Sessão #{{ item.numero_sessao or 1 }}</span>
+                                    </div>
+                                    <small class="text-muted d-block">
+                                        <strong>Serviço:</strong> {{ item.tipo_servico.nome if item.tipo_servico else 'Atendimento Clínico' }} | 
+                                        <strong>Doc:</strong> {{ item.cliente.cnpj_cpf or '--' }} | 
+                                        <strong>Tel:</strong> {{ item.cliente.telefone or '--' }}
+                                    </small>
+                                </div>
+
+                                <div class="d-flex align-items-center gap-2">
+                                    <button type="button" class="btn btn-sm btn-success fw-bold px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalEvolucao{{ item.id }}">
+                                        <i class="bi bi-pencil-square me-1"></i> {% if item.status == 'Concluido' %}Ver / Revisar Prontuário{% else %}Iniciar Evolução{% endif %}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- MODAL DE EVOLUÇÃO CLÍNICA / SOAP / DOCUMENTOS & ENCAMINHAMENTO -->
+                        <div class="modal fade" id="modalEvolucao{{ item.id }}" tabindex="-1" aria-labelledby="modalEvolucaoLabel{{ item.id }}" aria-hidden="true" data-bs-backdrop="static">
+                            <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+                                <div class="modal-content rounded-4 border-0 shadow-lg" style="max-height: 90vh;">
+                                    <div class="modal-header bg-dark text-white py-3 px-4 flex-shrink-0">
+                                        <div>
+                                            <h5 class="modal-title fw-bold" id="modalEvolucaoLabel{{ item.id }}">
+                                                <i class="bi bi-clipboard2-pulse me-2 text-primary"></i>Evolução de Prontuário Clínico & Documentos
+                                            </h5>
+                                            <small class="text-white-50">Paciente: <strong>{{ item.cliente.nome }}</strong> • Data: {{ data_selecionada.strftime('%d/%m/%Y') }}</small>
+                                        </div>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                                    </div>
+
+                                    <form method="POST" action="{{ url_for('salvar_evolucao_atendimento', id=item.id) }}" enctype="multipart/form-data" class="d-flex flex-column" style="height: calc(90vh - 65px);">
+                                        <div class="modal-body p-4 overflow-y-auto" style="flex: 1 1 auto;">
+                                            <!-- CABEÇALHO DO ATENDIMENTO -->
+                                            <div class="row g-3 mb-3">
+                                                <div class="col-md-4">
+                                                    <label class="form-label small fw-bold text-dark">Profissional Responsável</label>
+                                                    <input type="text" name="responsavel_tecnico" class="form-control" value="{{ item.responsavel_tecnico or (profissional.nome if profissional else current_user.nome) }}" readonly>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label small fw-bold text-dark">Registro de Conselho (CRP/CRM/CREFITO)</label>
+                                                    <input type="text" name="documento_responsavel" class="form-control" value="{{ item.documento_responsavel or (profissional.documento_registro if profissional else '') }}">
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label small fw-bold text-dark">Status do Atendimento</label>
+                                                    <select name="status" class="form-select fw-bold">
+                                                        <option value="Em Andamento" {% if item.status == 'Em Andamento' %}selected{% endif %}>Em Andamento</option>
+                                                        <option value="Concluido" {% if item.status == 'Concluido' %}selected{% endif %}>Concluído / Atendido</option>
+                                                        <option value="Pendente" {% if item.status == 'Pendente' %}selected{% endif %}>Pendente</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <!-- CAMPOS DE EVOLUÇÃO CLÍNICA -->
+                                            <div class="mb-3">
+                                                <label class="form-label small fw-bold text-primary">1. Queixa Principal / Motivo da Consulta</label>
+                                                <textarea name="motivo_queixa" id="campoQueixa{{ item.id }}" class="form-control" rows="2" placeholder="Descreva os relatos trazidos pelo paciente...">{{ item.observacoes or '' }}</textarea>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label class="form-label small fw-bold text-primary">2. Anamnese, Avaliação & Evolução Técnica</label>
+                                                <textarea name="anamnese_historico" id="campoAnamnese{{ item.id }}" class="form-control" rows="4" placeholder="Registro técnico detalhado da sessão, testes aplicados ou intervenção realizada...">{{ item.anamnese_historico or '' }}</textarea>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label class="form-label small fw-bold text-primary">3. Parecer / Conduta / Diagnóstico</label>
+                                                <textarea name="conclusao_parecer" id="campoParecer{{ item.id }}" class="form-control" rows="3" placeholder="Encaminhamentos, hipóteses diagnósticas e prescrições terapêuticas...">{{ item.conclusao_parecer or '' }}</textarea>
+                                            </div>
+
+                                            <!-- SEÇÃO: DOCUMENTOS, RECEITAS & ENCAMINHAMENTOS -->
+                                            <div class="p-3 bg-light rounded-4 border mb-3">
+                                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                                    <div>
+                                                        <span class="badge bg-primary bg-opacity-10 text-primary small mb-1">EMISSÃO RÁPIDA</span>
+                                                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-printer me-1 text-primary"></i>Documentos & Encaminhamentos Oficiais</h6>
+                                                    </div>
+                                                    <div class="d-flex flex-wrap gap-2">
+                                                        <button type="button" class="btn btn-sm btn-outline-primary fw-bold" data-bs-toggle="collapse" data-bs-target="#boxAtestado{{ item.id }}">
+                                                            <i class="bi bi-file-earmark-text me-1"></i> Atestado / Comparecimento
+                                                        </button>
+                                                        <button type="button" class="btn btn-sm btn-outline-success fw-bold" data-bs-toggle="collapse" data-bs-target="#boxReceituario{{ item.id }}">
+                                                            <i class="bi bi-capsule me-1"></i> Receituário
+                                                        </button>
+                                                        <button type="button" class="btn btn-sm btn-outline-dark fw-bold" data-bs-toggle="collapse" data-bs-target="#boxEncaminhamento{{ item.id }}">
+                                                            <i class="bi bi-person-lines-fill me-1"></i> Imprimir Ficha / Encaminhar
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <!-- 1. ATESTADO / COMPARECIMENTO -->
+                                                <div class="collapse mt-3 border-top pt-3 bg-white p-3 rounded-3 shadow-sm" id="boxAtestado{{ item.id }}">
+                                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                                        <strong class="text-primary small"><i class="bi bi-file-earmark-check me-1"></i>Gerar Atestado / Comparecimento</strong>
+                                                        <span class="badge bg-light text-muted small">Padrão CFM / CLT</span>
+                                                    </div>
+                                                    <div class="row g-2 mb-2">
+                                                        <div class="col-md-4">
+                                                            <label class="form-label small fw-bold">Tipo de Documento *</label>
+                                                            <select id="tipoDocAtestado{{ item.id }}" class="form-select form-select-sm" onchange="toggleCamposAtestado(this, '{{ item.id }}')">
+                                                                <option value="atestado">Atestado Médico (Afastamento)</option>
+                                                                <option value="comparecimento">Declaração de Comparecimento</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="col-md-4 campo-afastamento-{{ item.id }}">
+                                                            <label class="form-label small fw-bold">Dias de Repouso *</label>
+                                                            <input type="number" id="diasRepouso{{ item.id }}" class="form-control form-control-sm" placeholder="Ex: 3" min="1">
+                                                        </div>
+                                                        <div class="col-md-4 campo-afastamento-{{ item.id }}">
+                                                            <label class="form-label small fw-bold">Dias por Extenso</label>
+                                                            <input type="text" id="diasExtenso{{ item.id }}" class="form-control form-control-sm" placeholder="Ex: três dias">
+                                                        </div>
+                                                        <div class="col-md-4 campo-comparecimento-{{ item.id }} d-none">
+                                                            <label class="form-label small fw-bold">Horário de Início</label>
+                                                            <input type="time" id="horaInicio{{ item.id }}" class="form-control form-control-sm" value="{{ item.hora_inicio_agendada.strftime('%H:%M') if item.hora_inicio_agendada else '08:00' }}">
+                                                        </div>
+                                                        <div class="col-md-4 campo-comparecimento-{{ item.id }} d-none">
+                                                            <label class="form-label small fw-bold">Horário de Término</label>
+                                                            <input type="time" id="horaFim{{ item.id }}" class="form-control form-control-sm" value="{{ item.hora_fim_agendada.strftime('%H:%M') if item.hora_fim_agendada else '09:00' }}">
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="row g-2 mb-2">
+                                                        <div class="col-md-4">
+                                                            <label class="form-label small fw-bold">CID-10 (Opcional)</label>
+                                                            <input type="text" id="codigoCid{{ item.id }}" class="form-control form-control-sm text-uppercase" placeholder="Ex: J06.9">
+                                                        </div>
+                                                        <div class="col-md-8 d-flex align-items-center">
+                                                            <div class="form-check mt-3">
+                                                                <input class="form-check-input" type="checkbox" id="cidAuth{{ item.id }}" value="1">
+                                                                <label class="form-check-label small text-muted" for="cidAuth{{ item.id }}">
+                                                                    Paciente autorizou expressamente a inserção do CID-10 (Res. CFM nº 1.658/2002).
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="mb-2">
+                                                        <label class="form-label small fw-bold">Observações / Recomendações Adicionais</label>
+                                                        <input type="text" id="obsClinicas{{ item.id }}" class="form-control form-control-sm" placeholder="Ex: Repouso domiciliar e hidratação oral contínua.">
+                                                    </div>
+
+                                                    <div class="text-end">
+                                                        <button type="button" class="btn btn-sm btn-primary fw-bold px-3" onclick="submeterDocumento('atestado', '{{ item.id }}')">
+                                                            <i class="bi bi-printer-fill me-1"></i> Imprimir Atestado
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <!-- 2. RECEITUÁRIO MÉDICO -->
+                                                <div class="collapse mt-3 border-top pt-3 bg-white p-3 rounded-3 shadow-sm" id="boxReceituario{{ item.id }}">
+                                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                                        <strong class="text-success small"><i class="bi bi-prescription2 me-1"></i>Prescrição Farmacológica</strong>
+                                                        <span class="badge bg-light text-muted small">Portaria SVS/MS nº 344/1998</span>
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <label class="form-label small fw-bold text-dark">Medicamentos, Dosagem e Posologia *</label>
+                                                        <textarea id="prescricaoMedicamentos{{ item.id }}" class="form-control form-control-sm font-monospace" rows="5" 
+                                                                  placeholder="Ex:&#10;1. Dipirona 500mg/mL gotas ........................ 1 frasco&#10;   Tomar 35 gotas por via oral a cada 6 horas se dor ou febre.&#10;&#10;2. Amoxicilina 500mg cápsulas ...................... 21 cápsulas&#10;   Tomar 1 cápsula por via oral de 8 em 8 horas durante 7 dias."></textarea>
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <label class="form-label small fw-bold">Orientações Gerais / Cuidados Especiais</label>
+                                                        <input type="text" id="instrucoesReceita{{ item.id }}" class="form-control form-control-sm" placeholder="Ex: Ingerir no mínimo 2 litros de água ao dia. Retorno em 10 dias.">
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <button type="button" class="btn btn-sm btn-success fw-bold px-3" onclick="submeterDocumento('receituario', '{{ item.id }}')">
+                                                            <i class="bi bi-printer-fill me-1"></i> Imprimir Receituário
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <!-- 3. FICHA CLÍNICA COMPLETA & ENCAMINHAMENTO -->
+                                                <div class="collapse mt-3 border-top pt-3 bg-white p-3 rounded-3 shadow-sm" id="boxEncaminhamento{{ item.id }}">
+                                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                                        <strong class="text-dark small"><i class="bi bi-file-earmark-medical me-1"></i>Ficha de Encaminhamento & Acompanhamento</strong>
+                                                        <span class="badge bg-primary-subtle text-primary small">Referência / Contra-referência</span>
+                                                    </div>
+                                                    <div class="row g-2 mb-2">
+                                                        <div class="col-md-6">
+                                                            <label class="form-label small fw-bold">Especialidade / Profissional de Destino (Opcional)</label>
+                                                            <input type="text" id="destinoEspecialista{{ item.id }}" class="form-control form-control-sm" placeholder="Ex: Dr. Cardiologista / Fisioterapia Motora">
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label class="form-label small fw-bold">Clínica / Unidade de Saúde (Opcional)</label>
+                                                            <input type="text" id="destinoLocal{{ item.id }}" class="form-control form-control-sm" placeholder="Ex: Hospital das Clínicas ou Consultório Especializado">
+                                                        </div>
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <label class="form-label small fw-bold">Descrição para Acompanhamento / Motivo do Encaminhamento</label>
+                                                        <textarea id="motivoEncaminhamento{{ item.id }}" class="form-control form-control-sm" rows="3" 
+                                                                  placeholder="Descreva observações adicionais para o profissional que dará continuidade ao caso clínico..."></textarea>
+                                                    </div>
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="checkbox" id="incluirEvolucao{{ item.id }}" checked>
+                                                        <label class="form-check-label small text-muted" for="incluirEvolucao{{ item.id }}">
+                                                            Incluir na folha impressa a Queixa Principal, Anamnese e Parecer preenchidos nesta sessão.
+                                                        </label>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <button type="button" class="btn btn-sm btn-dark fw-bold px-3" onclick="submeterDocumento('encaminhamento', '{{ item.id }}')">
+                                                            <i class="bi bi-printer-fill me-1"></i> Imprimir Ficha / Encaminhamento
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- UPLOAD DE EXAMES E LAUDOS -->
+                                            <div class="mb-2">
+                                                <label class="form-label small fw-bold text-dark">4. Anexar Exames / Documentos / Laudos (PDF ou Fotos)</label>
+                                                <input type="file" name="anexos_atendimento[]" class="form-control" multiple>
+                                                
+                                                {% if item.evidencias %}
+                                                <div class="mt-2 d-flex flex-wrap gap-2">
+                                                    {% for ev in item.evidencias %}
+                                                    <a href="{{ url_for('download_file', filename=ev.chave_bucket) }}" target="_blank" class="btn btn-xs btn-outline-secondary py-1 px-2 small">
+                                                        <i class="bi bi-paperclip me-1"></i>{{ ev.nome_original }}
+                                                    </a>
+                                                    {% endfor %}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+
+                                        <!-- RODAPÉ FIXO DO MODAL COM BOTÕES SEMPRE VISÍVEIS -->
+                                        <div class="modal-footer border-top bg-light py-3 px-4 d-flex justify-content-between flex-shrink-0">
+                                            <button type="button" class="btn btn-outline-secondary px-3" data-bs-dismiss="modal">
+                                                <i class="bi bi-x-circle me-1"></i> Fechar sem Salvar
+                                            </button>
+                                            <button type="submit" class="btn btn-primary fw-bold px-4 shadow-sm">
+                                                <i class="bi bi-check-circle-fill me-1"></i> Gravar Prontuário
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-calendar-check fs-1 d-block mb-2 text-primary opacity-50"></i>
+                        <h6 class="fw-bold">Nenhum atendimento agendado para esta data.</h6>
+                        <small>Selecione outro dia no calendário ao lado para visualizar seus pacientes.</small>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- FORMULÁRIO INVISÍVEL DINÂMICO PARA DISPARO DE IMPRESSÃO (NOVA ABA) -->
+<form id="formEmissaoDocumento" method="POST" action="" target="_blank" style="display: none;">
+    <input type="hidden" name="tipo_documento" id="formDocTipo">
+    <input type="hidden" name="responsavel_tecnico" id="formDocProfissional">
+    <input type="hidden" name="documento_responsavel" id="formDocConselho">
+    <input type="hidden" name="dias_repouso" id="formDocDias">
+    <input type="hidden" name="dias_extenso" id="formDocExtenso">
+    <input type="hidden" name="hora_inicio_comparecimento" id="formDocHoraIni">
+    <input type="hidden" name="hora_fim_comparecimento" id="formDocHoraFim">
+    <input type="hidden" name="codigo_cid" id="formDocCid">
+    <input type="hidden" name="autorizou_cid" id="formDocAutorizouCid">
+    <input type="hidden" name="observacoes_clinicas" id="formDocObs">
+    <input type="hidden" name="prescricao_medicamentos" id="formDocMedicamentos">
+    <input type="hidden" name="instrucoes_gerais" id="formDocInstrucoes">
+    <input type="hidden" name="destino_especialista" id="formDocDestinoEsp">
+    <input type="hidden" name="destino_local" id="formDocDestinoLocal">
+    <input type="hidden" name="motivo_encaminhamento" id="formDocMotivoEnc">
+    <input type="hidden" name="incluir_evolucao" id="formDocIncluirEvolucao">
+    <input type="hidden" name="queixa_paciente" id="formDocQueixa">
+    <input type="hidden" name="anamnese_paciente" id="formDocAnamnese">
+    <input type="hidden" name="parecer_paciente" id="formDocParecer">
+</form>
+
+<!-- MODAL COMPULSÓRIO DE PRIMEIRO LOGIN: CRIE SUA SENHA -->
+{% if current_user.precisa_trocar_senha %}
+<div class="modal fade show d-block" id="modalTrocaSenhaObrigatoria" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" style="background: rgba(0,0,0,0.85); z-index: 1090;">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg p-3">
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <span class="badge bg-warning-subtle text-warning border px-2 py-1 mb-2">Primeiro Acesso Detectado</span>
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-shield-lock-fill text-primary me-2"></i>Crie a sua Senha Pessoal</h5>
+                </div>
+            </div>
+            <div class="modal-body py-3">
+                <p class="text-muted small">
+                    Olá <strong>{{ current_user.nome }}</strong>! Sua conta foi gerada com uma senha temporária. Para garantir o sigilo dos prontuários e a sua segurança, cadastre sua nova senha agora.
+                </p>
+
+                <form method="POST" action="{{ url_for('api_trocar_primeira_senha') }}">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nova Senha *</label>
+                        <input type="password" name="nova_senha" class="form-control" placeholder="Mínimo 6 dígitos" minlength="6" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Confirme a Nova Senha *</label>
+                        <input type="password" name="confirma_senha" class="form-control" placeholder="Repita a senha" minlength="6" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 fw-bold py-2 shadow">
+                        Salvar Nova Senha & Começar <i class="bi bi-arrow-right ms-1"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function toggleCamposAtestado(selectEl, id) {
+    const val = selectEl.value;
+    const camposAfastamento = document.querySelectorAll('.campo-afastamento-' + id);
+    const camposComparecimento = document.querySelectorAll('.campo-comparecimento-' + id);
+
+    if (val === 'comparecimento') {
+        camposAfastamento.forEach(el => el.classList.add('d-none'));
+        camposComparecimento.forEach(el => el.classList.remove('d-none'));
+    } else {
+        camposAfastamento.forEach(el => el.classList.remove('d-none'));
+        camposComparecimento.forEach(el => el.classList.add('d-none'));
+    }
+}
+
+function submeterDocumento(tipo, id) {
+    const form = document.getElementById('formEmissaoDocumento');
+    form.action = '/clinica/atendimento/' + id + '/emitir-documento';
+    document.getElementById('formDocTipo').value = tipo === 'atestado' ? document.getElementById('tipoDocAtestado' + id).value : tipo;
+
+    // Captura os dados preenchidos no prontuário atual
+    document.getElementById('formDocQueixa').value = document.getElementById('campoQueixa' + id).value;
+    document.getElementById('formDocAnamnese').value = document.getElementById('campoAnamnese' + id).value;
+    document.getElementById('formDocParecer').value = document.getElementById('campoParecer' + id).value;
+
+    if (tipo === 'atestado') {
+        document.getElementById('formDocDias').value = document.getElementById('diasRepouso' + id).value;
+        document.getElementById('formDocExtenso').value = document.getElementById('diasExtenso' + id).value;
+        document.getElementById('formDocHoraIni').value = document.getElementById('horaInicio' + id).value;
+        document.getElementById('formDocHoraFim').value = document.getElementById('horaFim' + id).value;
+        document.getElementById('formDocCid').value = document.getElementById('codigoCid' + id).value;
+        document.getElementById('formDocAutorizouCid').value = document.getElementById('cidAuth' + id).checked ? '1' : '';
+        document.getElementById('formDocObs').value = document.getElementById('obsClinicas' + id).value;
+    } else if (tipo === 'receituario') {
+        const meds = document.getElementById('prescricaoMedicamentos' + id).value;
+        if (!meds.trim()) {
+            alert('Por favor, informe a lista de medicamentos e a posologia.');
+            return;
+        }
+        document.getElementById('formDocMedicamentos').value = meds;
+        document.getElementById('formDocInstrucoes').value = document.getElementById('instrucoesReceita' + id).value;
+    } else if (tipo === 'encaminhamento') {
+        document.getElementById('formDocDestinoEsp').value = document.getElementById('destinoEspecialista' + id).value;
+        document.getElementById('formDocDestinoLocal').value = document.getElementById('destinoLocal' + id).value;
+        document.getElementById('formDocMotivoEnc').value = document.getElementById('motivoEncaminhamento' + id).value;
+        document.getElementById('formDocIncluirEvolucao').value = document.getElementById('incluirEvolucao' + id).checked ? '1' : '';
+    }
+
+    form.submit();
+}
+</script>
+{% endblock %}

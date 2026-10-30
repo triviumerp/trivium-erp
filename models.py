@@ -133,6 +133,11 @@ class Usuario(UserMixin, db.Model):
     motivo_rejeicao = db.Column(db.Text, nullable=True)
     aceitou_termos_afiliado = db.Column(db.Boolean, default=False)
     data_aceite_termos_afiliado = db.Column(db.DateTime, nullable=True)
+    
+    # Vínculo com Profissional Clínico / Operador e Primeiro Acesso
+    operador_id = db.Column(db.Integer, db.ForeignKey('operadores_campo.id', ondelete='SET NULL'), nullable=True)
+    operador_vinculado = db.relationship('OperadorCampo', backref=db.backref('usuario_acesso', uselist=False))
+    precisa_trocar_senha = db.Column(db.Boolean, default=False)
 
     cupons = db.relationship('CupomDesconto', backref='parceiro', lazy=True)
 

@@ -151,24 +151,22 @@
             .main-wrapper { 
                 margin-left: 0 !important; 
                 width: 100% !important; 
-                padding-bottom: calc(var(--bottom-nav-height) + 15px); /* Evita conteúdo tapado pelo rodapé */
+                padding-bottom: calc(var(--bottom-nav-height) + 15px);
             }
 
             .content-body { 
-                padding: 1rem 0.75rem !important; /* Aproveita melhor a largura no ecrã */
+                padding: 1rem 0.75rem !important; 
             }
 
             .top-navbar { 
                 padding: 0.5rem 0.9rem !important; 
             }
 
-            /* Cartões com espaçamento mais compacto no celular */
             .card-custom {
                 border-radius: 14px !important;
                 margin-bottom: 0.85rem !important;
             }
 
-            /* Suavização de tabelas para rolagem por toque */
             .table-responsive {
                 border-radius: 12px;
                 -webkit-overflow-scrolling: touch;
@@ -176,10 +174,9 @@
             }
 
             .table-responsive table {
-                min-width: 600px; /* Garante que as colunas não fiquem esmagadas */
+                min-width: 600px; 
             }
 
-            /* Botões touch-friendly */
             .btn {
                 min-height: 42px;
                 display: inline-flex;
@@ -294,6 +291,17 @@
             <hr class="my-2 border-secondary opacity-25">
             {% endif %}
 
+            <!-- ============================================================== -->
+            <!-- 3. ISOLAMENTO DO CORPO CLÍNICO vs MENU GERAL DO ERP            -->
+            <!-- ============================================================== -->
+            {% if current_user.is_authenticated and current_user.nivel_acesso == 'clinico' %}
+            <div class="mt-2 mb-1 px-3">
+                <small class="text-uppercase fw-bold text-primary" style="font-size: 0.68rem; letter-spacing: 0.5px;">Atendimento Especializado</small>
+            </div>
+            <a href="{{ url_for('painel_meus_atendimentos') }}" class="nav-link-custom {% if request.endpoint == 'painel_meus_atendimentos' %}active fw-bold text-primary{% endif %}">
+                <i class="bi bi-calendar2-heart-fill text-danger"></i><span>Meus Atendimentos & Agenda</span>
+            </a>
+            {% else %}
             <!-- 3. PAINEL DE CONTROLE / VISÃO GERAL -->
             <a href="{{ url_for('index') }}" id="tour-dashboard" class="nav-link-custom {% if request.endpoint == 'index' %}active{% endif %}">
                 <i class="bi bi-grid-1x2-fill"></i><span>Painel de Controle</span>
@@ -380,7 +388,6 @@
             <a href="{{ url_for('listar_estoque') }}" class="nav-link-custom {% if request.endpoint == 'listar_estoque' %}active{% endif %}">
                 <i class="bi bi-boxes"></i><span>Estoque & Almoxarifado</span>
             </a>
-            {# Só exibe Requisições se for almoxarifado interno puro; se for distribuidora com vendas, oculta para não duplicar com Expedição #}
             {% if not current_user.empresa.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}
             <a href="{{ url_for('listar_requisicoes_estoque') }}" class="nav-link-custom {% if request.endpoint == 'listar_requisicoes_estoque' %}active{% endif %}">
                 <i class="bi bi-clipboard-check-fill"></i><span>Requisições de Materiais</span>
@@ -455,12 +462,15 @@
                 <i class="bi bi-gear-wide-connected"></i><span>Configurações</span>
             </a>
             {% endif %}
+            {% endif %}
         </nav>
 
         <div class="mt-auto pt-2 border-top flex-shrink-0">
+            {% if not current_user.is_authenticated or current_user.nivel_acesso != 'clinico' %}
             <a href="{{ url_for('faq') }}" class="nav-link-custom {% if request.endpoint == 'faq' %}active{% endif %}">
                 <i class="bi bi-question-circle-fill"></i><span>Ajuda & FAQ</span>
             </a>
+            {% endif %}
             <a href="{{ url_for('suporte') }}" class="nav-link-custom {% if request.endpoint in ['suporte', 'novo_chamado', 'detalhe_chamado'] %}active{% endif %}">
                 <i class="bi bi-headset"></i><span>Suporte</span>
             </a>
@@ -487,8 +497,15 @@
                 <span class="small text-truncate">{{ current_user.empresa.plano or 'Trivium Gestão Pro' }}</span>
             </div>
 
-            <!-- Links Idênticos aos da Sidebar Desktop para Mobile -->
             <nav class="nav flex-column gap-1">
+                {% if current_user.is_authenticated and current_user.nivel_acesso == 'clinico' %}
+                <div class="mt-1 mb-1 px-2">
+                    <small class="text-uppercase fw-bold text-primary" style="font-size: 0.68rem;">Atendimento Especializado</small>
+                </div>
+                <a href="{{ url_for('painel_meus_atendimentos') }}" class="nav-link-custom {% if request.endpoint == 'painel_meus_atendimentos' %}active fw-bold text-primary{% endif %}">
+                    <i class="bi bi-calendar2-heart-fill text-danger"></i><span>Meus Atendimentos & Agenda</span>
+                </a>
+                {% else %}
                 <a href="{{ url_for('index') }}" class="nav-link-custom {% if request.endpoint == 'index' %}active{% endif %}">
                     <i class="bi bi-grid-1x2-fill"></i><span>Painel de Controle</span>
                 </a>
@@ -561,6 +578,7 @@
                 <a href="{{ url_for('faq') }}" class="nav-link-custom {% if request.endpoint == 'faq' %}active{% endif %}">
                     <i class="bi bi-question-circle-fill"></i><span>Ajuda & FAQ</span>
                 </a>
+                {% endif %}
                 <a href="{{ url_for('auth.logout') }}" class="nav-link-custom text-danger mt-3">
                     <i class="bi bi-box-arrow-left"></i><span>Terminar Sessão</span>
                 </a>
@@ -634,6 +652,20 @@
     <!-- BARRA INFERIOR MOBILE FIXA (BOTTOM NAVIGATION BAR)             -->
     <!-- ============================================================== -->
     <nav class="bottom-nav d-md-none">
+        {% if current_user.is_authenticated and current_user.nivel_acesso == 'clinico' %}
+        <a href="{{ url_for('painel_meus_atendimentos') }}" class="bottom-nav-item active">
+            <i class="bi bi-calendar2-heart-fill"></i>
+            <span>Agenda</span>
+        </a>
+        <a href="{{ url_for('suporte') }}" class="bottom-nav-item">
+            <i class="bi bi-headset"></i>
+            <span>Suporte</span>
+        </a>
+        <a href="{{ url_for('auth.logout') }}" class="bottom-nav-item text-danger">
+            <i class="bi bi-box-arrow-left"></i>
+            <span>Sair</span>
+        </a>
+        {% else %}
         <a href="{{ url_for('index') }}" class="bottom-nav-item {% if request.endpoint == 'index' %}active{% endif %}">
             <i class="bi bi-grid-1x2-fill"></i>
             <span>Início</span>
@@ -677,12 +709,13 @@
             <i class="bi bi-list"></i>
             <span>Mais</span>
         </button>
+        {% endif %}
     </nav>
 
     <!-- ============================================================== -->
     <!-- POP-UP REINCIDENTE DE CONCLUSÃO DE CADASTRO                    -->
     <!-- ============================================================== -->
-    {% if current_user.is_authenticated and current_user.nivel_acesso != 'master' and cadastro_pendente and request.endpoint != 'perfil_empresa' %}
+    {% if current_user.is_authenticated and current_user.nivel_acesso != 'master' and current_user.nivel_acesso != 'clinico' and cadastro_pendente and request.endpoint != 'perfil_empresa' %}
     <div class="modal fade" id="modalCompletarCadastro" tabindex="-1" aria-labelledby="modalCompletarCadastroLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
@@ -815,7 +848,7 @@
 
     @media (max-width: 767.98px) {
         #abaAjudaLateral {
-            top: 75% !important; /* Posiciona um pouco mais abaixo no celular para não tapar botões de ação */
+            top: 75% !important;
         }
     }
     </style>

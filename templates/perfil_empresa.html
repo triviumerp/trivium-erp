@@ -335,13 +335,14 @@
                                     <td>{{ u.email }}</td>
                                     <td>{{ u.cargo or '--' }}</td>
                                     <td>
-                                        <span class="badge {{ 'bg-primary' if u.nivel_acesso in ['admin', 'master'] else 'bg-secondary' }}">
+                                        <span class="badge {{ 'bg-primary' if u.nivel_acesso in ['admin', 'master'] else ('bg-info text-dark' if u.nivel_acesso == 'clinico' else 'bg-secondary') }}">
                                             {{ u.nivel_acesso|upper }}
                                         </span>
                                     </td>
                                     <td class="text-end pe-2">
                                         {% if current_user.nivel_acesso in ['admin', 'master'] %}
                                         <div class="btn-group btn-group-sm">
+                                            <!-- BOTAO EDITAR -->
                                             <button type="button" 
                                                     class="btn btn-outline-secondary btn-abrir-modal-perfil" 
                                                     data-bs-toggle="modal" 
@@ -350,14 +351,25 @@
                                                     title="Editar Acessos">
                                                 <i class="bi bi-pencil-square pointer-events-none"></i>
                                             </button>
+
+                                            <!-- NOVO: BOTAO ZERAR SENHA P/ Mudar@123 COM CONFIRMAÇÃO DIRETA -->
+                                            <form action="{{ url_for('resetar_senha_equipe', id=u.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Tem certeza que deseja zerar a senha de {{ u.nome }} para a senha padrão Mudar@123? O usuário precisará definir uma nova senha no próximo acesso.');">
+                                                <input type="hidden" name="modo_reset" value="padrao">
+                                                <button type="submit" class="btn btn-outline-warning text-dark" title="Zerar senha para Mudar@123">
+                                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                                </button>
+                                            </form>
+
+                                            <!-- BOTAO REDEFINIR MANUALMENTE COM MODAL -->
                                             <button type="button" 
                                                     class="btn btn-outline-warning text-dark btn-abrir-modal-perfil" 
                                                     data-bs-toggle="modal" 
                                                     data-bs-target="#modalResetarSenha{{ u.id }}" 
                                                     data-modal-id="modalResetarSenha{{ u.id }}" 
-                                                    title="Redefinir Senha">
+                                                    title="Redefinir Senha Manualmente">
                                                 <i class="bi bi-key pointer-events-none"></i>
                                             </button>
+
                                             {% if u.id != current_user.id %}
                                             <form action="{{ url_for('excluir_usuario_equipe', id=u.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Remover acesso deste colaborador?')">
                                                 <button type="submit" class="btn btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
@@ -789,7 +801,6 @@ function alternarTipoPessoaPerfil(tipo) {
     const labelDoc = document.getElementById('labelDocEmpresa');
     const inputDoc = document.getElementById('inputDocEmpresa');
 
-    // Remove qualquer máscara existente para reaplicar
     let valorLimpo = inputDoc.value.replace(/\D/g, '');
 
     if (tipo === 'PF') {
@@ -797,19 +808,18 @@ function alternarTipoPessoaPerfil(tipo) {
         boxFantasia.style.display = 'none';
         labelDoc.innerText = 'CPF *';
         inputDoc.placeholder = '000.000.000-00';
-        inputDoc.maxLength = 14; // 000.000.000-00
+        inputDoc.maxLength = 14;
         inputDoc.value = aplicarMascaraCPF(valorLimpo);
     } else {
         labelRazao.innerText = 'Razão Social *';
         boxFantasia.style.display = 'block';
         labelDoc.innerText = 'CNPJ *';
         inputDoc.placeholder = '00.000.000/0000-00';
-        inputDoc.maxLength = 18; // 00.000.000/0000-00
+        inputDoc.maxLength = 18;
         inputDoc.value = aplicarMascaraCNPJ(valorLimpo);
     }
 }
 
-// Funções de formatação dinâmica
 function aplicarMascaraCPF(v) {
     v = v.substring(0, 11);
     v = v.replace(/(\d{3})(\d)/, '$1.$2');
@@ -870,7 +880,6 @@ function recalcularTotalAssinaturaPerfil() {
         { nome: 'Pacote Base Essencial (OS, Propostas, Clientes)', detalhe: '5 usuários inclusos', valor: 14.90 }
     ];
 
-    // Checagem dos módulos selecionados
     const modAtend = document.getElementById('modAtend');
     if (modAtend && modAtend.checked) {
         base += 15.00;
@@ -895,7 +904,6 @@ function recalcularTotalAssinaturaPerfil() {
         itens.push({ nome: 'Módulo: Vendas, Frotas & Expedição', detalhe: 'Portal B2B e motoristas', valor: 20.00 });
     }
 
-    // Usuários adicionais
     const inputUsers = document.getElementById('inputLimiteUsuariosPerfil');
     const totalUsers = parseInt(inputUsers ? inputUsers.value : 5) || 5;
     const extras = Math.max(0, totalUsers - 5);
@@ -905,11 +913,9 @@ function recalcularTotalAssinaturaPerfil() {
         itens.push({ nome: `Usuários Adicionais (${extras} extra${extras > 1 ? 's' : ''})`, detalhe: `Total de ${totalUsers} colaboradores`, valor: custoExtras });
     }
 
-    // Atualiza mostrador do formulário principal
     const displayPerfil = document.getElementById('displayValorFinalPerfil');
     if (displayPerfil) displayPerfil.innerText = `R$ ${base.toFixed(2).replace('.', ',')}`;
 
-    // Atualiza cards de ciclo no modal com descontos
     const semestralTotal = (base * 6) * (1 - 0.12);
     const anualTotal = (base * 12) * (1 - 0.25);
 
@@ -917,7 +923,6 @@ function recalcularTotalAssinaturaPerfil() {
     document.getElementById('labelTotalSemestral').innerText = `R$ ${semestralTotal.toFixed(2).replace('.', ',')}`;
     document.getElementById('labelTotalAnual').innerText = `R$ ${anualTotal.toFixed(2).replace('.', ',')}`;
 
-    // Monta a tabela de revisão do que o cliente está adquirindo
     const tbody = document.getElementById('listaItensAquisicao');
     if (tbody) {
         tbody.innerHTML = '';
@@ -931,7 +936,6 @@ function recalcularTotalAssinaturaPerfil() {
             tbody.appendChild(tr);
         });
 
-        // Rodapé do resumo com a regra do ciclo selecionado
         let valorFinalCobrado = base;
         let descCiclo = 'Total Mensal:';
 
@@ -957,7 +961,6 @@ function selecionarCiclo(ciclo, elemento) {
     recalcularTotalAssinaturaPerfil();
 }
 
-// Redirecionamento direto ao checkout oficial do Mercado Pago
 function redirecionarMercadoPago() {
     const btn = document.getElementById('btnIrMercadoPago');
     btn.disabled = true;
@@ -986,7 +989,6 @@ function redirecionarMercadoPago() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Configura a máscara em tempo real ao digitar e inicializa PF/PJ
     const inputDoc = document.getElementById('inputDocEmpresa');
     if (inputDoc) {
         inputDoc.addEventListener('input', function(e) {
@@ -1006,10 +1008,8 @@ document.addEventListener('DOMContentLoaded', () => {
         alternarTipoPessoaPerfil('PJ');
     }
 
-    // 2. Tudo o que você já tinha continua aqui normalmente:
     recalcularTotalAssinaturaPerfil();
 
-    // RESTAURAÇÃO DE ABAS
     const hashAtual = window.location.hash;
     const abaSalva = localStorage.getItem('trivium_perfil_active_tab');
     let alvoAba = (hashAtual && hashAtual.startsWith('#tab-')) ? hashAtual : (abaSalva || '#tab-dados');
@@ -1041,7 +1041,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Se o backend indicou para abrir o checkout após salvar a mensalidade
     {% if abrir_modal_pagamento %}
     const modalMP = document.getElementById('modalCheckoutMercadoPago');
     if (modalMP) bootstrap.Modal.getOrCreateInstance(modalMP).show();
