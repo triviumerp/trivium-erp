@@ -349,20 +349,54 @@
                 </div>
             </div>
             <div class="modal-body py-3">
-                <p class="text-muted small">
-                    Olá <strong>{{ current_user.nome }}</strong>! Sua conta foi gerada com uma senha temporária. Para garantir o sigilo dos prontuários e a sua segurança, cadastre sua nova senha agora.
+                <p class="text-muted small mb-3">
+                    Olá <strong>{{ current_user.nome }}</strong>! Sua conta foi gerada com uma senha temporária. Para garantir o sigilo dos prontuários e a sua segurança, defina sua nova senha definitiva abaixo.
                 </p>
 
-                <form method="POST" action="{{ url_for('api_trocar_primeira_senha') }}">
-                    <div class="mb-3">
+                <form method="POST" action="{{ url_for('api_trocar_primeira_senha') }}" id="formTrocaSenhaPrimeiroAcesso">
+                    <!-- NOVA SENHA -->
+                    <div class="mb-2">
                         <label class="form-label small fw-bold">Nova Senha *</label>
-                        <input type="password" name="nova_senha" class="form-control" placeholder="Mínimo 6 dígitos" minlength="6" required>
+                        <div class="input-group input-group-sm">
+                            <input type="password" name="nova_senha" id="inputNovaSenhaClinico" class="form-control font-monospace" placeholder="Mínimo 8 caracteres" required oninput="validarRegrasSenhaClinico()">
+                            <button class="btn btn-outline-secondary" type="button" onclick="toggleVisibilidadeSenha('inputNovaSenhaClinico', this)">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+
+                        <!-- BARRA DE FORÇA DA SENHA -->
+                        <div class="progress mt-2" style="height: 5px; background: #e2e8f0;">
+                            <div class="progress-bar transition-all" id="barraForcaSenhaClinico" style="width: 0%;"></div>
+                        </div>
+                        <small class="d-block mt-1 fw-bold" id="textoForcaSenhaClinico" style="font-size: 0.72rem; color: #64748b;">Digite uma senha segura</small>
                     </div>
+
+                    <!-- CAIXA DE REGRAS VISUAIS -->
+                    <div class="p-2.5 px-3 bg-light border rounded-3 mb-3 small" style="font-size: 0.76rem;">
+                        <strong class="d-block text-dark mb-1"><i class="bi bi-shield-check text-primary me-1"></i>Requisitos Obrigatórios:</strong>
+                        <ul class="list-unstyled mb-0 d-flex flex-column gap-1 text-muted">
+                            <li id="reqTamanho"><i class="bi bi-circle text-muted me-1"></i> Mínimo de 8 caracteres</li>
+                            <li id="reqMaiuscula"><i class="bi bi-circle text-muted me-1"></i> Pelo menos 1 letra maiúscula</li>
+                            <li id="reqMinuscula"><i class="bi bi-circle text-muted me-1"></i> Pelo menos 1 letra minúscula</li>
+                            <li id="reqNumero"><i class="bi bi-circle text-muted me-1"></i> Pelo menos 1 número</li>
+                            <li id="reqEspecial"><i class="bi bi-circle text-muted me-1"></i> Pelo menos 1 caractere especial (@, #, $, !, etc.)</li>
+                        </ul>
+                    </div>
+
+                    <!-- CONFIRMAÇÃO DE SENHA -->
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Confirme a Nova Senha *</label>
-                        <input type="password" name="confirma_senha" class="form-control" placeholder="Repita a senha" minlength="6" required>
+                        <div class="input-group input-group-sm">
+                            <input type="password" name="confirma_senha" id="inputConfirmaSenhaClinico" class="form-control font-monospace" placeholder="Repita a senha" required oninput="validarRegrasSenhaClinico()">
+                            <button class="btn btn-outline-secondary" type="button" onclick="toggleVisibilidadeSenha('inputConfirmaSenhaClinico', this)">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div id="msgConferenciaSenha" class="small fw-bold mt-1 d-none" style="font-size: 0.75rem;"></div>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100 fw-bold py-2 shadow">
+
+                    <!-- BOTÃO COM TRAVA DINÂMICA -->
+                    <button type="submit" id="btnSalvarPrimeiraSenha" class="btn btn-primary w-100 fw-bold py-2 shadow disabled">
                         Salvar Nova Senha & Começar <i class="bi bi-arrow-right ms-1"></i>
                     </button>
                 </form>
@@ -373,6 +407,107 @@
 {% endif %}
 
 <script>
+function toggleVisibilidadeSenha(idInput, btn) {
+    const input = document.getElementById(idInput);
+    const icone = btn.querySelector('i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icone.classList.replace('bi-eye', 'bi-eye-slash');
+    } else {
+        input.type = 'password';
+        icone.classList.replace('bi-eye-slash', 'bi-eye');
+    }
+}
+
+function validarRegrasSenhaClinico() {
+    const senha = document.getElementById('inputNovaSenhaClinico').value;
+    const confirma = document.getElementById('inputConfirmaSenhaClinico').value;
+    const btnSalvar = document.getElementById('btnSalvarPrimeiraSenha');
+
+    // Validação de requisitos individuais
+    const temTamanho = senha.length >= 8;
+    const temMaiuscula = /[A-Z]/.test(senha);
+    const temMinuscula = /[a-z]/.test(senha);
+    const temNumero = /[0-9]/.test(senha);
+    const temEspecial = /[!@#$%^&*(),.?":{}|<>_\-\\\/\[\]~+=\`]/.test(senha);
+
+    atualizarItemRegra('reqTamanho', temTamanho);
+    atualizarItemRegra('reqMaiuscula', temMaiuscula);
+    atualizarItemRegra('reqMinuscula', temMinuscula);
+    atualizarItemRegra('reqNumero', temNumero);
+    atualizarItemRegra('reqEspecial', temEspecial);
+
+    // Medidor de Força
+    let score = 0;
+    if (temTamanho) score++;
+    if (temMaiuscula) score++;
+    if (temMinuscula) score++;
+    if (temNumero) score++;
+    if (temEspecial) score++;
+
+    const barra = document.getElementById('barraForcaSenhaClinico');
+    const texto = document.getElementById('textoForcaSenhaClinico');
+
+    if (senha.length === 0) {
+        barra.style.width = '0%';
+        barra.className = 'progress-bar';
+        texto.innerText = 'Digite uma senha segura';
+        texto.style.color = '#64748b';
+    } else if (score <= 2) {
+        barra.style.width = '35%';
+        barra.className = 'progress-bar bg-danger';
+        texto.innerText = 'Senha Fraca: atenda a todos os requisitos acima';
+        texto.style.color = '#dc2626';
+    } else if (score <= 4) {
+        barra.style.width = '70%';
+        barra.className = 'progress-bar bg-warning';
+        texto.innerText = 'Senha Média: quase pronta';
+        texto.style.color = '#d97706';
+    } else {
+        barra.style.width = '100%';
+        barra.className = 'progress-bar bg-success';
+        texto.innerText = 'Senha Forte e Segura!';
+        texto.style.color = '#16a34a';
+    }
+
+    // Validação de correspondência das senhas
+    const msgConf = document.getElementById('msgConferenciaSenha');
+    let confere = false;
+
+    if (confirma.length > 0) {
+        msgConf.classList.remove('d-none');
+        if (senha === confirma) {
+            msgConf.className = 'small fw-bold mt-1 text-success';
+            msgConf.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> As senhas coincidem!';
+            confere = true;
+        } else {
+            msgConf.className = 'small fw-bold mt-1 text-danger';
+            msgConf.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i> As senhas não conferem.';
+            confere = false;
+        }
+    } else {
+        msgConf.classList.add('d-none');
+    }
+
+    // Liberação do botão apenas se atingir todos os critérios e coincidir
+    if (score === 5 && confere) {
+        btnSalvar.classList.remove('disabled');
+    } else {
+        btnSalvar.classList.add('disabled');
+    }
+}
+
+function atualizarItemRegra(idEl, cumprido) {
+    const el = document.getElementById(idEl);
+    if (cumprido) {
+        el.className = 'text-success fw-bold';
+        el.querySelector('i').className = 'bi bi-check-circle-fill text-success me-1';
+    } else {
+        el.className = 'text-muted';
+        el.querySelector('i').className = 'bi bi-circle text-muted me-1';
+    }
+}
+
 function toggleCamposAtestado(selectEl, id) {
     const val = selectEl.value;
     const camposAfastamento = document.querySelectorAll('.campo-afastamento-' + id);

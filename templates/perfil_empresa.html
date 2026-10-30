@@ -532,6 +532,7 @@
 <!-- ================================================================= -->
 
 <!-- 1. MODAL: NOVO USUÁRIO DA EQUIPE -->
+<!-- 1. MODAL: NOVO USUÁRIO DA EQUIPE (DINÂMICO PELO PLANO) -->
 <div class="modal fade text-start" id="modalNovoUsuarioEquipe" tabindex="-1" aria-labelledby="lblNovoUsuario" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg rounded-4">
@@ -553,13 +554,16 @@
                     <div class="row g-2 mb-3">
                         <div class="col-7">
                             <label class="form-label small fw-bold">Cargo / Função</label>
-                            <input type="text" name="cargo" class="form-control form-control-sm" placeholder="Ex: Técnico de Campo">
+                            <input type="text" name="cargo" class="form-control form-control-sm" placeholder="Ex: Técnico / Atendente">
                         </div>
                         <div class="col-5">
                             <label class="form-label small fw-bold">Perfil Predefinido</label>
                             <select name="perfil_predefinido" class="form-select form-select-sm">
                                 <option value="personalizado">Personalizado</option>
                                 <option value="admin">Administrador</option>
+                                {% if perfil.modulo_atendimentos or current_user.nivel_acesso == 'master' %}
+                                <option value="clinico">Corpo Clínico (Restrito)</option>
+                                {% endif %}
                             </select>
                         </div>
                     </div>
@@ -580,32 +584,65 @@
                         </div>
                     </div>
 
-                    <!-- PERMISSÕES MODULARES -->
+                    <!-- PERMISSÕES DINÂMICAS CONFORME O PLANO CONTRATADO -->
                     <div class="p-3 bg-light rounded-3 border mt-3">
                         <label class="form-label small fw-bold text-dark d-block mb-2">
-                            <i class="bi bi-shield-check text-primary me-1"></i>Permissões de Acesso aos Módulos
+                            <i class="bi bi-shield-check text-primary me-1"></i>Permissões de Acesso aos Módulos Ativos no seu Plano
                         </label>
+
+                        <!-- Clientes / Pacientes -->
+                        {% if perfil.modulo_servicos_campo or perfil.modulo_atendimentos or perfil.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}
                         <div class="form-check form-switch mb-2">
                             <input class="form-check-input" type="checkbox" name="perm_clientes" id="novo_perm_cli" value="1" checked>
-                            <label class="form-check-label small" for="novo_perm_cli"><b>Clientes:</b> Cadastro, histórico e upload de laudos</label>
+                            <label class="form-check-label small" for="novo_perm_cli"><b>{% if perfil.modulo_atendimentos %}Pacientes:{% else %}Clientes:{% endif %}</b> Cadastro, histórico e documentos</label>
                         </div>
+                        {% endif %}
+
+                        <!-- Propostas & Catálogo -->
+                        {% if perfil.modulo_servicos_campo or perfil.modulo_atendimentos or current_user.nivel_acesso == 'master' %}
                         <div class="form-check form-switch mb-2">
                             <input class="form-check-input" type="checkbox" name="perm_propostas" id="novo_perm_prop" value="1" checked>
-                            <label class="form-check-label small" for="novo_perm_prop"><b>Propostas & Catálogo:</b> Emissão e orçamentos</label>
+                            <label class="form-check-label small" for="novo_perm_prop"><b>Propostas & Catálogo:</b> Emissão e orçamentos comerciais</label>
                         </div>
+                        {% endif %}
+
+                        <!-- Serviços & Ordens de Campo -->
+                        {% if perfil.modulo_servicos_campo or current_user.nivel_acesso == 'master' %}
                         <div class="form-check form-switch mb-2">
                             <input class="form-check-input" type="checkbox" name="perm_servicos" id="novo_perm_serv" value="1" checked>
-                            <label class="form-check-label small" for="novo_perm_serv"><b>Serviços / OS:</b> Agenda técnica, operadores e fotos</label>
+                            <label class="form-check-label small" for="novo_perm_serv"><b>Serviços / OS:</b> Agenda técnica de campo, operadores e etapas</label>
                         </div>
+                        {% endif %}
+
+                        <!-- Estoque & Almoxarifado -->
+                        {% if perfil.modulo_estoque or current_user.nivel_acesso == 'master' %}
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_estoque" id="novo_perm_est" value="1" checked>
+                            <label class="form-check-label small" for="novo_perm_est"><b>Estoque & Almoxarifado:</b> Saldos, inventário, Kardex e requisições</label>
+                        </div>
+                        {% endif %}
+
+                        <!-- Vendas, Frotas & Expedição -->
+                        {% if perfil.modulo_vendas_externas or (perfil.modulo_estoque and current_user.nivel_acesso == 'master') %}
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="perm_expedicao" id="novo_perm_exp" value="1" checked>
+                            <label class="form-check-label small" for="novo_perm_exp"><b>Vendas & Expedição:</b> Pedidos de mercadorias, rotas e motoristas</label>
+                        </div>
+                        {% endif %}
+
+                        <!-- Financeiro -->
+                        {% if perfil.modulo_servicos_campo or perfil.modulo_atendimentos or perfil.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}
                         <div class="form-check form-switch mb-2">
                             <input class="form-check-input" type="checkbox" name="perm_financeiro" id="novo_perm_fin" value="1">
-                            <label class="form-check-label small" for="novo_perm_fin"><b>Financeiro:</b> Faturamento, parcelas e baixas</label>
+                            <label class="form-check-label small" for="novo_perm_fin"><b>Financeiro:</b> Faturamento, boletos, parcelas e baixas</label>
                         </div>
+                        {% endif %}
+
                         <hr class="my-2 text-muted">
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" name="perm_configuracoes" id="novo_perm_conf" value="1">
                             <label class="form-check-label small text-danger fw-bold" for="novo_perm_conf">
-                                Permissão Admin (Configurações da Empresa e Equipe)
+                                Permissão Administrador (Acesso às Configurações e Equipe)
                             </label>
                         </div>
                     </div>
@@ -620,7 +657,7 @@
 </div>
 
 {% for u in usuarios_equipe %}
-<!-- 2. MODAL EDITAR ACESSOS DO COLABORADOR -->
+<!-- 2. MODAL EDITAR ACESSOS DO COLABORADOR (DINÂMICO PELO PLANO) -->
 <div class="modal fade text-start" id="modalEditarUsuario{{ u.id }}" tabindex="-1" aria-labelledby="lblEditar{{ u.id }}" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow rounded-4">
@@ -642,39 +679,76 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Cargo / Função</label>
-                        <input type="text" name="cargo" class="form-control form-control-sm" value="{{ u.cargo or '' }}" placeholder="Ex: Técnico de Campo">
+                        <input type="text" name="cargo" class="form-control form-control-sm" value="{{ u.cargo or '' }}" placeholder="Ex: Técnico / Atendente">
                     </div>
 
                     <div class="p-3 bg-light rounded-3 border mt-3">
                         <label class="form-label small fw-bold text-dark d-block mb-2">
-                            <i class="bi bi-shield-lock text-primary me-1"></i>Permissões de Acesso aos Módulos
+                            <i class="bi bi-shield-lock text-primary me-1"></i>Permissões de Acesso aos Módulos Ativos
                         </label>
+                        
                         {% if u.id == current_user.id %}
                             <div class="alert alert-info py-2 px-3 small mb-0">
                                 <i class="bi bi-info-circle me-1"></i>Você é o titular administrador e possui acesso irrestrito a todos os módulos.
                             </div>
+                        {% elif u.nivel_acesso == 'clinico' %}
+                            <div class="alert alert-success py-2 px-3 small mb-0">
+                                <i class="bi bi-heart-pulse-fill me-1"></i><strong>Perfil Clínico Especialista:</strong> Este usuário tem acesso isolado e exclusivo à sua própria agenda de consultas e prontuários dos seus pacientes.
+                            </div>
                         {% else %}
+                            <!-- Clientes / Pacientes -->
+                            {% if perfil.modulo_servicos_campo or perfil.modulo_atendimentos or perfil.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}
                             <div class="form-check form-switch mb-2">
                                 <input class="form-check-input" type="checkbox" name="perm_clientes" id="perm_cli_{{ u.id }}" value="1" {% if u.perm_clientes %}checked{% endif %}>
-                                <label class="form-check-label small" for="perm_cli_{{ u.id }}"><b>Clientes:</b> Cadastro, histórico e upload de laudos</label>
+                                <label class="form-check-label small" for="perm_cli_{{ u.id }}"><b>{% if perfil.modulo_atendimentos %}Pacientes:{% else %}Clientes:{% endif %}</b> Cadastro, histórico e documentos</label>
                             </div>
+                            {% endif %}
+
+                            <!-- Propostas & Catálogo -->
+                            {% if perfil.modulo_servicos_campo or perfil.modulo_atendimentos or current_user.nivel_acesso == 'master' %}
                             <div class="form-check form-switch mb-2">
                                 <input class="form-check-input" type="checkbox" name="perm_propostas" id="perm_prop_{{ u.id }}" value="1" {% if u.perm_propostas %}checked{% endif %}>
-                                <label class="form-check-label small" for="perm_prop_{{ u.id }}"><b>Propostas & Catálogo:</b> Emissão e orçamentos</label>
+                                <label class="form-check-label small" for="perm_prop_{{ u.id }}"><b>Propostas & Catálogo:</b> Emissão e orçamentos comerciais</label>
                             </div>
+                            {% endif %}
+
+                            <!-- Serviços & Ordens de Campo -->
+                            {% if perfil.modulo_servicos_campo or current_user.nivel_acesso == 'master' %}
                             <div class="form-check form-switch mb-2">
                                 <input class="form-check-input" type="checkbox" name="perm_servicos" id="perm_serv_{{ u.id }}" value="1" {% if u.perm_servicos %}checked{% endif %}>
-                                <label class="form-check-label small" for="perm_serv_{{ u.id }}"><b>Serviços / OS:</b> Agenda técnica, operadores e fotos</label>
+                                <label class="form-check-label small" for="perm_serv_{{ u.id }}"><b>Serviços / OS:</b> Agenda técnica de campo, operadores e etapas</label>
                             </div>
+                            {% endif %}
+
+                            <!-- Estoque & Almoxarifado -->
+                            {% if perfil.modulo_estoque or current_user.nivel_acesso == 'master' %}
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" name="perm_estoque" id="perm_est_{{ u.id }}" value="1" {% if u.perm_estoque %}checked{% endif %}>
+                                <label class="form-check-label small" for="perm_est_{{ u.id }}"><b>Estoque & Almoxarifado:</b> Saldos, inventário, Kardex e requisições</label>
+                            </div>
+                            {% endif %}
+
+                            <!-- Vendas, Frotas & Expedição -->
+                            {% if perfil.modulo_vendas_externas or (perfil.modulo_estoque and current_user.nivel_acesso == 'master') %}
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" name="perm_expedicao" id="perm_exp_{{ u.id }}" value="1" {% if u.perm_expedicao %}checked{% endif %}>
+                                <label class="form-check-label small" for="perm_exp_{{ u.id }}"><b>Vendas & Expedição:</b> Pedidos de mercadorias, rotas e motoristas</label>
+                            </div>
+                            {% endif %}
+
+                            <!-- Financeiro -->
+                            {% if perfil.modulo_servicos_campo or perfil.modulo_atendimentos or perfil.modulo_vendas_externas or current_user.nivel_acesso == 'master' %}
                             <div class="form-check form-switch mb-2">
                                 <input class="form-check-input" type="checkbox" name="perm_financeiro" id="perm_fin_{{ u.id }}" value="1" {% if u.perm_financeiro %}checked{% endif %}>
-                                <label class="form-check-label small" for="perm_fin_{{ u.id }}"><b>Financeiro:</b> Faturamento, parcelas e baixas</label>
+                                <label class="form-check-label small" for="perm_fin_{{ u.id }}"><b>Financeiro:</b> Faturamento, boletos, parcelas e baixas</label>
                             </div>
+                            {% endif %}
+
                             <hr class="my-2 text-muted">
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" name="perm_configuracoes" id="perm_conf_{{ u.id }}" value="1" {% if u.perm_configuracoes %}checked{% endif %}>
                                 <label class="form-check-label small text-danger fw-bold" for="perm_conf_{{ u.id }}">
-                                    Permissão Admin (Configurações Gerais da Empresa)
+                                    Permissão Administrador (Acesso às Configurações e Equipe)
                                 </label>
                             </div>
                         {% endif %}

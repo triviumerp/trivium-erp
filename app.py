@@ -3815,6 +3815,8 @@ def criar_usuario_equipe():
         perm_propostas=bool(request.form.get('perm_propostas')),
         perm_servicos=bool(request.form.get('perm_servicos')),
         perm_financeiro=bool(request.form.get('perm_financeiro')),
+        perm_estoque=bool(request.form.get('perm_estoque')),       
+        perm_expedicao=bool(request.form.get('perm_expedicao')),
         perm_configuracoes=bool(request.form.get('perm_configuracoes'))
     )
     novo_user.set_senha(senha_padrao)
@@ -3887,6 +3889,8 @@ def editar_usuario_equipe(id):
         usuario.perm_propostas = bool(request.form.get('perm_propostas'))
         usuario.perm_servicos = bool(request.form.get('perm_servicos'))
         usuario.perm_financeiro = bool(request.form.get('perm_financeiro'))
+        usuario.perm_estoque = bool(request.form.get('perm_estoque'))        
+        usuario.perm_expedicao = bool(request.form.get('perm_expedicao'))
         usuario.perm_configuracoes = perm_conf
         usuario.nivel_acesso = 'admin' if perm_conf else 'operador'
 
@@ -6532,18 +6536,21 @@ def excluir_motorista(id):
     flash('Motorista removido da equipe com sucesso.', 'info')
     return redirect(url_for('gestao_motoristas'))
 
+# app.py -> rota api_trocar_primeira_senha atualizada com verificação completa
 @app.route('/api/usuario/definir-primeira-senha', methods=['POST'])
 @login_required
 def api_trocar_primeira_senha():
     nova_senha = request.form.get('nova_senha', '').strip()
     confirma_senha = request.form.get('confirma_senha', '').strip()
 
-    if len(nova_senha) < 6:
-        flash('A nova senha deve ter no mínimo 6 caracteres.', 'danger')
+    if nova_senha != confirma_senha:
+        flash('A confirmação não confere com a nova senha digitada.', 'danger')
         return redirect(url_for('painel_meus_atendimentos'))
 
-    if nova_senha != confirma_senha:
-        flash('As senhas digitadas não coincidem.', 'warning')
+    # Aplica a regra de senha forte padrão do sistema
+    senha_valida, msg_erro = validar_senha_forte(nova_senha)
+    if not senha_valida:
+        flash(f'A senha não atende aos requisitos mínimos: {msg_erro}', 'warning')
         return redirect(url_for('painel_meus_atendimentos'))
 
     current_user.set_senha(nova_senha)
