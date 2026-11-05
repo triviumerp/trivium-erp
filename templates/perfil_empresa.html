@@ -172,129 +172,285 @@
 
             <!-- ABA 2: PLANOS & ASSINATURA -->
             <div class="tab-pane fade" id="tab-planos" role="tabpanel">
-                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white">
-                    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+                <!-- 1. CARTÃO PRINCIPAL: SEU PLANO ATUAL -->
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 pb-3 border-bottom gap-2">
                         <div>
-                            <h5 class="fw-bold text-dark mb-1"><i class="bi bi-sliders text-primary me-2"></i>Personalização do Plano & Módulos</h5>
-                            <p class="text-muted small mb-0">Base Essencial de R$ 14,90 (5 acessos inclusos) com expansão modular sob demanda.</p>
-                        </div>
-                        <div class="text-end">
-                            <span class="badge {{ 'bg-success' if perfil.status_assinatura == 'ativo' else ('bg-warning text-dark' if perfil.status_assinatura == 'trial' else 'bg-danger') }} px-3 py-2 fs-6">
-                                Status: {{ perfil.status_assinatura|upper }}
+                            <span class="badge bg-primary bg-opacity-10 text-primary fw-bold text-uppercase px-2 py-1 mb-1">
+                                Gestão de Assinatura
                             </span>
+                            <h4 class="fw-bold text-dark mb-0">Seu Plano Atual</h4>
+                        </div>
+                        <div>
+                            {% if perfil.status_assinatura == 'ativo' %}
+                                <span class="badge bg-success px-3 py-2 fs-6 fw-bold">
+                                    <i class="bi bi-check-circle-fill me-1"></i> ATIVO
+                                </span>
+                            {% elif perfil.status_assinatura == 'trial' %}
+                                <span class="badge bg-warning text-dark px-3 py-2 fs-6 fw-bold">
+                                    <i class="bi bi-clock-history me-1"></i> PERÍODO DE TESTES (TRIAL)
+                                </span>
+                            {% else %}
+                                <span class="badge bg-danger px-3 py-2 fs-6 fw-bold">
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i> PENDENTE / BLOQUEADO
+                                </span>
+                            {% endif %}
                         </div>
                     </div>
 
-                    <!-- FORMULÁRIO MODULAR -->
-                    <form method="POST" action="{{ url_for('perfil_empresa') }}" class="mb-4">
-                        <input type="hidden" name="form_type" value="config_assinatura_modular">
-                        <input type="hidden" name="modulo_servicos_campo" value="1">
-
-                        <!-- BASE ESSENCIAL -->
-                        <div class="d-flex justify-content-between align-items-center bg-light p-3 rounded-3 border mb-3">
-                            <div class="d-flex align-items-center gap-3">
-                                <i class="bi bi-check-circle-fill text-primary fs-3"></i>
-                                <div>
-                                    <strong class="d-block text-dark">Pacote Base Essencial (Incluso)</strong>
-                                    <small class="text-muted">Painel, Gestão de Clientes, Catálogo, Propostas em PDF, Ordens de Serviço Básicas e <strong>5 Utilizadores Inclusos</strong>.</small>
-                                </div>
-                            </div>
-                            <span class="fw-bold text-dark fs-6">R$ 14,90 / mês</span>
-                        </div>
-
-                        <h6 class="fw-bold text-dark mb-3 mt-4">Módulos Opcionais Ativos</h6>
-
-                        <!-- MÓDULO 1: ATENDIMENTOS CLÍNICOS -->
-                        <div class="card border p-3 rounded-3 mb-2">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="form-check form-switch mb-0">
-                                    <input class="form-check-input mod-switch" type="checkbox" name="modulo_atendimentos" id="modAtend" value="1" data-valor="15.00" 
-                                           {% if perfil.modulo_atendimentos %}checked{% endif %} onchange="recalcularTotalAssinaturaPerfil()">
-                                    <label class="form-check-label fw-bold text-dark" for="modAtend">
-                                        <i class="bi bi-person-heart text-danger me-1"></i> Fichas de Atendimento Clínico & Prontuários
-                                    </label>
-                                    <small class="text-muted d-block">Prontuários eletrônicos, fichas de pacientes, histórico de sessões, anamnese e condutas clínicas.</small>
-                                </div>
-                                <span class="badge bg-light text-dark border">+ R$ 15,00/mês</span>
+                    <!-- GRID COM OS DADOS REAIS DO PLANO -->
+                    <div class="row g-3 mb-4">
+                        <!-- TIPO DO PLANO / CICLO -->
+                        <div class="col-md-3 col-6">
+                            <div class="p-3 bg-light rounded-3 border h-100">
+                                <small class="text-muted fw-bold d-block mb-1">Plano & Ciclo</small>
+                                <strong class="text-dark fs-6 d-block">{{ perfil.plano or 'Plano Essencial' }}</strong>
+                                <small class="text-primary fw-semibold">
+                                    {% if 'Anual' in (perfil.plano or '') %}
+                                        Ciclo Anual (12 Meses)
+                                    {% elif 'Semestral' in (perfil.plano or '') %}
+                                        Ciclo Semestral (6 Meses)
+                                    {% elif perfil.status_assinatura == 'trial' %}
+                                        Avaliação Gratuita
+                                    {% else %}
+                                        Ciclo Mensal
+                                    {% endif %}
+                                </small>
                             </div>
                         </div>
 
-                        <!-- MÓDULO 2: GESTÃO DE TÉCNICOS & OPERADORES -->
-                        <div class="card border p-3 rounded-3 mb-2">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="form-check form-switch mb-0">
-                                    <input class="form-check-input mod-switch" type="checkbox" name="modulo_gestao_tecnicos" id="modTec" value="1" data-valor="15.00" 
-                                           {% if perfil.modulo_gestao_tecnicos %}checked{% endif %} onchange="recalcularTotalAssinaturaPerfil()">
-                                    <label class="form-check-label fw-bold text-dark" for="modTec">
-                                        <i class="bi bi-people-fill text-primary me-1"></i> Gestão de Equipe & Técnicos de Campo
-                                    </label>
-                                    <small class="text-muted d-block">Escala de operadores, cronograma Gantt de etapas e link mobile externo de execução sem login.</small>
-                                </div>
-                                <span class="badge bg-light text-dark border">+ R$ 15,00/mês</span>
+                        <!-- VALOR CONTRATADO -->
+                        <div class="col-md-3 col-6">
+                            <div class="p-3 bg-light rounded-3 border h-100">
+                                <small class="text-muted fw-bold d-block mb-1">Valor do Plano</small>
+                                <strong class="text-dark fs-5 d-block">
+                                    {% if perfil.status_assinatura == 'trial' %}
+                                        R$ 0,00
+                                    {% else %}
+                                        R$ {{ "%.2f"|format(perfil.valor_mensalidade or 14.90)|replace('.', ',') }}
+                                    {% endif %}
+                                </strong>
+                                <small class="text-muted">
+                                    {% if perfil.status_assinatura == 'trial' %}Sem custos no teste{% else %}por mês{% endif %}
+                                </small>
                             </div>
                         </div>
 
-                        <!-- MÓDULO 3: ESTOQUE & ALMOXARIFADO -->
-                        <div class="card border p-3 rounded-3 mb-2">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="form-check form-switch mb-0">
-                                    <input class="form-check-input mod-switch" type="checkbox" name="modulo_estoque" id="modEst" value="1" data-valor="20.00" 
-                                           {% if perfil.modulo_estoque %}checked{% endif %} onchange="recalcularTotalAssinaturaPerfil()">
-                                    <label class="form-check-label fw-bold text-dark" for="modEst">
-                                        <i class="bi bi-boxes text-success me-1"></i> Controle de Estoque & Almoxarifado Inteligente
-                                    </label>
-                                    <small class="text-muted d-block">Controle de saldos, alerta de estoque mínimo, Kardex, importação/exportação Excel e requisições públicas.</small>
-                                </div>
-                                <span class="badge bg-light text-dark border">+ R$ 20,00/mês</span>
+                        <!-- PRÓXIMO VENCIMENTO / DIAS DE TESTE -->
+                        <div class="col-md-3 col-6">
+                            <div class="p-3 bg-light rounded-3 border h-100">
+                                <small class="text-muted fw-bold d-block mb-1">
+                                    {% if perfil.status_assinatura == 'trial' %}Expiração do Teste{% else %}Próximo Vencimento{% endif %}
+                                </small>
+                                <strong class="text-dark fs-6 d-block">
+                                    {{ perfil.data_vencimento.strftime('%d/%m/%Y') if perfil.data_vencimento else '--/--/----' }}
+                                </strong>
+                                {% if perfil.status_assinatura == 'trial' %}
+                                    <span class="badge bg-warning-subtle text-warning border fw-bold">
+                                        {{ perfil.dias_restantes_trial }} dia(s) restante(s)
+                                    </span>
+                                {% elif dias_para_vencer is not none and dias_para_vencer >= 0 %}
+                                    <small class="text-muted">Vence em {{ dias_para_vencer }} dia(s)</small>
+                                {% elif dias_para_vencer is not none and dias_para_vencer < 0 %}
+                                    <small class="text-danger fw-bold">Vencido há {{ dias_para_vencer|abs }} dia(s)</small>
+                                {% endif %}
                             </div>
                         </div>
 
-                        <!-- MÓDULO 4: VENDAS, FROTAS & EXPEDIÇÃO -->
-                        <div class="card border p-3 rounded-3 mb-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="form-check form-switch mb-0">
-                                    <input class="form-check-input mod-switch" type="checkbox" name="modulo_vendas_externas" id="modVend" value="1" data-valor="20.00" 
-                                           {% if perfil.modulo_vendas_externas %}checked{% endif %} onchange="recalcularTotalAssinaturaPerfil()">
-                                    <label class="form-check-label fw-bold text-dark" for="modVend">
-                                        <i class="bi bi-truck text-info me-1"></i> Vendas, Frotas & Expedição
-                                    </label>
-                                    <small class="text-muted d-block">Portal B2B de compras do cliente, fila de separação, roteirização com motoristas e comprovante digital com assinatura.</small>
-                                </div>
-                                <span class="badge bg-light text-dark border">+ R$ 20,00/mês</span>
+                        <!-- LIMITE DE EQUIPE ATUAL -->
+                        <div class="col-md-3 col-6">
+                            <div class="p-3 bg-light rounded-3 border h-100">
+                                <small class="text-muted fw-bold d-block mb-1">Acessos de Usuários</small>
+                                <strong class="text-dark fs-6 d-block">{{ usuarios_equipe|length }} de {{ perfil.limite_usuarios or 5 }} em uso</strong>
+                                <small class="text-muted">5 inclusos na base</small>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- LIMITE DE USUÁRIOS -->
-                        <div class="card border p-3 rounded-3 mb-4 bg-light">
-                            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
-                                <div>
-                                    <strong class="d-block text-dark">Limite de Usuários da Equipe</strong>
-                                    <small class="text-muted"><strong>5 acessos gratuitos inclusos</strong>. Cada acesso adicional soma apenas <strong>+ R$ 4,00/mês</strong>.</small>
-                                </div>
-                                <div class="d-flex align-items-center gap-2">
-                                    <label class="small fw-bold text-muted">Acessos:</label>
-                                    <input type="number" id="inputLimiteUsuariosPerfil" name="limite_usuarios" class="form-control text-center fw-bold" 
-                                           style="width: 80px;" min="5" max="50" value="{{ perfil.limite_usuarios or 5 }}" onchange="recalcularTotalAssinaturaPerfil()">
-                                </div>
-                            </div>
+                    <!-- MÓDULOS CONTRATADOS EM DESTAQUE -->
+                    <div class="p-3 rounded-3 border mb-4 bg-white">
+                        <small class="text-muted fw-bold d-block mb-2 text-uppercase" style="font-size: 0.75rem;">Módulos Inclusos na Sua Operação:</small>
+                        <div class="d-flex flex-wrap gap-2">
+                            <span class="badge bg-light text-dark border p-2">
+                                <i class="bi bi-check-circle-fill text-success me-1"></i> Pacote Base (OS, Propostas e Clientes)
+                            </span>
+                            {% if perfil.modulo_atendimentos %}
+                            <span class="badge bg-light text-dark border p-2">
+                                <i class="bi bi-heart-pulse-fill text-danger me-1"></i> Fichas & Prontuários Clínicos
+                            </span>
+                            {% endif %}
+                            {% if perfil.modulo_gestao_tecnicos %}
+                            <span class="badge bg-light text-dark border p-2">
+                                <i class="bi bi-people-fill text-primary me-1"></i> Gestão de Técnicos & Escala
+                            </span>
+                            {% endif %}
+                            {% if perfil.modulo_estoque %}
+                            <span class="badge bg-light text-dark border p-2">
+                                <i class="bi bi-boxes text-success me-1"></i> Estoque & Almoxarifado
+                            </span>
+                            {% endif %}
+                            {% if perfil.modulo_vendas_externas %}
+                            <span class="badge bg-light text-dark border p-2">
+                                <i class="bi bi-truck text-info me-1"></i> Vendas, Frotas & Expedição
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- AÇÕES PRINCIPAIS: PAGAMENTO (COM TRAVA DE 10 DIAS) & BOTÃO UPGRADE -->
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 pt-2">
+                        <div>
+                            <!-- BOTÃO QUE REVELA AS OPÇÕES DE EXPANSÃO / UPGRADE -->
+                            <button type="button" class="btn btn-outline-primary fw-bold px-3 py-2" data-bs-toggle="collapse" data-bs-target="#boxUpgradePlano" aria-expanded="false">
+                                <i class="bi bi-arrow-up-circle me-1"></i> Fazer Upgrade do Plano / Mais Usuários
+                            </button>
                         </div>
 
-                        <!-- TOTAL E BOTÕES -->
-                        <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 border-top pt-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <!-- REGRA DO BOTÃO DE PAGAMENTO: -->
+                            <!-- 1. Se for Trial: SEMPRE mostra para o cliente ativar o plano definitivo -->
+                            <!-- 2. Se for Ativo: SÓ mostra se faltar 10 dias ou menos para vencer (ou se já estiver vencido) -->
+                            <!-- 3. Se for Bloqueado: Mostra em destaque -->
+                            {% if perfil.status_assinatura == 'trial' %}
+                                <button type="button" class="btn btn-success fw-bold px-4 py-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCheckoutMercadoPago">
+                                    <i class="bi bi-shield-check me-1"></i> Contratar Plano Definitivo
+                                </button>
+                            {% elif perfil.status_assinatura in ['bloqueado', 'cancelado'] or (dias_para_vencer is not none and dias_para_vencer < 0) %}
+                                <button type="button" class="btn btn-danger fw-bold px-4 py-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCheckoutMercadoPago">
+                                    <i class="bi bi-credit-card-2-front me-1"></i> Regularizar Pagamento Agora
+                                </button>
+                            {% elif dias_para_vencer is not none and dias_para_vencer <= 10 %}
+                                <button type="button" class="btn btn-warning text-dark fw-bold px-4 py-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCheckoutMercadoPago">
+                                    <i class="bi bi-arrow-clockwise me-1"></i> Antecipar / Renovar Pagamento
+                                </button>
+                            {% else %}
+                                <!-- Caso tenha mais de 10 dias de validade, NÃO mostra botão de pagamento -->
+                                <div class="text-end">
+                                    <span class="badge bg-success-subtle text-success border px-3 py-2 fw-bold d-inline-flex align-items-center gap-1">
+                                        <i class="bi bi-shield-fill-check"></i> Assinatura em dia
+                                    </span>
+                                    <small class="text-muted d-block mt-1" style="font-size: 0.72rem;">
+                                        Opção de renovação liberada 10 dias antes do vencimento.
+                                    </small>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. SEÇÃO RECOLHIDA: FORMULÁRIO DE UPGRADE & ADIÇÃO DE USUÁRIOS -->
+                <div class="collapse" id="boxUpgradePlano">
+                    <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4 border-top border-4 border-primary">
+                        <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
                             <div>
-                                <span class="text-muted small d-block">Mensalidade Calculada:</span>
-                                <h4 class="fw-extrabold text-primary mb-0" id="displayValorFinalPerfil">R$ {{ "%.2f"|format(perfil.valor_mensalidade or 14.90) }}</h4>
+                                <h5 class="fw-bold text-dark mb-1">
+                                    <i class="bi bi-sliders text-primary me-2"></i>Expandir Módulos & Usuários da Equipe
+                                </h5>
+                                <p class="text-muted small mb-0">Adicione novos setores ou aumente os acessos simultâneos da sua empresa.</p>
                             </div>
-                            <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-toggle="modal" data-bs-target="#modalOrcamentoPersonalizado">
-                                    <i class="bi bi-chat-quote me-1"></i> Orçamento Personalizado
-                                </button>
-                                <button type="submit" class="btn btn-primary fw-bold px-4 py-2">
-                                    <i class="bi bi-credit-card-2-front me-1"></i> Atualizar Minha Assinatura
-                                </button>
-                            </div>
+                            <button type="button" class="btn-close" data-bs-toggle="collapse" data-bs-target="#boxUpgradePlano"></button>
                         </div>
-                    </form>
+
+                        <!-- FORMULÁRIO DE ATUALIZAÇÃO -->
+                        <form method="POST" action="{{ url_for('perfil_empresa') }}">
+                            <input type="hidden" name="form_type" value="config_assinatura_modular">
+                            <input type="hidden" name="modulo_servicos_campo" value="1">
+
+                            <!-- DESTAQUE DO QUE É MAIS BUSCADO: ADICIONAR USUÁRIOS -->
+                            <div class="card border-primary p-3 rounded-3 mb-4 bg-primary bg-opacity-10">
+                                <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3">
+                                    <div>
+                                        <strong class="d-block text-dark fs-6">
+                                            <i class="bi bi-people-fill text-primary me-1"></i> Aumentar Limite de Utilizadores
+                                        </strong>
+                                        <small class="text-muted">Seu plano inclui <strong>5 acessos gratuitos</strong>. Cada utilizador adicional soma apenas <strong>+ R$ 4,00/mês</strong>.</small>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <label class="small fw-bold text-dark">Acessos Totais:</label>
+                                        <input type="number" id="inputLimiteUsuariosPerfil" name="limite_usuarios" class="form-control text-center fw-bold form-control-lg border-primary" 
+                                            style="width: 90px;" min="5" max="50" value="{{ perfil.limite_usuarios or 5 }}" onchange="recalcularTotalAssinaturaPerfil()">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h6 class="fw-bold text-dark mb-3">Módulos Opcionais do Sistema:</h6>
+
+                            <!-- MÓDULOS -->
+                            <div class="card border p-3 rounded-3 mb-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input mod-switch" type="checkbox" name="modulo_atendimentos" id="modAtend" value="1" data-valor="15.00" 
+                                            {% if perfil.modulo_atendimentos %}checked{% endif %} onchange="recalcularTotalAssinaturaPerfil()">
+                                        <label class="form-check-label fw-bold text-dark" for="modAtend">
+                                            <i class="bi bi-person-heart text-danger me-1"></i> Fichas de Atendimento Clínico & Prontuários
+                                        </label>
+                                        <small class="text-muted d-block">Prontuários SOAP, anamnese, evolução de consultas e emissão de atestados/receitas.</small>
+                                    </div>
+                                    <span class="badge bg-light text-dark border">+ R$ 15,00/mês</span>
+                                </div>
+                            </div>
+
+                            <div class="card border p-3 rounded-3 mb-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input mod-switch" type="checkbox" name="modulo_gestao_tecnicos" id="modTec" value="1" data-valor="15.00" 
+                                            {% if perfil.modulo_gestao_tecnicos %}checked{% endif %} onchange="recalcularTotalAssinaturaPerfil()">
+                                        <label class="form-check-label fw-bold text-dark" for="modTec">
+                                            <i class="bi bi-people-fill text-primary me-1"></i> Gestão de Técnicos & Operadores de Campo
+                                        </label>
+                                        <small class="text-muted d-block">Escala técnica, cronograma Gantt de etapas e aplicativo mobile sem login.</small>
+                                    </div>
+                                    <span class="badge bg-light text-dark border">+ R$ 15,00/mês</span>
+                                </div>
+                            </div>
+
+                            <div class="card border p-3 rounded-3 mb-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input mod-switch" type="checkbox" name="modulo_estoque" id="modEst" value="1" data-valor="20.00" 
+                                            {% if perfil.modulo_estoque %}checked{% endif %} onchange="recalcularTotalAssinaturaPerfil()">
+                                        <label class="form-check-label fw-bold text-dark" for="modEst">
+                                            <i class="bi bi-boxes text-success me-1"></i> Controle de Estoque & Almoxarifado
+                                        </label>
+                                        <small class="text-muted d-block">Controle de saldo, Kardex, código de barras, fotos de catálogo e canal de requisições.</small>
+                                    </div>
+                                    <span class="badge bg-light text-dark border">+ R$ 20,00/mês</span>
+                                </div>
+                            </div>
+
+                            <div class="card border p-3 rounded-3 mb-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input mod-switch" type="checkbox" name="modulo_vendas_externas" id="modVend" value="1" data-valor="20.00" 
+                                            {% if perfil.modulo_vendas_externas %}checked{% endif %} onchange="recalcularTotalAssinaturaPerfil()">
+                                        <label class="form-check-label fw-bold text-dark" for="modVend">
+                                            <i class="bi bi-truck text-info me-1"></i> Vendas, Frotas & Expedição
+                                        </label>
+                                        <small class="text-muted d-block">Portal B2B de compras, fila de expedição, roteirização com motoristas e protocolo assinado.</small>
+                                    </div>
+                                    <span class="badge bg-light text-dark border">+ R$ 20,00/mês</span>
+                                </div>
+                            </div>
+
+                            <!-- TOTAL RECALCULADO E CONFIRMAÇÃO -->
+                            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 border-top pt-3 mt-3">
+                                <div>
+                                    <span class="text-muted small d-block">Nova Mensalidade Estimada:</span>
+                                    <h4 class="fw-extrabold text-primary mb-0" id="displayValorFinalPerfil">
+                                        R$ {{ "%.2f"|format(perfil.valor_mensalidade or 14.90)|replace('.', ',') }}
+                                    </h4>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-outline-secondary fw-bold" data-bs-toggle="collapse" data-bs-target="#boxUpgradePlano">
+                                        Cancelar
+                                    </button>
+                                    <button type="submit" class="btn btn-primary fw-bold px-4 py-2 shadow-sm">
+                                        <i class="bi bi-check2-circle me-1"></i> Confirmar Alteração do Plano
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
 

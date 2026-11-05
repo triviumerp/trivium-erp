@@ -3757,11 +3757,18 @@ def perfil_empresa():
 
     usuarios_equipe = Usuario.query.filter_by(empresa_id=current_user.empresa_id).all()
 
+    # Cálculo dos dias restantes para vencimento
+    dias_para_vencer = None
+    if empresa.data_vencimento:
+        dias_para_vencer = (empresa.data_vencimento - date.today()).days
+
     return render_template(
         'perfil_empresa.html', 
         perfil=empresa,
         usuarios_equipe=usuarios_equipe,
-        abrir_modal_pagamento=abrir_modal_pagamento
+        abrir_modal_pagamento=abrir_modal_pagamento,
+        dias_para_vencer=dias_para_vencer,
+        hoje=date.today()
     )
 
 @app.route('/configuracoes/usuarios/novo', methods=['POST'])
